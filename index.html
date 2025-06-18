@@ -5,85 +5,159 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Афиши автоэнтузиастов</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      background-color: #f0f0f0;
+      background-color: #1a1a1a;
+      color: #e5e5e5;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
     }
     .event-card {
-      background: white;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 15px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
-    .event-card h2 {
-      margin: 0 0 10px;
-      font-size: 1.2em;
+    .event-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(255, 0, 0, 0.3);
     }
-    .event-card p {
-      margin: 5px 0;
-      color: #555;
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
     }
-    .event-card button {
-      background: #0088cc;
-      color: white;
-      border: none;
-      padding: 10px;
-      border-radius: 5px;
-      cursor: pointer;
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    .event-card button:hover {
-      background: #005f99;
+    /* Скрываем скроллбар, но сохраняем прокрутку */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    html {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
     }
   </style>
 </head>
-<body>
-  <h1>Афиши мероприятий для автоэнтузиастов</h1>
-  <div id="events"></div>
+<body class="min-h-screen flex flex-col items-center px-4 py-6">
+  <h1 class="text-2xl font-bold text-red-500 mb-6">Афиши автоэнтузиастов</h1>
+
+  <!-- Фильтры -->
+  <div class="w-full mb-6 flex flex-col space-y-2">
+    <select id="typeFilter" class="w-full p-2 rounded-lg bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500">
+      <option value="all">Все мероприятия</option>
+      <option value="rally">Ралли</option>
+      <option value="exhibition">Выставки</option>
+      <option value="meetup">Встречи</option>
+    </select>
+    <select id="dateFilter" class="w-full p-2 rounded-lg bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500">
+      <option value="all">Все даты</option>
+      <option value="upcoming">Ближайшие</option>
+      <option value="thisWeek">На этой неделе</option>
+    </select>
+  </div>
+
+  <!-- Список афиш -->
+  <div id="events" class="w-full space-y-4"></div>
+
+  <!-- Модальное окно для деталей -->
+  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden">
+    <div class="bg-gray-800 rounded-lg p-6 w-11/12 max-w-md">
+      <h2 id="modalTitle" class="text-xl font-bold text-red-500 mb-4"></h2>
+      <p id="modalDate" class="text-gray-300 mb-2"></p>
+      <p id="modalLocation" class="text-gray-300 mb-2"></p>
+      <p id="modalDescription" class="text-gray-300 mb-4"></p>
+      <div class="flex flex-col space-y-2">
+        <button id="joinBtn" class="bg-red-500 text-white py-2 rounded-lg hover:bg-red-600">Записаться</button>
+        <button id="shareBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Поделиться</button>
+        <button id="mapBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Открыть карту</button>
+        <button id="closeModal" class="bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">Закрыть</button>
+      </div>
+    </div>
+  </div>
 
   <script>
-    // Инициализация Telegram Web App
     const tg = window.Telegram.WebApp;
     tg.ready();
+    tg.expand();
+    tg.enableClosingConfirmation();
 
-    // Пример данных афиш (в реальном проекте данные можно брать из базы данных)
+    // Пример данных афиш
     const events = [
       {
         id: 1,
-        title: "Ралли-клуб: Ночная гонка",
+        title: "Ночная гонка",
+        type: "rally",
         date: "2025-07-10",
-        location: "Москва, гоночная трасса ADM",
-        description: "Присоединяйтесь к ночной гонке для любителей скорости!"
+        location: "Москва, трасса ADM",
+        description: "Экстремальная гонка под звездами для любителей скорости!",
+        image: "https://via.placeholder.com/300x150?text=Ночная+гонка",
+        coords: { lat: 55.7558, lng: 37.6173 }
       },
       {
         id: 2,
-        title: "Выставка ретро-автомобилей",
+        title: "Выставка ретро-авто",
+        type: "exhibition",
         date: "2025-07-15",
         location: "Санкт-Петербург, Экспоцентр",
-        description: "Уникальная коллекция классических автомобилей."
+        description: "Коллекция классических автомобилей 60-80-х годов.",
+        image: "https://via.placeholder.com/300x150?text=Ретро-авто",
+        coords: { lat: 59.9343, lng: 30.3351 }
+      },
+      {
+        id: 3,
+        title: "Встреча автоклуба",
+        type: "meetup",
+        date: "2025-06-20",
+        location: "Казань, Парковка ТЦ",
+        description: "Общение, обмен опытом и крутые тачки!",
+        image: "https://via.placeholder.com/300x150?text=Встреча",
+        coords: { lat: 55.8304, lng: 49.0661 }
       }
     ];
 
-    // Отображение афиш
     const eventsContainer = document.getElementById('events');
-    events.forEach(event => {
-      const eventCard = document.createElement('div');
-      eventCard.className = 'event-card';
-      eventCard.innerHTML = `
-        <h2>${event.title}</h2>
-        <p><strong>Дата:</strong> ${event.date}</p>
-        <p><strong>Место:</strong> ${event.location}</p>
-        <p>${event.description}</p>
-        <button onclick="joinEvent(${event.id})">Записаться</button>
-        <button onclick="shareEvent(${event.id})">Поделиться</button>
-      `;
-      eventsContainer.appendChild(eventCard);
-    });
+    const typeFilter = document.getElementById('typeFilter');
+    const dateFilter = document.getElementById('dateFilter');
+    const eventModal = document.getElementById('eventModal');
+    const closeModalBtn = document.getElementById('closeModal');
 
-    // Функция для записи на мероприятие
+    // Функция для отображения афиш
+    function renderEvents(filteredEvents = events) {
+      eventsContainer.innerHTML = '';
+      filteredEvents.forEach((event, index) => {
+        const eventCard = document.createElement('div');
+        eventCard.className = 'event-card bg-gray-800 rounded-lg overflow-hidden fade-in';
+        eventCard.style.animationDelay = `${index * 0.1}s`;
+        eventCard.innerHTML = `
+          <img src="${event.image}" alt="${event.title}" class="w-full h-32 object-cover">
+          <div class="p-4">
+            <h2 class="text-lg font-bold text-white">${event.title}</h2>
+            <p class="text-sm text-gray-400">${event.date} • ${event.location}</p>
+            <p class="text-sm text-gray-300 mt-2 line-clamp-2">${event.description}</p>
+          </div>
+        `;
+        eventCard.addEventListener('click', () => showEventDetails(event));
+        eventsContainer.appendChild(eventCard);
+      });
+    }
+
+    // Функция для показа деталей мероприятия
+    function showEventDetails(event) {
+      document.getElementById('modalTitle').textContent = event.title;
+      document.getElementById('modalDate').textContent = `Дата: ${event.date}`;
+      document.getElementById('modalLocation').textContent = `Место: ${event.location}`;
+      document.getElementById('modalDescription').textContent = event.description;
+      eventModal.classList.remove('hidden');
+
+      // Обработчики кнопок в модальном окне
+      document.getElementById('joinBtn').onclick = () => joinEvent(event.id);
+      document.getElementById('shareBtn').onclick = () => shareEvent(event);
+      document.getElementById('mapBtn').onclick = () => openMap(event.coords);
+    }
+
+    // Закрытие модального окна
+    closeModalBtn.addEventListener('click', () => eventModal.classList.add('hidden'));
+
+    // Записаться на мероприятие
     function joinEvent(eventId) {
       tg.showPopup({
         title: 'Запись на мероприятие',
@@ -92,22 +166,57 @@
       }, (buttonId) => {
         if (buttonId === 'join') {
           tg.sendData(JSON.stringify({ action: 'join', eventId }));
+          tg.showAlert('Вы записались на мероприятие!');
         }
       });
     }
 
-    // Функция для шаринга
-    function shareEvent(eventId) {
-      const event = events.find(e => e.id === eventId);
+    // Поделиться мероприятием
+    function shareEvent(event) {
       tg.shareToChat({
         text: `Присоединяйтесь к мероприятию: ${event.title} (${event.date}, ${event.location})`,
-        url: `https://t.me/your_bot_name?start=event_${eventId}`
+        url: `https://t.me/your_bot_name?start=event_${event.id}`
       });
     }
 
-    // Адаптация интерфейса под Telegram
-    tg.expand(); // Разворачивает приложение на полный экран
-    tg.enableClosingConfirmation(); // Подтверждение при закрытии
+    // Открыть карту
+    function openMap(coords) {
+      const url = `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
+      tg.openLink(url);
+    }
+
+    // Фильтрация мероприятий
+    function filterEvents() {
+      const type = typeFilter.value;
+      const date = dateFilter.value;
+      let filteredEvents = events;
+
+      // Фильтр по типу
+      if (type !== 'all') {
+        filteredEvents = filteredEvents.filter(event => event.type === type);
+      }
+
+      // Фильтр по дате
+      const today = new Date('2025-06-18'); // Текущая дата для примера
+      if (date === 'upcoming') {
+        filteredEvents = filteredEvents.filter(event => new Date(event.date) >= today);
+      } else if (date === 'thisWeek') {
+        const weekEnd = new Date(today);
+        weekEnd.setDate(today.getDate() + 7);
+        filteredEvents = filteredEvents.filter(event => {
+          const eventDate = new Date(event.date);
+          return eventDate >= today && eventDate <= weekEnd;
+        });
+      }
+
+      renderEvents(filteredEvents);
+    }
+
+    typeFilter.addEventListener('change', filterEvents);
+    dateFilter.addEventListener('change', filterEvents);
+
+    // Инициализация
+    renderEvents();
   </script>
 </body>
 </html>
