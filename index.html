@@ -187,9 +187,27 @@
         max-width: 400px;
       }
     }
+    .loading {
+      position: relative;
+      opacity: 0.8;
+      pointer-events: none;
+    }
     .loading::after {
-      content: 'Загрузка...';
-      display: inline-block;
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-top: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    @keyframes spin {
+      0% { transform: translateY(-50%) rotate(0deg); }
+      100% { transform: translateY(-50%) rotate(360deg); }
     }
   </style>
 </head>
@@ -226,7 +244,7 @@
         <input type="text" id="eventLocation" placeholder="Место" required>
         <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
         <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение</button>
-        <img id="previewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью">
+        <img id="previewImage" class="w-full h-auto object-contain rounded-lg mb-4 hidden" alt="Превью">
         <input type="file" id="imageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
       </form>
@@ -238,7 +256,7 @@
       <p id="adStatus" class="text-sm text-gray-400 mb-4 hidden">Реклама не настроена</p>
       <form id="adForm" class="admin-form">
         <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение рекламы</button>
-        <img id="adPreviewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью рекламы">
+        <img id="adPreviewImage" class="w-full h-auto object-contain rounded-lg mb-4 hidden" alt="Превью рекламы">
         <input type="file" id="adImageInput" accept="image/*" class="hidden">
         <input type="text" id="adLinkUrl" placeholder="URL ссылки рекламы" required>
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить рекламу</button>
@@ -261,7 +279,7 @@
         <input type="text" id="editLocation" placeholder="Место" required>
         <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
         <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Изменить изображение</button>
-        <img id="editPreviewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью">
+        <img id="editPreviewImage" class="w-full h-auto object-contain rounded-lg mb-4 hidden" alt="Превью">
         <input type="file" id="editImageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
         <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
@@ -299,7 +317,7 @@
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     document.getElementById('username').textContent = user.first_name || 'Гость';
-    const adminId = 366825437; // Твой Telegram ID
+    const adminId = 366825437;
     const isAdmin = user.id === adminId;
     if (isAdmin) {
       document.getElementById('adminBtn').classList.remove('hidden');
@@ -429,7 +447,10 @@
       }
     });
 
-    async function uploadToImgBB(file) {
+    async function uploadToImgBB(file, button) {
+      const originalText = button.textContent;
+      button.textContent = 'Загрузка...';
+      button.classList.add('loading');
       try {
         if (!file.type.startsWith('image/')) {
           throw new Error('Файл должен быть изображением (JPEG, PNG и т.д.)');
@@ -437,7 +458,17 @@
         if (file.size > 32 * 1024 * 1024) {
           throw new Error('Файл превышает лимит в 32 МБ');
         }
-        console.log('Начинаем загрузку изображения:', file.name, file.size);
+        console.log('Начинаем загрузку изображения:', {
+          name: file.name,
+          size: (file.size / 1024 / 1024).toFixed(2) + ' МБ',
+          type: file.type
+        });
+        const img = new Image();
+        const dimensions = await new Promise((resolve) => {
+          img.onload = () => resolve({ width: img.width, height: img.height });
+          img.src = URL.createObjectURL(file);
+        });
+        console.log('Размеры изображения:', dimensions);
         const reader = new FileReader();
         return new Promise((resolve, reject) => {
           reader.onload = async () => {
@@ -462,6 +493,9 @@
         console.error('ImgBB ошибка:', err);
         tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
         return null;
+      } finally {
+        button.textContent = originalText;
+        button.classList.remove('loading');
       }
     }
 
@@ -470,16 +504,14 @@
       const submitBtn = adminForm.querySelector('button[type="submit"]');
       const originalText = submitBtn.textContent;
       submitBtn.textContent = 'Загрузка...';
-      submitBtn.disabled = true;
+      submitBtn.classList.add('loading');
       try {
         console.log('Отправка формы добавления события');
         let imageUrl = null;
         const file = imageInput.files[0];
         if (file) {
           console.log('Загрузка изображения для события');
-          uploadImageBtn.textContent = 'Загрузка...';
-          imageUrl = await uploadToImgBB(file);
-          uploadImageBtn.textContent = 'Загрузить изображение';
+          imageUrl = await uploadToImgBB(file, uploadImageBtn);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение');
           console.log('Изображение загружено:', imageUrl);
         }
@@ -519,7 +551,7 @@
         tg.showAlert(`Ошибка: ${err.message}`);
       } finally {
         submitBtn.textContent = originalText;
-        submitBtn.disabled = false;
+        submitBtn.classList.remove('loading');
       }
     });
 
@@ -528,16 +560,14 @@
       const submitBtn = editForm.querySelector('button[type="submit"]');
       const originalText = submitBtn.textContent;
       submitBtn.textContent = 'Загрузка...';
-      submitBtn.disabled = true;
+      submitBtn.classList.add('loading');
       try {
         console.log('Отправка формы редактирования события');
         let imageUrl = null;
         const file = editImageInput.files[0];
         if (file) {
           console.log('Загрузка нового изображения для события');
-          editImageBtn.textContent = 'Загрузка...';
-          imageUrl = await uploadToImgBB(file);
-          editImageBtn.textContent = 'Изменить изображение';
+          imageUrl = await uploadToImgBB(file, editImageBtn);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение');
           console.log('Изображение загружено:', imageUrl);
         }
@@ -573,7 +603,7 @@
         tg.showAlert(`Ошибка: ${err.message}`);
       } finally {
         submitBtn.textContent = originalText;
-        submitBtn.disabled = false;
+        submitBtn.classList.remove('loading');
       }
     });
 
@@ -582,16 +612,14 @@
       const submitBtn = adForm.querySelector('button[type="submit"]');
       const originalText = submitBtn.textContent;
       submitBtn.textContent = 'Загрузка...';
-      submitBtn.disabled = true;
+      submitBtn.classList.add('loading');
       try {
         console.log('Отправка формы рекламы');
         let imageUrl = null;
         const file = adImageInput.files[0];
         if (file) {
           console.log('Загрузка изображения для рекламы');
-          uploadAdImageBtn.textContent = 'Загрузка...';
-          imageUrl = await uploadToImgBB(file);
-          uploadAdImageBtn.textContent = 'Загрузить изображение рекламы';
+          imageUrl = await uploadToImgBB(file, uploadAdImageBtn);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение рекламы');
           console.log('Изображение рекламы загружено:', imageUrl);
         }
@@ -646,7 +674,7 @@
         tg.showAlert(`Ошибка: ${err.message}`);
       } finally {
         submitBtn.textContent = originalText;
-        submitBtn.disabled = false;
+        submitBtn.classList.remove('loading');
       }
     });
 
