@@ -342,3 +342,259 @@
     editImageBtn.addEventListener('click', () => {
       editImageInput.click();
     });
+
+    editImageInput.addEventListener('change', () => {
+      const file = editImageInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          editPreviewImage.src = e.target.result;
+          editPreviewImage.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    adminForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = imageInput.files[0];
+      let imageUrl = null;
+      try {
+        if (file) {
+          imageUrl = await uploadImageToAirtable(file);
+        }
+        const eventData = {
+          fields: {
+            ID: String(Math.floor(Math.random() * 1000000)),
+            Title: document.getElementById('eventTitle').value,
+            Type: document.getElementById('eventType').value,
+            "Date (Friendly)": document.getElementById('eventDate').value,
+            Location: document.getElementById('eventLocation').value,
+            Description: document.getElementById('eventDescription').value,
+            Image: imageUrl || []
+          }
+        };
+        const response = await fetch(AIRTABLE_API_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(eventData)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        adminForm.reset();
+        previewImage.classList.add('hidden');
+        imageInput.value = '';
+        tg.showAlert('Мероприятие добавлено!');
+        navButtons.forEach(btn => btn.classList.remove('active'));
+        document.querySelector('[data-tab="events"]').classList.add('active');
+        eventsContainer.classList.remove('hidden');
+        adminPanel.classList.add('hidden');
+        renderEvents();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    });
+
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = editImageInput.files[0];
+      let imageUrl = null;
+      try {
+        if (file) {
+          imageUrl = await uploadImageToAirtable(file);
+        }
+        const eventData = {
+          fields: {
+            ID: document.getElementById('editId').value,
+            Title: document.getElementById('editTitle').value,
+            Type: document.getElementById('editType').value,
+            "Date (Friendly)": document.getElementById('editDate').value,
+            Location: document.getElementById('editLocation').value,
+            Description: document.getElementById('editDescription').value,
+            Image: imageUrl || (editPreviewImage.src && !editPreviewImage.src.includes('placeholder') ? [{ url: editPreviewImage.src }] : [])
+          }
+        };
+        const response = await fetch(`${AIRTABLE_API_URL}/${document.getElementById('editId').value}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(eventData)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        editModal.classList.add('hidden');
+        tg.showAlert('Мероприятие обновлено!');
+        renderEvents();
+        renderManageList();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    });
+
+    cancelEdit.addEventListener('click', () => {
+      editModal.classList.add('hidden');
+    });
+
+    async function renderEvents() {
+      eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      try {
+        const response = await fetch(AIRTABLE_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        const events = data.records.map(record => ({
+          id: record.id,
+          eventId: record.fields.ID,
+          title: record.fields.Title,
+          type: record.fields.Type,
+          date: record.fields["Date (Friendly)"],
+          location: record.fields.Location,
+          description: record.fields.Description,
+          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/150'
+        }));
+        console.log('События:', events);
+        eventsContainer.innerHTML = '';
+        if (events.length === 0) {
+          eventsContainer.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
+          return;
+        }
+        events.forEach((event, index) => {
+          const eventCard = document.createElement('div');
+          eventCard.className = 'event-card fade-in';
+          eventCard.style.animationDelay = `${index * 0.1}s`;
+          eventCard.innerHTML = `
+            <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg">
+            <div class="p-2 text-center">
+              <p class="text-sm font-semibold text-white">${event.date}</p>
+              <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
+            </div>
+          `;
+          eventCard.addEventListener('click', () => showEventDetails(event));
+          eventsContainer.appendChild(eventCard);
+        });
+      } catch (err) {
+        eventsContainer.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
+        console.error('Ошибка:', err);
+      }
+    }
+
+    async function renderManageList() {
+      manageList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      try {
+        const response = await fetch(AIRTABLE_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        const events = data.records.map(record => ({
+          return ({
+            id: record.id,
+            eventId: record.fields.ID,
+            title: record.fields.Title,
+            date: record.fields["Date (Friendly)"]
+          });
+        });
+        manageList.innerHTML = '';
+        if (events.length === 0) {
+          manageList.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
+          return;
+        }
+        events.forEach((event => {
+          const item = document.createElement('div');
+          item.className = 'flex flex-justify-between items-center bg-gray-800 py-2 px-4 rounded-lg';
+          item.innerHTML = `
+            <p class="text-sm text-white line-clamp-1">${event.title} (${event.date})</p>
+            <div class="flex space-x-1">
+              <button class="edit-btn text-sm py-1 px-2 rounded-lg" data-id="${event.id}"Редактировать</button>
+              <button class="delete-btn text-sm py-1 px-2 rounded-lg" data-id="${event.id}"Удалить</button>
+            </div>
+          `;
+          manageList.appendChild(item);
+        });
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            const response = await fetch(`${AIRTABLE_API_URL}/${id}`, {
+              headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+            });
+            const event = await response.json();
+            document.getElementById('editId').value = id;
+            document.getElementById('editTitle').value = event.fields.Title;
+            document.getElementById('editType').value = event.fields.Type;
+            document.getElementById('editDate').value = event.fields["Date (Friendly)"];
+            document.getElementById('editLocation').value = event.fields.Location;
+            document.getElementById('editDescription').value = event.fields.Description;
+            document.getElementById('editPreviewImage').src = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : 'https://via.placeholder.com/150';
+            editPreviewImage.classList.toggle('hidden');
+            editModal.classList.remove('hidden');
+          });
+        });
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            tg.showConfirm('Удалить мероприятие?', async (confirmed) => {
+              if (confirmed) {
+                try {
+                  const response = await fetch(`${AIRTABLE_API_URL}/${id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+                  });
+                  if (!response.ok) throw new Error(await response.text());
+                  tg.showAlert('Мероприятие удалено!');
+                  renderEvents();
+                  renderManageList();
+                } catch (err) {
+                  tg.showAlert(`Ошибка: ${err.message}`);
+                }
+              }
+            });
+          });
+        });
+      } catch (err) {
+        manageList.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
+        console.error('Ошибка:', err);
+      }
+    }
+
+    function showEventDetails(event) {
+      document.getElementById('modalTitle').textContent = event.title;
+      document.getElementById('modalDate').textContent = `Дата: ${event.date}`;
+      document.getElementById('modalLocation').valueContent = `Место: ${event.location}`;
+      document.getElementById('modalDescription').valueContent = event.description;
+      eventModal.classList.remove('hidden');
+      document.getElementById('joinBtn').onclick = () => joinEvent(event.eventId);
+      document.getElementById('shareBtn').onclick = () => shareEvent(event);
+    }
+
+    closeModalBtn.addEventListener('click', () => {
+      => {
+      document.getElementById.classList('eventModal').add('hidden');
+    });
+
+    function joinEvent(eventId) {
+      return tg.showPopup({
+        title: 'Запись на мероприятие',
+        message: 'Хотите записаться?',
+        buttons: [{ id: 'join', type: 'ok', text: 'Да' }, { type: 'cancel' }]
+      }, (buttonId) => {
+        if (buttonId === 'join') {
+          return tg.sendEventData(JSON.stringify({ action: 'join', eventId }));
+          tg.showAlert('Вы записались!');
+        }
+      });
+    }
+
+    function shareEvent(event) {
+      const text = `Присоединяйтесь: ${event.title} (${event.date}, ${event.location})`;
+      const url = `https://t.me/smolville_drift?start=event_${event.eventId}`;
+      tg.openTelegramLink(`https://t.me/share?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
+    }
+
+    renderEvents();
+  </script>
+</body>
+</html>
