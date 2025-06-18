@@ -11,12 +11,13 @@
       background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.PNG');
       background-repeat: repeat;
       background-size: auto;
+      background-color: #1c1c1e; /* Фоллбэк */
       color: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       overflow-x: hidden;
       display: flex;
       flex-direction: column;
-      min-height: 20vh;
+      min-height: 100vh;
       position: relative;
     }
     body::before {
@@ -338,7 +339,7 @@
     });
 
     adminTabs.forEach(tab => {
-      button.addEventListener('click', () => {
+      tab.addEventListener('click', () => {
         adminTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         document.querySelectorAll('.admin-section').forEach(section => section.classList.remove('active'));
@@ -416,6 +417,27 @@
       } catch (err) {
         tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
         console.error('Imgur ошибка:', err);
+        return null;
+      }
+    }
+
+    async function uploadToAirtable(file) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_ADS_TABLE_NAME)}/attachments`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}`
+          },
+          body: formData
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        return data.url; // URL загруженного файла
+      } catch (err) {
+        tg.showAlert(`Ошибка загрузки изображения в Airtable: ${err.message}`);
+        console.error('Airtable ошибка:', err);
         return null;
       }
     }
@@ -509,7 +531,7 @@
         let imageUrl = null;
         const file = adImageInput.files[0];
         if (file) {
-          imageUrl = await uploadToImgur(file);
+          imageUrl = await uploadToAirtable(file);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение рекламы');
         }
         const adData = {
