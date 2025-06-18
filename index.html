@@ -8,23 +8,29 @@
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      background-color: #1a1a1a;
-      color: #e5e5e5;
-      font-family: 'Inter', sans-serif;
+      background-color: #f2f2f7;
+      color: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
     }
     .event-card {
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
     }
     .event-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 20px rgba(255, 0, 0, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
     .fade-in {
-      animation: fadeIn 0.5s ease-in;
+      animation: fadeIn 0.3s ease-in;
     }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
+      from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
     ::-webkit-scrollbar {
@@ -35,51 +41,115 @@
       scrollbar-width: none;
     }
     .logo {
-      max-width: 150px;
+      max-width: 75px;
       height: auto;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 0;
+    }
+    .username {
+      font-size: 16px;
+      font-weight: 600;
+      color: #000;
+    }
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      padding: 10px;
+      font-size: 14px;
+      color: #007aff;
+      transition: background 0.2s ease;
+      border-radius: 8px;
+    }
+    .nav-btn.active {
+      background: #007aff;
+      color: #fff;
+    }
+    .events-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      width: 100%;
+    }
+    .event-card {
+      aspect-ratio: 1/1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 10px;
+    }
+    .modal-content {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px);
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col items-center px-4 py-6">
-  <!-- Логотип с гиперссылкой на канал -->
-  <div class="mb-6 cursor-pointer" onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/smolville_drift')">
-    <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo">
+<body>
+  <!-- Шапка с именем пользователя и логотипом -->
+  <div class="header">
+    <span id="username" class="username">Гость</span>
+    <div onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/smolville_drift')" class="cursor-pointer">
+      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo">
+    </div>
   </div>
 
-  <h1 class="text-2xl font-bold text-red-500 mb-6">Афиши автоэнтузиастов</h1>
+  <h1 class="text-xl font-bold text-gray-900 mt-4 mb-4">Афиши автоэнтузиастов</h1>
 
   <!-- Фильтры -->
-  <div class="w-full mb-6 flex flex-col space-y-2">
-    <select id="typeFilter" class="w-full p-2 rounded-lg bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500">
+  <div class="w-full mb-4 flex flex-col space-y-2">
+    <select id="typeFilter" class="w-full p-2 rounded-lg bg-white text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
       <option value="all">Все мероприятия</option>
       <option value="rally">Ралли</option>
       <option value="exhibition">Выставки</option>
       <option value="meetup">Встречи</option>
     </select>
-    <select id="dateFilter" class="w-full p-2 rounded-lg bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500">
+    <select id="dateFilter" class="w-full p-2 rounded-lg bg-white text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
       <option value="all">Все даты</option>
       <option value="upcoming">Ближайшие</option>
       <option value="thisWeek">На этой неделе</option>
     </select>
   </div>
 
-  <!-- Список афиш -->
-  <div id="events" class="w-full space-y-4"></div>
+  <!-- Список афиш в виде сетки -->
+  <div id="events" class="events-grid"></div>
 
   <!-- Модальное окно для деталей -->
-  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden">
-    <div class="bg-gray-800 rounded-lg p-6 w-11/12 max-w-md">
-      <h2 id="modalTitle" class="text-xl font-bold text-red-500 mb-4"></h2>
-      <p id="modalDate" class="text-gray-300 mb-2"></p>
-      <p id="modalLocation" class="text-gray-300 mb-2"></p>
-      <p id="modalDescription" class="text-gray-300 mb-4"></p>
+  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="modal-content rounded-lg p-6 w-11/12 max-w-md">
+      <h2 id="modalTitle" class="text-lg font-bold text-gray-900 mb-3"></h2>
+      <p id="modalDate" class="text-sm text-gray-600 mb-2"></p>
+      <p id="modalLocation" class="text-sm text-gray-600 mb-2"></p>
+      <p id="modalDescription" class="text-sm text-gray-600 mb-4"></p>
       <div class="flex flex-col space-y-2">
-        <button id="joinBtn" class="bg-red-500 text-white py-2 rounded-lg hover:bg-red-600">Записаться</button>
-        <button id="shareBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Поделиться</button>
-        <button id="mapBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Открыть карту</button>
-        <button id="closeModal" class="bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">Закрыть</button>
+        <button id="joinBtn" class="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600">Записаться</button>
+        <button id="shareBtn" class="bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">Поделиться</button>
+        <button id="mapBtn" class="bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">Открыть карту</button>
+        <button id="closeModal" class="bg-gray-300 text-gray-900 py-2 rounded-lg hover:bg-gray-400">Закрыть</button>
       </div>
     </div>
+  </div>
+
+  <!-- Нижнее меню -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" data-tab="events">Мероприятия</button>
+    <button class="nav-btn" data-tab="favorites">Избранное</button>
+    <button class="nav-btn" data-tab="map">Карта</button>
+    <button class="nav-btn" data-tab="profile">Профиль</button>
   </div>
 
   <script>
@@ -87,6 +157,10 @@
     tg.ready();
     tg.expand();
     tg.enableClosingConfirmation();
+
+    // Установка имени пользователя
+    const username = tg.initDataUnsafe?.user?.first_name || 'Гость';
+    document.getElementById('username').textContent = username;
 
     // Пример данных афиш
     const events = [
@@ -97,7 +171,7 @@
         date: "2025-07-10",
         location: "Москва, трасса ADM",
         description: "Экстремальная гонка под звездами для любителей скорости!",
-        image: "https://via.placeholder.com/300x150?text=Ночная+гонка",
+        image: "https://via.placeholder.com/150x150?text=Ночная+гонка",
         coords: { lat: 55.7558, lng: 37.6173 }
       },
       {
@@ -107,7 +181,7 @@
         date: "2025-07-15",
         location: "Санкт-Петербург, Экспоцентр",
         description: "Коллекция классических автомобилей 60-80-х годов.",
-        image: "https://via.placeholder.com/300x150?text=Ретро-авто",
+        image: "https://via.placeholder.com/150x150?text=Ретро-авто",
         coords: { lat: 59.9343, lng: 30.3351 }
       },
       {
@@ -117,8 +191,18 @@
         date: "2025-06-20",
         location: "Казань, Парковка ТЦ",
         description: "Общение, обмен опытом и крутые тачки!",
-        image: "https://via.placeholder.com/300x150?text=Встреча",
+        image: "https://via.placeholder.com/150x150?text=Встреча",
         coords: { lat: 55.8304, lng: 49.0661 }
+      },
+      {
+        id: 4,
+        title: "Дрифт-фестиваль",
+        type: "rally",
+        date: "2025-07-20",
+        location: "Сочи, Автодром",
+        description: "Зрелищный дрифт для фанатов!",
+        image: "https://via.placeholder.com/150x150?text=Дрифт",
+        coords: { lat: 43.5912, lng: 39.7203 }
       }
     ];
 
@@ -127,20 +211,33 @@
     const dateFilter = document.getElementById('dateFilter');
     const eventModal = document.getElementById('eventModal');
     const closeModalBtn = document.getElementById('closeModal');
+    const navButtons = document.querySelectorAll('.nav-btn');
+
+    // Обработка нижнего меню
+    navButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        navButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        const tab = button.dataset.tab;
+        // Пока функционал только для "Мероприятия", остальные табы для будущего расширения
+        if (tab !== 'events') {
+          tg.showAlert(`Раздел "${tab}" в разработке!`);
+        }
+      });
+    });
 
     // Функция для отображения афиш
     function renderEvents(filteredEvents = events) {
       eventsContainer.innerHTML = '';
       filteredEvents.forEach((event, index) => {
         const eventCard = document.createElement('div');
-        eventCard.className = 'event-card bg-gray-800 rounded-lg overflow-hidden fade-in';
+        eventCard.className = 'event-card fade-in';
         eventCard.style.animationDelay = `${index * 0.1}s`;
         eventCard.innerHTML = `
-          <img src="${event.image}" alt="${event.title}" class="w-full h-32 object-cover">
-          <div class="p-4">
-            <h2 class="text-lg font-bold text-white">${event.title}</h2>
-            <p class="text-sm text-gray-400">${event.date} • ${event.location}</p>
-            <p class="text-sm text-gray-300 mt-2 line-clamp-2">${event.description}</p>
+          <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg">
+          <div class="p-2 text-center">
+            <p class="text-sm font-semibold text-gray-900">${event.date}</p>
+            <p class="text-xs text-gray-600 line-clamp-1">${event.title}</p>
           </div>
         `;
         eventCard.addEventListener('click', () => showEventDetails(event));
@@ -156,7 +253,6 @@
       document.getElementById('modalDescription').textContent = event.description;
       eventModal.classList.remove('hidden');
 
-      // Обработчики кнопок в модальном окне
       document.getElementById('joinBtn').onclick = () => joinEvent(event.id);
       document.getElementById('shareBtn').onclick = () => shareEvent(event);
       document.getElementById('mapBtn').onclick = () => openMap(event.coords);
@@ -199,12 +295,10 @@
       const date = dateFilter.value;
       let filteredEvents = events;
 
-      // Фильтр по типу
       if (type !== 'all') {
         filteredEvents = filteredEvents.filter(event => event.type === type);
       }
 
-      // Фильтр по дате
       const today = new Date('2025-06-18');
       if (date === 'upcoming') {
         filteredEvents = filteredEvents.filter(event => new Date(event.date) >= today);
