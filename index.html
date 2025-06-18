@@ -248,7 +248,7 @@
       document.getElementById('adminBtn').classList.remove('hidden');
     }
 
-    const AIRTABLE_API_KEY = 'pat4GDCWliOOHrG1d.b0f72d88e2f9109794415c96617c5afe86dc2f4e1500c4414fb27571c50e04d4';
+    const AIRTABLE_API_KEY = 'patusKukW9gvyIC9O.24a3467ed01b96c6f6b1469874eec5b05de13981218880922d73aff57eb5a0e7';
     const AIRTABLE_BASE_ID = 'appjunbLjOT8Seluo';
     const AIRTABLE_TABLE_NAME = 'tbl1wzVpDRpInIpMY';
     const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}`;
@@ -302,7 +302,7 @@
             ID: String(Math.floor(Math.random() * 1000000)),
             Title: document.getElementById('eventTitle').value,
             Type: document.getElementById('eventType').value,
-            "Date (Friendly)": document.getElementById('eventDate').value,
+            Date: document.getElementById('eventDate').value,
             Location: document.getElementById('eventLocation').value,
             Description: document.getElementById('eventDescription').value,
             Image: []
@@ -338,7 +338,7 @@
             ID: document.getElementById('editId').value,
             Title: document.getElementById('editTitle').value,
             Type: document.getElementById('editType').value,
-            "Date (Friendly)": document.getElementById('editDate').value,
+            Date: document.getElementById('editDate').value,
             Location: document.getElementById('editLocation').value,
             Description: document.getElementById('editDescription').value
           }
@@ -379,7 +379,7 @@
           eventId: record.fields.ID,
           title: record.fields.Title,
           type: record.fields.Type,
-          date: record.fields["Date (Friendly)"],
+          date: record.fields.Date,
           location: record.fields.Location,
           description: record.fields.Description,
           image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/150'
@@ -422,7 +422,7 @@
           id: record.id,
           eventId: record.fields.ID,
           title: record.fields.Title,
-          date: record.fields["Date (Friendly)"]
+          date: record.fields.Date
         }));
         manageList.innerHTML = '';
         if (events.length === 0) {
@@ -452,7 +452,7 @@
             document.getElementById('editId').value = id;
             document.getElementById('editTitle').value = event.fields.Title || '';
             document.getElementById('editType').value = event.fields.Type || '';
-            document.getElementById('editDate').value = event.fields["Date (Friendly)"] || '';
+            document.getElementById('editDate').value = event.fields.Date || '';
             document.getElementById('editLocation').value = event.fields.Location || '';
             document.getElementById('editDescription').value = event.fields.Description || '';
             document.getElementById('editImage').value = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : '';
