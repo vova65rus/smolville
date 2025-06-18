@@ -50,7 +50,7 @@
       align-items: center;
       justify-content: space-between;
       width: 100%;
-      padding: 10px 0;
+      padding: 10px 16px;
     }
     .username {
       font-size: 18px;
@@ -94,7 +94,7 @@
       grid-template-columns: repeat(2, 1fr);
       gap: 10px;
       width: 100%;
-      padding-bottom: 60px;
+      padding: 0 16px 60px 16px;
     }
     .event-card {
       aspect-ratio: 1/1;
@@ -104,16 +104,16 @@
       padding: 10px;
     }
     .modal-content, .admin-content {
-      background: rgba(28, 28, 30, 0.9);
+      background: rgba(28, 28, 30, 0.95);
       backdrop-filter: blur(10px);
     }
     .admin-content {
-      padding-bottom: 70px;
+      padding-bottom: 80px;
       overflow-y: auto;
-      max-height: calc(100vh - 150px);
+      max-height: 80vh;
       margin-top: 20px;
     }
-    .admin-form input, .admin-form textarea {
+    .admin-form input, .admin-form textarea, .admin-form select {
       background: #2c2c2e;
       color: #ffffff;
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -122,7 +122,7 @@
       width: 100%;
       margin-bottom: 10px;
     }
-    .admin-form button, .admin-tab, .delete-btn {
+    .admin-form button, .admin-tab, .delete-btn, .edit-btn {
       background: #0a84ff;
       color: #ffffff;
       padding: 10px;
@@ -132,10 +132,13 @@
       cursor: pointer;
     }
     .admin-tab.active {
-      background: #1a73e8;
+      background: #1a63d8;
     }
     .delete-btn {
       background: #ff3b30;
+    }
+    .edit-btn {
+      background: #34c759;
     }
     .admin-section {
       display: none;
@@ -149,48 +152,74 @@
   </style>
 </head>
 <body>
-  <!-- Шапка с именем пользователя и логотипом -->
-  <div class="header px-4">
+  <header class="header">
     <span id="username" class="username">Гость</span>
     <div onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/smolville_drift')" class="cursor-pointer">
       <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo">
     </div>
-  </div>
+  </header>
 
   <h1 class="text-xl font-bold text-white mt-4 mb-4 text-center">Афиши автоэнтузиастов</h1>
 
-  <!-- Список афиш в виде сетки -->
-  <div id="events" class="events-grid px-4"></div>
+  <div id="events" class="events-grid"></div>
 
-  <!-- Админ-панель -->
   <div id="adminPanel" class="admin-content rounded-lg p-6 w-11/12 max-w-md mx-auto hidden">
     <h2 class="text-lg font-bold text-white mb-3">Админ-панель</h2>
     <div class="flex space-x-2 mb-4">
       <button class="admin-tab active" data-tab="add">Добавить</button>
-      <button class="admin-tab" data-tab="delete">Удалить</button>
+      <button class="admin-tab" data-tab="manage">Управление</button>
     </div>
-    <!-- Форма добавления -->
     <div id="addSection" class="admin-section active">
       <form id="adminForm" class="admin-form">
         <input type="text" id="eventTitle" placeholder="Название мероприятия" required>
+        <select id="eventType" required>
+          <option value="" disabled selected>Выбери категорию</option>
+          <option value="rally">Ралли</option>
+          <option value="exhibition">Выставка</option>
+          <option value="meetup">Встреча</option>
+        </select>
         <input type="date" id="eventDate" required>
-        <input type="text" id="eventLocation" placeholder="Место проведения" required>
-        <textarea id="eventDescription" placeholder="Описание мероприятия" rows="4" required></textarea>
+        <input type="text" id="eventLocation" placeholder="Место" required>
+        <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
         <input type="number" id="eventLat" placeholder="Широта (например, 55.7558)" step="any" required>
         <input type="number" id="eventLng" placeholder="Долгота (например, 37.6173)" step="any" required>
         <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение</button>
-        <img id="previewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью изображения">
+        <img id="previewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью">
         <input type="hidden" id="eventImage">
-        <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить мероприятие</button>
+        <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
       </form>
     </div>
-    <!-- Список для удаления -->
-    <div id="deleteSection" class="admin-section">
-      <div id="deleteList" class="space-y-2"></div>
+    <div id="manageSection" class="admin-section">
+      <div id="manageList" class="space-y-2"></div>
     </div>
   </div>
 
-  <!-- Модальное окно для деталей -->
+  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="modal-content rounded-lg p-6 w-11/12 max-w-md">
+      <h2 class="text-lg font-bold text-white mb-3">Редактировать</h2>
+      <form id="editForm" class="admin-form">
+        <input type="hidden" id="editId">
+        <input type="text" id="editTitle" placeholder="Название" required>
+        <select id="editType" required>
+          <option value="" disabled>Категория</option>
+          <option value="rally">Ралли</option>
+          <option value="exhibition">Выставка</option>
+          <option value="meetup">Встреча</option>
+        </select>
+        <input type="date" id="editDate" required>
+        <input type="text" id="editLocation" placeholder="Место" required>
+        <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
+        <input type="number" id="editLat" placeholder="Широта" step="any" required>
+        <input type="number" id="editLng" placeholder="Долгота" step="any" required>
+        <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Изменить изображение</button>
+        <img id="editPreviewImage" class="w-full h-32 object-cover rounded-lg mb-4" alt="Превью">
+        <input type="hidden" id="editImage">
+        <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
+        <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
+      </form>
+    </div>
+  </div>
+
   <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
     <div class="modal-content rounded-lg p-6 w-11/12 max-w-md">
       <h2 id="modalTitle" class="text-lg font-bold text-white mb-3"></h2>
@@ -200,13 +229,12 @@
       <div class="flex flex-col space-y-2">
         <button id="joinBtn" class="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600">Записаться</button>
         <button id="shareBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Поделиться</button>
-        <button id="mapBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Открыть карту</button>
+        <button id="mapBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Карта</button>
         <button id="closeModal" class="bg-gray-700 text-white py-2 rounded-lg hover:bg-gray-800">Закрыть</button>
       </div>
     </div>
   </div>
 
-  <!-- Нижнее меню -->
   <div class="bottom-nav">
     <button class="nav-btn active" data-tab="events">Мероприятия</button>
     <button class="nav-btn" data-tab="favorites">Избранное</button>
@@ -221,61 +249,18 @@
     tg.expand();
     tg.enableClosingConfirmation();
 
-    // Установка имени пользователя и проверка админа
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    const username = user.first_name || 'Гость';
-    document.getElementById('username').textContent = username;
-
-    // Проверка админа (замени 123456789 на свой Telegram ID)
-    const adminId = 366825437; // Укажи свой Telegram ID
+    document.getElementById('username').textContent = user.first_name || 'Гость';
+    const adminId = 123456789; // Замени на свой Telegram ID
     const isAdmin = user.id === adminId;
     if (isAdmin) {
       document.getElementById('adminBtn').classList.remove('hidden');
     }
 
-    // Данные афиш
-    let events = [
-      {
-        id: 1,
-        title: "Ночная гонка",
-        type: "rally",
-        date: "2025-07-10",
-        location: "Москва, трасса ADM",
-        description: "Экстремальная гонка под звездами для любителей скорости!",
-        image: "https://via.placeholder.com/150x150?text=Ночная+гонка",
-        coords: { lat: 55.7558, lng: 37.6173 }
-      },
-      {
-        id: 2,
-        title: "Выставка ретро-авто",
-        type: "exhibition",
-        date: "2025-07-15",
-        location: "Санкт-Петербург, Экспоцентр",
-        description: "Коллекция классических автомобилей 60-80-х годов.",
-        image: "https://via.placeholder.com/150x150?text=Ретро-авто",
-        coords: { lat: 59.9343, lng: 30.3351 }
-      },
-      {
-        id: 3,
-        title: "Встреча автоклуба",
-        type: "meetup",
-        date: "2025-06-20",
-        location: "Казань, Парковка ТЦ",
-        description: "Общение, обмен опытом и крутые тачки!",
-        image: "https://via.placeholder.com/150x150?text=Встреча",
-        coords: { lat: 55.8304, lng: 49.0661 }
-      },
-      {
-        id: 4,
-        title: "Дрифт-фестиваль",
-        type: "rally",
-        date: "2025-07-20",
-        location: "Сочи, Автодром",
-        description: "Зрелищный дрифт для фанатов!",
-        image: "https://via.placeholder.com/150x150?text=Дрифт",
-        coords: { lat: 43.5912, lng: 39.7203 }
-      }
-    ];
+    const AIRTABLE_API_KEY = 'pat4GDCWliOOHrG1d.b0f72d88e2f9109794415c96617c5afe86dc2f4e1500c4414fb27571c50e04d4'; // Замени на свой API-ключ
+    const AIRTABLE_BASE_ID = 'appjunbLjOT8Seluo'; // Замени на Base ID
+    const AIRTABLE_TABLE_NAME = 'Events'; // Имя таблицы
+    const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}`;
 
     const eventsContainer = document.getElementById('events');
     const eventModal = document.getElementById('eventModal');
@@ -284,201 +269,336 @@
     const adminForm = document.getElementById('adminForm');
     const uploadImageBtn = document.getElementById('uploadImageBtn');
     const previewImage = document.getElementById('previewImage');
+    const editModal = document.getElementById('editModal');
+    const editForm = document.getElementById('editForm');
+    const editImageBtn = document.getElementById('editImageBtn');
+    const editPreviewImage = document.getElementById('editPreviewImage');
+    const cancelEdit = document.getElementById('cancelEdit');
     const navButtons = document.querySelectorAll('.nav-btn');
     const adminTabs = document.querySelectorAll('.admin-tab');
-    const deleteList = document.getElementById('deleteList');
+    const manageList = document.getElementById('manageList');
 
-    // Обработка нижнего меню
     navButtons.forEach(button => {
       button.addEventListener('click', () => {
         navButtons.forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
-        const tab = button.dataset.tab;
-        console.log(`Клик по вкладке: ${tab}`);
         eventsContainer.classList.add('hidden');
         adminPanel.classList.add('hidden');
-        if (tab === 'events') {
+        if (button.dataset.tab === 'events') {
           eventsContainer.classList.remove('hidden');
-        } else if (tab === 'admin' && isAdmin) {
+        } else if (button.dataset.tab === 'admin' && isAdmin) {
           adminPanel.classList.remove('hidden');
-          renderDeleteList();
+          renderManageList();
         } else {
-          tg.showAlert(`Раздел "${tab}" в разработке!`);
+          tg.showAlert(`Раздел "${button.dataset.tab}" в разработке!`);
         }
       });
     });
 
-    // Обработка вкладок админ-панели
     adminTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         adminTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         document.querySelectorAll('.admin-section').forEach(section => section.classList.remove('active'));
         document.getElementById(`${tab.dataset.tab}Section`).classList.add('active');
-        if (tab.dataset.tab === 'delete') {
-          renderDeleteList();
+        if (tab.dataset.tab === 'manage') {
+          renderManageList();
         }
       });
     });
 
-    // Загрузка изображения
+    function uploadImage(input, previewImg, imageField) {
+      return new Promise((resolve, reject) => {
+        const file = input.files[0];
+        if (!file) {
+          reject('Файл не выбран');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          previewImg.src = e.target.result;
+          previewImg.classList.remove('hidden');
+          const formData = new FormData();
+          formData.append('file', file);
+          imageField.value = e.target.result; // Временное значение для превью
+          resolve(file);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
     uploadImageBtn.addEventListener('click', () => {
-      tg.showPopup({
-        title: 'Выберите действие',
-        message: 'Выберите изображение для мероприятия',
-        buttons: [{ id: 'upload', type: 'ok', text: 'Загрузить' }, { type: 'cancel' }]
-      }, (buttonId) => {
-        if (buttonId === 'upload') {
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = 'image/*';
-          input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (file) {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                const base64Image = e.target.result;
-                document.getElementById('eventImage').value = base64Image;
-                previewImage.src = base64Image;
-                previewImage.classList.remove('hidden');
-              };
-              reader.readAsDataURL(file);
-            }
-          };
-          input.click();
-        }
-      });
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = () => {
+        uploadImage(input, previewImage, document.getElementById('eventImage'))
+          .catch(err => tg.showAlert(`Ошибка: ${err}`));
+      };
+      input.click();
     });
 
-    // Обработка формы добавления
-    adminForm.addEventListener('submit', (e) => {
+    editImageBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = () => {
+        uploadImage(input, editPreviewImage, document.getElementById('editImage'))
+          .catch(err => tg.showAlert(`Ошибка: ${err}`));
+      };
+      input.click();
+    });
+
+    adminForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const newEvent = {
-        id: events.length + 1,
-        title: document.getElementById('eventTitle').value,
-        type: 'custom',
-        date: document.getElementById('eventDate').value,
-        location: document.getElementById('eventLocation').value,
-        description: document.getElementById('eventDescription').value,
-        image: document.getElementById('eventImage').value || 'https://via.placeholder.com/150x150?text=Новое+событие',
-        coords: {
-          lat: parseFloat(document.getElementById('eventLat').value),
-          lng: parseFloat(document.getElementById('eventLng').value)
+      const fileInput = document.getElementById('eventImage').value ? document.createElement('input') : null;
+      if (fileInput) {
+        fileInput.type = 'file';
+        fileInput.files = previewImage.src ? [new File([previewImage.src], 'image.jpg')] : [];
+      }
+      const eventData = {
+        fields: {
+          ID: String(Math.floor(Math.random() * 1000000)), // Уникальный ID
+          Title: document.getElementById('eventTitle').value,
+          Type: document.getElementById('eventType').value,
+          Date: document.getElementById('eventDate').value,
+          Location: document.getElementById('eventLocation').value,
+          Description: document.getElementById('eventDescription').value,
+          Lat: parseFloat(document.getElementById('eventLat').value),
+          Lng: parseFloat(document.getElementById('eventLng').value),
+          Image: fileInput && fileInput.files[0] ? [{ url: previewImage.src }] : []
         }
       };
-      events.push(newEvent);
-      renderEvents();
-      adminForm.reset();
-      previewImage.classList.add('hidden');
-      document.getElementById('eventImage').value = '';
-      tg.showAlert('Мероприятие успешно добавлено!');
-      navButtons.forEach(btn => btn.classList.remove('active'));
-      document.querySelector('[data-tab="events"]').classList.add('active');
-      eventsContainer.classList.remove('hidden');
-      adminPanel.classList.add('hidden');
+      try {
+        const response = await fetch(AIRTABLE_API_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(eventData)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        adminForm.reset();
+        previewImage.classList.add('hidden');
+        document.getElementById('eventImage').value = '';
+        tg.showAlert('Мероприятие добавлено!');
+        navButtons.forEach(btn => btn.classList.remove('active'));
+        document.querySelector('[data-tab="events"]').classList.add('active');
+        eventsContainer.classList.remove('hidden');
+        adminPanel.classList.add('hidden');
+        renderEvents();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
     });
 
-    // Рендеринг списка для удаления
-    function renderDeleteList() {
-      deleteList.innerHTML = '';
-      if (events.length === 0) {
-        deleteList.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий для удаления</p>';
-        return;
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById('editImage').value ? document.createElement('input') : null;
+      if (fileInput) {
+        fileInput.type = 'file';
+        fileInput.files = editPreviewImage.src ? [new File([editPreviewImage.src], 'image.jpg')] : [];
       }
-      events.forEach(event => {
-        const item = document.createElement('div');
-        item.className = 'flex justify-between items-center bg-gray-800 p-2 rounded-lg';
-        item.innerHTML = `
-          <span class="text-sm text-white line-clamp-1">${event.title} (${event.date})</span>
-          <button class="delete-btn text-sm py-1 px-2" data-id="${event.id}">Удалить</button>
-        `;
-        deleteList.appendChild(item);
-      });
-      document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = parseInt(btn.dataset.id);
-          tg.showConfirm('Вы уверены, что хотите удалить это мероприятие?', (confirmed) => {
-            if (confirmed) {
-              events = events.filter(event => event.id !== id);
-              renderEvents();
-              renderDeleteList();
-              tg.showAlert('Мероприятие удалено!');
-            }
+      const eventData = {
+        fields: {
+          ID: document.getElementById('editId').value,
+          Title: document.getElementById('editTitle').value,
+          Type: document.getElementById('editType').value,
+          Date: document.getElementById('editDate').value,
+          Location: document.getElementById('editLocation').value,
+          Description: document.getElementById('editDescription').value,
+          Lat: parseFloat(document.getElementById('editLat').value),
+          Lng: parseFloat(document.getElementById('editLng').value),
+          Image: fileInput && fileInput.files[0] ? [{ url: editPreviewImage.src }] : []
+        }
+      };
+      try {
+        const response = await fetch(`${AIRTABLE_API_URL}/${document.getElementById('editId').value}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(eventData)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        editModal.classList.add('hidden');
+        tg.showAlert('Мероприятие обновлено!');
+        renderEvents();
+        renderPosts();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    });
+
+    cancelEdit.addEventListener('click', () => {
+      editModal.classList.add('hidden');
+    });
+
+    async function renderEvents() {
+      eventsContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
+      try {
+        const response = await fetch(AIRTABLE_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        const events = data.records.map(record => ({
+          id: record.id,
+          eventId: record.fields.ID,
+          title: record.fields.Title,
+          type: record.fields.Type,
+          date: record.fields.Date,
+          location: record.fields.Location,
+          description: record.fields.Description,
+          coords: { lat: record.fields.Lat, lng: record.fields.Lng },
+          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/150'
+        }));
+        console.log('Events:', events);
+        eventsContainer.innerHTML = '';
+        if (events.length === 0) {
+          eventsContainer.innerHTML = '<p class="text-center text-gray-500">Нет мероприятий</p>';
+          return;
+        }
+        events.forEach((event, index) => {
+          const eventCard = document.createElement('div');
+          eventCard.classList = 'event-card fade-in';
+          eventCard.style.animationDelay = `${index * 0.2}s`;
+          eventCard.innerHTML = `
+            <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg">
+            <div class="p-3 text-center">
+              <p class="text-sm font-semibold text-gray-200">${event.date}</p>
+              <p class="text-sm text-gray-400 line-clamp-1">${event.title}</p>
+            </div>
+          `;
+          eventTile.addEventListener('click', () => showEventDetails(event));
+          eventCard.appendChild(eventCard);
+        });
+      } catch (err) {
+        eventsContainer.innerHTML = '<p class="text-center text-gray-500">Ошибка загрузки</p>';
+        console.error('Error:', err);
+      }
+    }
+
+    async function renderManageList() {
+      manageList.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
+      try {
+        const response = await fetch(AIRTABLE_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        const events = data.records.map(record => ({
+          id: record.id,
+          eventId: record.fields.ID,
+          title: record.fields.Title,
+          date: record.fields.Date
+        }));
+        manageList.innerHTML = '';
+        if (events.length === 0) {
+          manageList.innerHTML = '<p class="text-center text-gray-500">Нет мероприятий</p>';
+          return;
+        }
+        events.forEach(event => {
+          const item = document.createElement('div');
+          item.className = 'flex justify-between items-center p-3 bg-gray-800 rounded-lg';
+          item.innerHTML = `
+            <span class="text-sm text-gray-200 line-clamp-2">${event.title} (${event.date})</span>
+            <div class="flex space-x-2">
+              <button class="edit-btn text-sm py-1 px-3 bg-green-500 rounded-lg" data-id="${event.id}">Редактировать</button>
+              <button class="delete-btn text-sm py-1 px-3 bg-red-600 rounded-lg" data-id="${event.id}">Удалить</button>
+            </div>
+          `;
+          manageList.appendChild(item);
+        });
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            const response = await fetch(`${AIRTABLE_API_URL}/${id}`, {
+              headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+            });
+            const event = await response.json();
+            document.getElementById('editId').value = id;
+            document.getElementById('editTitle').value = event.fields.Title;
+            document.getElementById('editType').value = event.fields.Type;
+            document.getElementById('editDate').value = event.fields.Date;
+            document.getElementById('editLocation').value = event.fields.Location;
+            document.getElementById('editDescription').value = event.fields.Description;
+            document.getElementById('editLat').value = event.fields.Lat;
+            document.getElementById('editLng').value = event.fields.Lng;
+            document.getElementById('editImage').value = event.fields.Image && event.fields.Image[0]?.url || '';
+            editPreviewImage.src = event.fields.Image && event.fields.Image[0]?.url || 'https://via.placeholder.com/150';
+            editPreviewImage.classList.toggle('hidden', !event.fields.Image);
+            editModal.classList.remove('hidden');
           });
         });
-      });
-    }
-
-    // Функция для отображения афиш
-    function renderEvents() {
-      console.log('Рендеринг событий:', events);
-      eventsContainer.innerHTML = '';
-      if (!events || events.length === 0) {
-        eventsContainer.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
-        return;
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            tg.showConfirm('Удалить событие?', async (confirmed) => {
+              if (confirmed) {
+                try {
+                  const response = await fetch(`${AIRTABLE_API_URL}/${id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+                  });
+                  if (!response.ok) throw new Error(await response.text());
+                  tg.showAlert('Мероприятие удалено!');
+                  renderEvents();
+                  renderManageList();
+                } catch (err) {
+                  tg.showAlert(`Ошибка: ${err.message}`);
+                }
+              }
+            });
+          });
+        });
+      } catch (err) {
+        manageList.innerHTML = '<p class="text-center text-gray-500">Ошибка загрузки</p>';
+        console.error('Ошибка:', err);
       }
-      events.forEach((event, index) => {
-        const eventCard = document.createElement('div');
-        eventCard.className = 'event-card fade-in';
-        eventCard.style.animationDelay = `${index * 0.1}s`;
-        eventCard.innerHTML = `
-          <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg">
-          <div class="p-2 text-center">
-            <p class="text-sm font-semibold text-white">${event.date}</p>
-            <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
-          </div>
-        `;
-        eventCard.addEventListener('click', () => showEventDetails(event));
-        eventsContainer.appendChild(eventCard);
-      });
     }
 
-    // Функция для показа деталей мероприятия
     function showEventDetails(event) {
-      console.log('Открытие деталей:', event);
       document.getElementById('modalTitle').textContent = event.title;
       document.getElementById('modalDate').textContent = `Дата: ${event.date}`;
       document.getElementById('modalLocation').textContent = `Место: ${event.location}`;
-      document.getElementById('modalDescription').textContent = event.description;
+      document.getElementById('modalDescription').value = event.description;
       eventModal.classList.remove('hidden');
       document.getElementById('joinBtn').onclick = () => joinEvent(event.id);
       document.getElementById('shareBtn').onclick = () => shareEvent(event);
       document.getElementById('mapBtn').onclick = () => openMap(event.coords);
     }
 
-    // Закрытие модального окна
     closeModalBtn.addEventListener('click', () => {
       eventModal.classList.add('hidden');
     });
 
-    // Записаться на мероприятие
     function joinEvent(eventId) {
       tg.showPopup({
-        title: 'Запись на мероприятие',
-        message: 'Хотите записаться на это мероприятие?',
+        title: title: 'Записаться',
+        message: 'Записаться на мероприятие?',
         buttons: [{ id: 'join', type: 'ok', text: 'Да' }, { type: 'cancel' }]
       }, (buttonId) => {
         if (buttonId === 'join') {
           tg.sendData(JSON.stringify({ action: 'join', eventId }));
-          tg.showAlert('Вы записались на мероприятие!');
+          tg.showAlert('Вы записались!');
         }
       });
     }
 
-    // Поделиться мероприятием
     function shareEvent(event) {
-      const text = `Присоединяйтесь к мероприятию: ${event.title} (${event.date}, ${event.location})`;
-      const url = `https://t.me/smolville_drift?start=event_${event.id}`;
+      const text = `Присоединяйтесь: ${event.title} (${event.date}, ${event.location})`;
+      const url = `https://t.me/smolville_drift?event_${event.id}`;
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
     }
 
-    // Открыть карту
     function openMap(coords) {
       const url = `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
-      tg.openLink(url);
+      window.open(url);
     }
 
-    // Инициализация
     renderEvents();
   </script>
 </body>
