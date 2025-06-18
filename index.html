@@ -220,7 +220,9 @@
     <div id="adsSection" class="admin-section">
       <p id="adStatus" class="text-sm text-gray-400 mb-4 hidden">Реклама не настроена</p>
       <form id="adForm" class="admin-form">
-        <input type="text" id="adImageUrl" placeholder="URL изображения рекламы" required>
+        <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение рекламы</button>
+        <img id="adPreviewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью рекламы">
+        <input type="file" id="adImageInput" accept="image/*" class="hidden">
         <input type="text" id="adLinkUrl" placeholder="URL ссылки рекламы" required>
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить рекламу</button>
       </form>
@@ -287,10 +289,11 @@
       document.getElementById('adminBtn').classList.remove('hidden');
     }
 
-    const AIRTABLE_API_KEY = 'patusKukW9gvyIC9O.24a3467ed01b96c6f6b1469874eec5b05de13981218880922d73aff57eb5a0e7';
+    const AIRTABLE_EVENTS_API_KEY = 'patusKukW9gvyIC9O.24a3467ed01b96c6f6b1469874eec5b05de13981218880922d73aff57eb5a0e7';
+    const AIRTABLE_ADS_API_KEY = 'patIkY9DHyB0Prcc7.65cfabfe91df5c711f2bae60b697e0f5456c8e6df6e8cb02a8ad1636c15a7a42';
     const AIRTABLE_BASE_ID = 'appjunbLjOT8Seluo';
     const AIRTABLE_EVENTS_TABLE_NAME = 'tbl1wzVpDRpInIpMY';
-    const AIRTABLE_ADS_TABLE_NAME = 'tblXXXXXXXXXXXXXX'; // Замени на Table ID для Ads
+    const AIRTABLE_ADS_TABLE_NAME = 'tblILQr1xFKmkLTKB';
     const AIRTABLE_EVENTS_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_EVENTS_TABLE_NAME)}`;
     const AIRTABLE_ADS_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_ADS_TABLE_NAME)}`;
     const IMGUR_CLIENT_ID = '1234567890abcdef'; // Замени на твой Imgur Client ID
@@ -306,6 +309,9 @@
     const previewImage = document.getElementById('previewImage');
     const imageInput = document.getElementById('imageInput');
     const adForm = document.getElementById('adForm');
+    const uploadAdImageBtn = document.getElementById('uploadAdImageBtn');
+    const adPreviewImage = document.getElementById('adPreviewImage');
+    const adImageInput = document.getElementById('adImageInput');
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
     const editImageBtn = document.getElementById('editImageBtn');
@@ -334,7 +340,7 @@
     });
 
     adminTabs.forEach(tab => {
-      tab.addEventListener('click', () => {
+      button.addEventListener('click', () => {
         adminTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         document.querySelectorAll('.admin-section').forEach(section => section.classList.remove('active'));
@@ -358,6 +364,22 @@
         reader.onload = (e) => {
           previewImage.src = e.target.result;
           previewImage.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    uploadAdImageBtn.addEventListener('click', () => {
+      adImageInput.click();
+    });
+
+    adImageInput.addEventListener('change', () => {
+      const file = adImageInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          adPreviewImage.src = e.target.result;
+          adPreviewImage.classList.remove('hidden');
         };
         reader.readAsDataURL(file);
       }
@@ -423,7 +445,7 @@
         const response = await fetch(AIRTABLE_EVENTS_API_URL, {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(eventData)
@@ -467,7 +489,7 @@
         const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${document.getElementById('editId').value}`, {
           method: 'PATCH',
           headers: {
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(eventData)
@@ -486,25 +508,32 @@
     adForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
+        let imageUrl = null;
+        const file = adImageInput.files[0];
+        if (file) {
+          imageUrl = await uploadToImgur(file);
+          if (!imageUrl) throw new Error('Не удалось загрузить изображение рекламы');
+        }
         const adData = {
           fields: {
             ID: 'ad1',
-            ImageUrl: document.getElementById('adImageUrl').value,
-            LinkUrl: document.getElementById('adLinkUrl').value
+            IMG: imageUrl ? [{ url: imageUrl }] : [],
+            URL: document.getElementById('adLinkUrl').value
           }
         };
         const recordsResponse = await fetch(AIRTABLE_ADS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+          headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
         });
         if (!recordsResponse.ok) throw new Error(await recordsResponse.text());
         const records = await recordsResponse.json();
         const existingAd = records.records?.find(record => record.fields.ID === 'ad1');
         let response;
         if (existingAd) {
+          adData.fields.IMG = imageUrl ? [{ url: imageUrl }] : (existingAd.fields.IMG && existingAd.fields.IMG[0] ? [{ url: existingAd.fields.IMG[0].url }] : []);
           response = await fetch(`${AIRTABLE_ADS_API_URL}/${existingAd.id}`, {
             method: 'PATCH',
             headers: {
-              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+              Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify(adData)
@@ -513,7 +542,7 @@
           response = await fetch(AIRTABLE_ADS_API_URL, {
             method: 'POST',
             headers: {
-              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+              Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify(adData)
@@ -521,6 +550,8 @@
         }
         if (!response.ok) throw new Error(await response.text());
         adForm.reset();
+        adPreviewImage.classList.add('hidden');
+        adImageInput.value = '';
         adStatus.classList.add('hidden');
         tg.showAlert('Реклама обновлена!');
         renderAdBanner();
@@ -538,7 +569,7 @@
       eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
       try {
         const response = await fetch(AIRTABLE_EVENTS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+          headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
         });
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
@@ -581,7 +612,7 @@
     async function renderAdBanner() {
       try {
         const response = await fetch(AIRTABLE_ADS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+          headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
         });
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
@@ -592,10 +623,10 @@
           return;
         }
         const ad = data.records.find(record => record.fields.ID === 'ad1');
-        if (ad && ad.fields.ImageUrl && ad.fields.LinkUrl) {
+        if (ad && ad.fields.IMG && ad.fields.IMG[0] && ad.fields.URL) {
           adBanner.innerHTML = `
-            <a href="${ad.fields.LinkUrl}" target="_blank">
-              <img src="${ad.fields.ImageUrl}" alt="Реклама">
+            <a href="${ad.fields.URL}" target="_blank">
+              <img src="${ad.fields.IMG[0].url}" alt="Реклама">
             </a>
           `;
           adBanner.classList.remove('hidden');
@@ -616,7 +647,7 @@
     async function loadAdData() {
       try {
         const response = await fetch(AIRTABLE_ADS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+          headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
         });
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
@@ -627,8 +658,9 @@
         }
         const ad = data.records.find(record => record.fields.ID === 'ad1');
         if (ad) {
-          document.getElementById('adImageUrl').value = ad.fields.ImageUrl || '';
-          document.getElementById('adLinkUrl').value = ad.fields.LinkUrl || '';
+          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/300x100';
+          adPreviewImage.classList.toggle('hidden', !ad.fields.IMG);
+          document.getElementById('adLinkUrl').value = ad.fields.URL || '';
           adStatus.classList.add('hidden');
         } else {
           adStatus.classList.remove('hidden');
@@ -645,7 +677,7 @@
       manageList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
       try {
         const response = await fetch(AIRTABLE_EVENTS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+          headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
         });
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
@@ -676,7 +708,7 @@
           btn.addEventListener('click', async () => {
             const id = btn.dataset.id;
             const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${id}`, {
-              headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+              headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
             });
             if (!response.ok) throw new Error(await response.text());
             const event = await response.json();
@@ -699,7 +731,7 @@
                 try {
                   const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${id}`, {
                     method: 'DELETE',
-                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+                    headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
                   });
                   if (!response.ok) throw new Error(await response.text());
                   tg.showAlert('Мероприятие удалено!');
