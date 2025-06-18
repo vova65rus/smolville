@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Автомобильные-события</title>
+  <title>Автомобильные события</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
       background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.png');
       background-repeat: repeat;
-      background-size: auto;
+      background-size: 80px auto;
       background-color: #1c1c1e; /* Фоллбэк */
+      background-attachment: scroll;
       color: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       overflow-x: hidden;
@@ -29,6 +30,11 @@
       height: 100%;
       background: rgba(0, 0, 0, 0.5);
       z-index: -1;
+    }
+    @media (max-width: 768px) {
+      body {
+        background-size: 60px auto; /* Меньший паттерн для мобильных */
+      }
     }
     .event-card {
       transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -108,7 +114,7 @@
       grid-template-columns: repeat(2, 1fr);
       gap: 10px;
       width: 100%;
-      padding: 0 16px 60px 16px;
+      padding: 0 16px 10px 16px;
     }
     .event-card {
       aspect-ratio: 1/1;
@@ -165,14 +171,21 @@
     }
     .ad-banner {
       width: 100%;
-      max-width: 728px;
+      max-width: 320px;
       margin: 10px auto;
+      padding-bottom: 60px;
       display: block;
     }
     .ad-banner img {
       width: 100%;
-      height: auto;
+      max-height: 80px;
+      object-fit: contain;
       border-radius: 8px;
+    }
+    @media (min-width: 768px) {
+      .ad-banner {
+        max-width: 400px;
+      }
     }
   </style>
 </head>
@@ -186,9 +199,9 @@
 
   <h1 class="text-xl font-bold text-white mt-4 mb-4 text-center">Автомобильные события</h1>
 
-  <div id="adBanner" class="ad-banner hidden"></div>
-
   <div id="events" class="events-grid"></div>
+
+  <div id="adBanner" class="ad-banner hidden"></div>
 
   <div id="adminPanel" class="admin-content rounded-lg p-6 w-11/12 max-w-md mx-auto hidden">
     <h2 class="text-lg font-bold text-white mb-3">Админ-панель</h2>
@@ -295,7 +308,7 @@
     const AIRTABLE_ADS_TABLE_NAME = 'tblILQr1xFKmkLTKB';
     const AIRTABLE_EVENTS_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_EVENTS_TABLE_NAME)}`;
     const AIRTABLE_ADS_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_ADS_TABLE_NAME)}`;
-    const IMGUR_CLIENT_ID = '1234567890abcdef'; // Замени на твой Imgur Client ID
+    const IMGBB_API_KEY = 'cfcfd4907b017bc742ce53d162f8a3c9'; // Замени на твой ImgBB API-ключ
 
     const eventsContainer = document.getElementById('events');
     const adBanner = document.getElementById('adBanner');
@@ -400,44 +413,28 @@
       }
     });
 
-    async function uploadToImgur(file) {
+    async function uploadToImgBB(file) {
       try {
-        const formData = new FormData();
-        formData.append('image', file);
-        const response = await fetch('https://api.imgur.com/3/image', {
-          method: 'POST',
-          headers: {
-            Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
-          },
-          body: formData
+        const reader = new FileReader();
+        return new Promise((resolve, reject) => {
+          reader.onload = async () => {
+            const base64Image = reader.result.split(',')[1];
+            const formData = new FormData();
+            formData.append('image', base64Image);
+            const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+              method: 'POST',
+              body: formData
+            });
+            if (!response.ok) throw new Error(await response.text());
+            const data = await response.json();
+            resolve(data.data.url);
+          };
+          reader.onerror = () => reject(new Error('Ошибка чтения файла'));
+          reader.readAsDataURL(file);
         });
-        if (!response.ok) throw new Error(await response.text());
-        const data = await response.json();
-        return data.data.link;
       } catch (err) {
         tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
-        console.error('Imgur ошибка:', err);
-        return null;
-      }
-    }
-
-    async function uploadToAirtable(file) {
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_ADS_TABLE_NAME)}/attachments`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}`
-          },
-          body: formData
-        });
-        if (!response.ok) throw new Error(await response.text());
-        const data = await response.json();
-        return data.url; // URL загруженного файла
-      } catch (err) {
-        tg.showAlert(`Ошибка загрузки изображения в Airtable: ${err.message}`);
-        console.error('Airtable ошибка:', err);
+        console.error('ImgBB ошибка:', err);
         return null;
       }
     }
@@ -448,7 +445,7 @@
         let imageUrl = null;
         const file = imageInput.files[0];
         if (file) {
-          imageUrl = await uploadToImgur(file);
+          imageUrl = await uploadToImgBB(file);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение');
         }
         const eventData = {
@@ -492,7 +489,7 @@
         let imageUrl = null;
         const file = editImageInput.files[0];
         if (file) {
-          imageUrl = await uploadToImgur(file);
+          imageUrl = await uploadToImgBB(file);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение');
         }
         const eventData = {
@@ -531,7 +528,7 @@
         let imageUrl = null;
         const file = adImageInput.files[0];
         if (file) {
-          imageUrl = await uploadToAirtable(file);
+          imageUrl = await uploadToImgBB(file);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение рекламы');
         }
         const adData = {
@@ -545,7 +542,7 @@
           headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
         });
         if (!recordsResponse.ok) throw new Error(await recordsResponse.text());
-        const records = await recordsResponse.json();
+        const records = await response.json();
         const existingAd = records.records?.find(record => record.fields.ID === 'ad1');
         let response;
         if (existingAd) {
@@ -678,7 +675,7 @@
         }
         const ad = data.records.find(record => record.fields.ID === 'ad1');
         if (ad) {
-          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/300x100';
+          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/320x80';
           adPreviewImage.classList.toggle('hidden', !ad.fields.IMG);
           document.getElementById('adLinkUrl').value = ad.fields.URL || '';
           adStatus.classList.add('hidden');
