@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Афиши автоэнтузиастов</title>
+  <title>Авто-события</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
@@ -16,7 +16,7 @@
       overflow-x: hidden;
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
+      min-height: 20vh;
       position: relative;
     }
     body::before {
@@ -201,9 +201,8 @@
         <input type="text" id="eventTitle" placeholder="Название мероприятия" required>
         <select id="eventType" required>
           <option value="" disabled selected>Выбери категорию</option>
-          <option value="rally">Ралли</option>
-          <option value="exhibition">Выставка</option>
-          <option value="meetup">Встреча</option>
+          <option value="Спорт">Спорт</option>
+          <option value="Выставки">Выставки</option>
         </select>
         <input type="text" id="eventDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="eventLocation" placeholder="Место" required>
@@ -237,9 +236,8 @@
         <input type="text" id="editTitle" placeholder="Название" required>
         <select id="editType" required>
           <option value="" disabled>Категория</option>
-          <option value="rally">Ралли</option>
-          <option value="exhibition">Выставка</option>
-          <option value="meetup">Встреча</option>
+          <option value="Спорт">Спорт</option>
+          <option value="Выставки">Выставки</option>
         </select>
         <input type="text" id="editDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="editLocation" placeholder="Место" required>
