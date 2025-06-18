@@ -10,8 +10,8 @@
     body {
       background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.png');
       background-repeat: repeat;
-      background-size: 120px auto;
-      background-color: #1c1c1e; /* Фоллбэк */
+      background-size: 80px auto;
+      background-color: #1c1c1e;
       background-attachment: scroll;
       color: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -33,7 +33,7 @@
     }
     @media (max-width: 768px) {
       body {
-        background-size: 60px auto; /* Меньший паттерн для мобильных */
+        background-size: 60px auto;
       }
     }
     .event-card {
@@ -186,6 +186,10 @@
       .ad-banner {
         max-width: 400px;
       }
+    }
+    .loading::after {
+      content: 'Загрузка...';
+      display: inline-block;
     }
   </style>
 </head>
@@ -372,6 +376,10 @@
     imageInput.addEventListener('change', () => {
       const file = imageInput.files[0];
       if (file) {
+        if (!file.type.startsWith('image/')) {
+          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          return;
+        }
         const reader = new FileReader();
         reader.onload = (e) => {
           previewImage.src = e.target.result;
@@ -388,6 +396,10 @@
     adImageInput.addEventListener('change', () => {
       const file = adImageInput.files[0];
       if (file) {
+        if (!file.type.startsWith('image/')) {
+          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          return;
+        }
         const reader = new FileReader();
         reader.onload = (e) => {
           adPreviewImage.src = e.target.result;
@@ -404,6 +416,10 @@
     editImageInput.addEventListener('change', () => {
       const file = editImageInput.files[0];
       if (file) {
+        if (!file.type.startsWith('image/')) {
+          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          return;
+        }
         const reader = new FileReader();
         reader.onload = (e) => {
           editPreviewImage.src = e.target.result;
@@ -415,9 +431,13 @@
 
     async function uploadToImgBB(file) {
       try {
+        if (!file.type.startsWith('image/')) {
+          throw new Error('Файл должен быть изображением (JPEG, PNG и т.д.)');
+        }
         if (file.size > 32 * 1024 * 1024) {
           throw new Error('Файл превышает лимит в 32 МБ');
         }
+        console.log('Начинаем загрузку изображения:', file.name, file.size);
         const reader = new FileReader();
         return new Promise((resolve, reject) => {
           reader.onload = async () => {
@@ -428,10 +448,10 @@
               method: 'POST',
               body: formData
             });
-            if (!response.ok) throw new Error(await response.text());
             const data = await response.json();
-            if (!data.success || data.status !== 200) {
-              throw new Error('Ошибка загрузки изображения на ImgBB');
+            console.log('Ответ от ImgBB:', data);
+            if (!response.ok || !data.success || data.status !== 200) {
+              throw new Error(data.error?.message || 'Ошибка загрузки на ImgBB');
             }
             resolve(data.data.url);
           };
@@ -439,20 +459,29 @@
           reader.readAsDataURL(file);
         });
       } catch (err) {
-        tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
         console.error('ImgBB ошибка:', err);
+        tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
         return null;
       }
     }
 
     adminForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const submitBtn = adminForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.textContent = 'Загрузка...';
+      submitBtn.disabled = true;
       try {
+        console.log('Отправка формы добавления события');
         let imageUrl = null;
         const file = imageInput.files[0];
         if (file) {
+          console.log('Загрузка изображения для события');
+          uploadImageBtn.textContent = 'Загрузка...';
           imageUrl = await uploadToImgBB(file);
+          uploadImageBtn.textContent = 'Загрузить изображение';
           if (!imageUrl) throw new Error('Не удалось загрузить изображение');
+          console.log('Изображение загружено:', imageUrl);
         }
         const eventData = {
           fields: {
@@ -465,6 +494,7 @@
             Image: imageUrl ? [{ url: imageUrl }] : []
           }
         };
+        console.log('Отправка данных в Airtable:', eventData);
         const response = await fetch(AIRTABLE_EVENTS_API_URL, {
           method: 'POST',
           headers: {
@@ -474,6 +504,7 @@
           body: JSON.stringify(eventData)
         });
         if (!response.ok) throw new Error(await response.text());
+        console.log('Событие добавлено в Airtable');
         adminForm.reset();
         previewImage.classList.add('hidden');
         imageInput.value = '';
@@ -484,23 +515,36 @@
         adminPanel.classList.add('hidden');
         renderEvents();
       } catch (err) {
+        console.error('Ошибка добавления события:', err);
         tg.showAlert(`Ошибка: ${err.message}`);
-        console.error('Ошибка:', err);
+      } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
       }
     });
 
     editForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const submitBtn = editForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.textContent = 'Загрузка...';
+      submitBtn.disabled = true;
       try {
+        console.log('Отправка формы редактирования события');
         let imageUrl = null;
         const file = editImageInput.files[0];
         if (file) {
+          console.log('Загрузка нового изображения для события');
+          editImageBtn.textContent = 'Загрузка...';
           imageUrl = await uploadToImgBB(file);
+          editImageBtn.textContent = 'Изменить изображение';
           if (!imageUrl) throw new Error('Не удалось загрузить изображение');
+          console.log('Изображение загружено:', imageUrl);
         }
+        const editId = document.getElementById('editId').value;
+        if (!editId) throw new Error('ID события не найден');
         const eventData = {
           fields: {
-            ID: document.getElementById('editId').value,
             Title: document.getElementById('editTitle').value,
             Type: document.getElementById('editType').value,
             Date: document.getElementById('editDate').value,
@@ -509,7 +553,8 @@
             Image: imageUrl ? [{ url: imageUrl }] : (editPreviewImage.src && !editPreviewImage.src.includes('placeholder') ? [{ url: editPreviewImage.src }] : [])
           }
         };
-        const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${document.getElementById('editId').value}`, {
+        console.log('Отправка данных в Airtable для редактирования:', eventData);
+        const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${editId}`, {
           method: 'PATCH',
           headers: {
             Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}`,
@@ -518,24 +563,37 @@
           body: JSON.stringify(eventData)
         });
         if (!response.ok) throw new Error(await response.text());
+        console.log('Событие обновлено в Airtable');
         editModal.classList.add('hidden');
         tg.showAlert('Мероприятие обновлено!');
         renderEvents();
         renderManageList();
       } catch (err) {
+        console.error('Ошибка редактирования события:', err);
         tg.showAlert(`Ошибка: ${err.message}`);
-        console.error('Ошибка:', err);
+      } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
       }
     });
 
     adForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const submitBtn = adForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.textContent = 'Загрузка...';
+      submitBtn.disabled = true;
       try {
+        console.log('Отправка формы рекламы');
         let imageUrl = null;
         const file = adImageInput.files[0];
         if (file) {
+          console.log('Загрузка изображения для рекламы');
+          uploadAdImageBtn.textContent = 'Загрузка...';
           imageUrl = await uploadToImgBB(file);
+          uploadAdImageBtn.textContent = 'Загрузить изображение рекламы';
           if (!imageUrl) throw new Error('Не удалось загрузить изображение рекламы');
+          console.log('Изображение рекламы загружено:', imageUrl);
         }
         const adData = {
           fields: {
@@ -544,15 +602,18 @@
             URL: document.getElementById('adLinkUrl').value
           }
         };
+        console.log('Проверка существующей рекламы в Airtable');
         const recordsResponse = await fetch(AIRTABLE_ADS_API_URL, {
           headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
         });
         if (!recordsResponse.ok) throw new Error(await recordsResponse.text());
         const records = await recordsResponse.json();
+        console.log('Записи рекламы:', records);
         const existingAd = records.records?.find(record => record.fields.ID === 'ad1');
         let response;
         if (existingAd) {
           adData.fields.IMG = imageUrl ? [{ url: imageUrl }] : (existingAd.fields.IMG && existingAd.fields.IMG[0] ? [{ url: existingAd.fields.IMG[0].url }] : []);
+          console.log('Обновление рекламы:', adData);
           response = await fetch(`${AIRTABLE_ADS_API_URL}/${existingAd.id}`, {
             method: 'PATCH',
             headers: {
@@ -562,6 +623,7 @@
             body: JSON.stringify(adData)
           });
         } else {
+          console.log('Создание новой рекламы:', adData);
           response = await fetch(AIRTABLE_ADS_API_URL, {
             method: 'POST',
             headers: {
@@ -572,6 +634,7 @@
           });
         }
         if (!response.ok) throw new Error(await response.text());
+        console.log('Реклама сохранена в Airtable');
         adForm.reset();
         adPreviewImage.classList.add('hidden');
         adImageInput.value = '';
@@ -579,8 +642,11 @@
         tg.showAlert('Реклама обновлена!');
         renderAdBanner();
       } catch (err) {
+        console.error('Ошибка сохранения рекламы:', err);
         tg.showAlert(`Ошибка: ${err.message}`);
-        console.error('Ошибка:', err);
+      } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
       }
     });
 
