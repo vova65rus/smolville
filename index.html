@@ -9,9 +9,8 @@
   <style>
     body {
       background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.PNG');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
+      background-repeat: repeat;
+      background-size: auto;
       color: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       overflow-x: hidden;
@@ -219,6 +218,7 @@
       <div id="manageList" class="space-y-2"></div>
     </div>
     <div id="adsSection" class="admin-section">
+      <p id="adStatus" class="text-sm text-gray-400 mb-4 hidden">Реклама не настроена</p>
       <form id="adForm" class="admin-form">
         <input type="text" id="adImageUrl" placeholder="URL изображения рекламы" required>
         <input type="text" id="adLinkUrl" placeholder="URL ссылки рекламы" required>
@@ -297,6 +297,7 @@
 
     const eventsContainer = document.getElementById('events');
     const adBanner = document.getElementById('adBanner');
+    const adStatus = document.getElementById('adStatus');
     const eventModal = document.getElementById('eventModal');
     const closeModalBtn = document.getElementById('closeModal');
     const adminPanel = document.getElementById('adminPanel');
@@ -492,35 +493,35 @@
             LinkUrl: document.getElementById('adLinkUrl').value
           }
         };
-        const response = await fetch(AIRTABLE_ADS_API_URL, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(adData)
+        const recordsResponse = await fetch(AIRTABLE_ADS_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
         });
-        if (!response.ok) {
-          const recordsResponse = await fetch(AIRTABLE_ADS_API_URL, {
-            headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        if (!recordsResponse.ok) throw new Error(await recordsResponse.text());
+        const records = await recordsResponse.json();
+        const existingAd = records.records?.find(record => record.fields.ID === 'ad1');
+        let response;
+        if (existingAd) {
+          response = await fetch(`${AIRTABLE_ADS_API_URL}/${existingAd.id}`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(adData)
           });
-          const records = await recordsResponse.json();
-          const existingAd = records.records.find(record => record.fields.ID === 'ad1');
-          if (existingAd) {
-            const updateResponse = await fetch(`${AIRTABLE_ADS_API_URL}/${existingAd.id}`, {
-              method: 'PATCH',
-              headers: {
-                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(adData)
-            });
-            if (!updateResponse.ok) throw new Error(await updateResponse.text());
-          } else {
-            throw new Error(await response.text());
-          }
+        } else {
+          response = await fetch(AIRTABLE_ADS_API_URL, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(adData)
+          });
         }
+        if (!response.ok) throw new Error(await response.text());
         adForm.reset();
+        adStatus.classList.add('hidden');
         tg.showAlert('Реклама обновлена!');
         renderAdBanner();
       } catch (err) {
@@ -584,6 +585,12 @@
         });
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
+        if (!data.records || data.records.length === 0) {
+          adBanner.classList.add('hidden');
+          adStatus.classList.remove('hidden');
+          adStatus.textContent = 'Реклама не настроена';
+          return;
+        }
         const ad = data.records.find(record => record.fields.ID === 'ad1');
         if (ad && ad.fields.ImageUrl && ad.fields.LinkUrl) {
           adBanner.innerHTML = `
@@ -592,11 +599,16 @@
             </a>
           `;
           adBanner.classList.remove('hidden');
+          adStatus.classList.add('hidden');
         } else {
           adBanner.classList.add('hidden');
+          adStatus.classList.remove('hidden');
+          adStatus.textContent = 'Реклама не настроена';
         }
       } catch (err) {
         adBanner.classList.add('hidden');
+        adStatus.classList.remove('hidden');
+        adStatus.textContent = 'Ошибка загрузки рекламы';
         console.error('Ошибка загрузки рекламы:', err);
       }
     }
@@ -608,12 +620,23 @@
         });
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
+        if (!data.records || data.records.length === 0) {
+          adStatus.classList.remove('hidden');
+          adStatus.textContent = 'Реклама не настроена';
+          return;
+        }
         const ad = data.records.find(record => record.fields.ID === 'ad1');
         if (ad) {
           document.getElementById('adImageUrl').value = ad.fields.ImageUrl || '';
           document.getElementById('adLinkUrl').value = ad.fields.LinkUrl || '';
+          adStatus.classList.add('hidden');
+        } else {
+          adStatus.classList.remove('hidden');
+          adStatus.textContent = 'Реклама не настроена';
         }
       } catch (err) {
+        adStatus.classList.remove('hidden');
+        adStatus.textContent = 'Ошибка загрузки данных рекламы';
         console.error('Ошибка загрузки данных рекламы:', err);
       }
     }
