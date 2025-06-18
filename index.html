@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Афиши автоэнтузиастов</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+    }
+    .event-card {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .event-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.2em;
+    }
+    .event-card p {
+      margin: 5px 0;
+      color: #555;
+    }
+    .event-card button {
+      background: #0088cc;
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .event-card button:hover {
+      background: #005f99;
+    }
+  </style>
+</head>
+<body>
+  <h1>Афиши мероприятий для автоэнтузиастов</h1>
+  <div id="events"></div>
+
+  <script>
+    // Инициализация Telegram Web App
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+
+    // Пример данных афиш (в реальном проекте данные можно брать из базы данных)
+    const events = [
+      {
+        id: 1,
+        title: "Ралли-клуб: Ночная гонка",
+        date: "2025-07-10",
+        location: "Москва, гоночная трасса ADM",
+        description: "Присоединяйтесь к ночной гонке для любителей скорости!"
+      },
+      {
+        id: 2,
+        title: "Выставка ретро-автомобилей",
+        date: "2025-07-15",
+        location: "Санкт-Петербург, Экспоцентр",
+        description: "Уникальная коллекция классических автомобилей."
+      }
+    ];
+
+    // Отображение афиш
+    const eventsContainer = document.getElementById('events');
+    events.forEach(event => {
+      const eventCard = document.createElement('div');
+      eventCard.className = 'event-card';
+      eventCard.innerHTML = `
+        <h2>${event.title}</h2>
+        <p><strong>Дата:</strong> ${event.date}</p>
+        <p><strong>Место:</strong> ${event.location}</p>
+        <p>${event.description}</p>
+        <button onclick="joinEvent(${event.id})">Записаться</button>
+        <button onclick="shareEvent(${event.id})">Поделиться</button>
+      `;
+      eventsContainer.appendChild(eventCard);
+    });
+
+    // Функция для записи на мероприятие
+    function joinEvent(eventId) {
+      tg.showPopup({
+        title: 'Запись на мероприятие',
+        message: 'Хотите записаться на это мероприятие?',
+        buttons: [{ id: 'join', type: 'ok', text: 'Да' }, { type: 'cancel' }]
+      }, (buttonId) => {
+        if (buttonId === 'join') {
+          tg.sendData(JSON.stringify({ action: 'join', eventId }));
+        }
+      });
+    }
+
+    // Функция для шаринга
+    function shareEvent(eventId) {
+      const event = events.find(e => e.id === eventId);
+      tg.shareToChat({
+        text: `Присоединяйтесь к мероприятию: ${event.title} (${event.date}, ${event.location})`,
+        url: `https://t.me/your_bot_name?start=event_${eventId}`
+      });
+    }
+
+    // Адаптация интерфейса под Telegram
+    tg.expand(); // Разворачивает приложение на полный экран
+    tg.enableClosingConfirmation(); // Подтверждение при закрытии
+  </script>
+</body>
+</html>
