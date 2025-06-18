@@ -181,9 +181,7 @@
         <input type="text" id="eventDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="eventLocation" placeholder="Место" required>
         <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
-        <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение</button>
-        <img id="previewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью">
-        <input type="file" id="imageInput" accept="image/*" class="hidden">
+        <input type="text" id="eventImage" placeholder="URL изображения (добавьте в Airtable вручную)" disabled>
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
       </form>
     </div>
@@ -207,9 +205,7 @@
         <input type="text" id="editDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="editLocation" placeholder="Место" required>
         <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
-        <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Изменить изображение</button>
-        <img id="editPreviewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью">
-        <input type="file" id="editImageInput" accept="image/*" class="hidden">
+        <input type="text" id="editImage" placeholder="URL изображения (добавьте в Airtable вручную)" disabled>
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
         <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
       </form>
@@ -253,8 +249,8 @@
     }
 
     const AIRTABLE_API_KEY = 'pat4GDCWliOOHrG1d.b0f72d88e2f9109794415c96617c5afe86dc2f4e1500c4414fb27571c50e04d4';
-    const AIRTABLE_BASE_ID = 'tbl1wzVpDRpInIpMY';
-    const AIRTABLE_TABLE_NAME = 'Events';
+    const AIRTABLE_BASE_ID = 'appjunbLjOT8Seluo';
+    const AIRTABLE_TABLE_NAME = 'tbl1wzVpDRpInIpMY';
     const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}`;
 
     const eventsContainer = document.getElementById('events');
@@ -262,14 +258,8 @@
     const closeModalBtn = document.getElementById('closeModal');
     const adminPanel = document.getElementById('adminPanel');
     const adminForm = document.getElementById('adminForm');
-    const uploadImageBtn = document.getElementById('uploadImageBtn');
-    const previewImage = document.getElementById('previewImage');
-    const imageInput = document.getElementById('imageInput');
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
-    const editImageBtn = document.getElementById('editImageBtn');
-    const editPreviewImage = document.getElementById('editPreviewImage');
-    const editImageInput = document.getElementById('editImageInput');
     const cancelEdit = document.getElementById('cancelEdit');
     const navButtons = document.querySelectorAll('.nav-btn');
     const adminTabs = document.querySelectorAll('.admin-tab');
@@ -304,55 +294,9 @@
       });
     });
 
-    uploadImageBtn.addEventListener('click', () => {
-      imageInput.click();
-    });
-
-    imageInput.addEventListener('change', () => {
-      const file = imageInput.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          previewImage.src = e.target.result;
-          previewImage.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
-    editImageBtn.addEventListener('click', () => {
-      editImageInput.click();
-    });
-
-    editImageInput.addEventListener('change', () => {
-      const file = editImageInput.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          editPreviewImage.src = e.target.result;
-          editPreviewImage.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
     adminForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const file = imageInput.files[0];
-      let imageUrl = null;
       try {
-        if (file) {
-          const formData = new FormData();
-          formData.append('attachment', file);
-          const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/attachments`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-            body: formData
-          });
-          if (!response.ok) throw new Error(await response.text());
-          const data = await response.json();
-          imageUrl = [{ url: data.url }];
-        }
         const eventData = {
           fields: {
             ID: String(Math.floor(Math.random() * 1000000)),
@@ -361,7 +305,7 @@
             "Date (Friendly)": document.getElementById('eventDate').value,
             Location: document.getElementById('eventLocation').value,
             Description: document.getElementById('eventDescription').value,
-            Image: imageUrl || []
+            Image: []
           }
         };
         const response = await fetch(AIRTABLE_API_URL, {
@@ -374,9 +318,7 @@
         });
         if (!response.ok) throw new Error(await response.text());
         adminForm.reset();
-        previewImage.classList.add('hidden');
-        imageInput.value = '';
-        tg.showAlert('Мероприятие добавлено!');
+        tg.showAlert('Мероприятие добавлено! Добавьте изображение в Airtable вручную.');
         navButtons.forEach(btn => btn.classList.remove('active'));
         document.querySelector('[data-tab="events"]').classList.add('active');
         eventsContainer.classList.remove('hidden');
@@ -390,21 +332,7 @@
 
     editForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const file = editImageInput.files[0];
-      let imageUrl = null;
       try {
-        if (file) {
-          const formData = new FormData();
-          formData.append('attachment', file);
-          const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/attachments`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-            body: formData
-          });
-          if (!response.ok) throw new Error(await response.text());
-          const data = await response.json();
-          imageUrl = [{ url: data.url }];
-        }
         const eventData = {
           fields: {
             ID: document.getElementById('editId').value,
@@ -412,8 +340,7 @@
             Type: document.getElementById('editType').value,
             "Date (Friendly)": document.getElementById('editDate').value,
             Location: document.getElementById('editLocation').value,
-            Description: document.getElementById('editDescription').value,
-            Image: imageUrl || (editPreviewImage.src && !editPreviewImage.src.includes('placeholder') ? [{ url: editPreviewImage.src }] : [])
+            Description: document.getElementById('editDescription').value
           }
         };
         const response = await fetch(`${AIRTABLE_API_URL}/${document.getElementById('editId').value}`, {
@@ -426,7 +353,7 @@
         });
         if (!response.ok) throw new Error(await response.text());
         editModal.classList.add('hidden');
-        tg.showAlert('Мероприятие обновлено!');
+        tg.showAlert('Мероприятие обновлено! Измените изображение в Airtable вручную.');
         renderEvents();
         renderManageList();
       } catch (err) {
@@ -528,8 +455,7 @@
             document.getElementById('editDate').value = event.fields["Date (Friendly)"] || '';
             document.getElementById('editLocation').value = event.fields.Location || '';
             document.getElementById('editDescription').value = event.fields.Description || '';
-            editPreviewImage.src = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : 'https://via.placeholder.com/150';
-            editPreviewImage.classList.toggle('hidden', !event.fields.Image);
+            document.getElementById('editImage').value = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : '';
             editModal.classList.remove('hidden');
           });
         });
