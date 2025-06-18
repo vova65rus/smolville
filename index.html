@@ -251,7 +251,7 @@
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     document.getElementById('username').textContent = user.first_name || 'Гость';
-    const adminId = 123456789; // Замени на свой Telegram ID
+    const adminId = 366825437; // Замени на свой Telegram ID
     const isAdmin = user.id === adminId;
     if (isAdmin) {
       document.getElementById('adminBtn').classList.remove('hidden');
