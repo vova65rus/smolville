@@ -32,7 +32,7 @@
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+      to { opacity: 1; transform: none; }
     }
     ::-webkit-scrollbar {
       display: none;
@@ -123,6 +123,12 @@
       border-radius: 8px;
       width: 100%;
     }
+    .admin-content {
+      padding-bottom: 70px; /* Отступ для нижнего меню */
+      overflow-y: auto;
+      max-height: calc(100vh - 150px); /* Учитываем шапку и меню */
+      margin-top: 20px;
+    }
     .hidden {
       display: none;
     }
@@ -195,8 +201,8 @@
     const username = user.first_name || 'Гость';
     document.getElementById('username').textContent = username;
 
-    // Проверка админа (замени 123456789 на свой Telegram ID)
-    const adminId = 366825437; // Укажи свой Telegram ID
+    // Проверка админа (замените 123456789 на свой Telegram ID)
+    const adminId = 123456789; // Укажите свой Telegram ID
     const isAdmin = user.id === adminId;
     if (isAdmin) {
       document.getElementById('adminBtn').classList.remove('hidden');
@@ -220,7 +226,7 @@
         type: "exhibition",
         date: "2025-07-15",
         location: "Санкт-Петербург, Экспоцентр",
-        description: "Коллекция классических автомобилей 60-80-х годов.",
+        description: "Коллекция классических автомобилей",
         image: "https://via.placeholder.com/150x150?text=Ретро-авто",
         coords: { lat: 59.9343, lng: 30.3351 }
       },
@@ -229,7 +235,7 @@
         title: "Встреча автоклуба",
         type: "meetup",
         date: "2025-06-20",
-        location: "Казань, Парковка ТЦ",
+        location: "Казань, Парковка",
         description: "Общение, обмен опытом и крутые тачки!",
         image: "https://via.placeholder.com/150x150?text=Встреча",
         coords: { lat: 55.8304, lng: 49.0661 }
@@ -242,7 +248,7 @@
         location: "Сочи, Автодром",
         description: "Зрелищный дрифт для фанатов!",
         image: "https://via.placeholder.com/150x150?text=Дрифт",
-        coords: { lat: 43.5912, lng: 39.7203 }
+        coords: { lat: 43.4412, lng: 39.7493 }
       }
     ];
 
@@ -260,16 +266,14 @@
       button.addEventListener('click', () => {
         navButtons.forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
-        const tab = button.dataset.tab;
-        console.log(`Клик по вкладке: ${tab}`);
         eventsContainer.classList.add('hidden');
         adminPanel.classList.add('hidden');
-        if (tab === 'events') {
+        if (button.dataset.tab === 'events') {
           eventsContainer.classList.remove('hidden');
-        } else if (tab === 'admin' && isAdmin) {
+        } else if (button.dataset.tab === 'admin' && isAdmin) {
           adminPanel.classList.remove('hidden');
         } else {
-          tg.showAlert(`Раздел "${tab}" в разработке!`);
+          tg.showAlert(`Раздел ${button.dataset.tab} в разработке!`);
         }
       });
     });
@@ -282,28 +286,23 @@
         buttons: [{ id: 'upload', type: 'ok', text: 'Загрузить' }, { type: 'cancel' }]
       }, (buttonId) => {
         if (buttonId === 'upload') {
-          tg.requestWriteAccess(() => {
-            tg.openLink('https://t.me/smolville_drift?start=upload_image'); // Заглушка для загрузки
-            // Для реальной загрузки нужно использовать сервер
-            // Временное решение: использовать Base64
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = (e) => {
-              const file = e.target.files[0];
-              if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                  const base64Image = e.target.result;
-                  document.getElementById('eventImage').value = base64Image;
-                  previewImage.src = base64Image;
-                  previewImage.classList.remove('hidden');
-                };
-                reader.readAsDataURL(file);
-              }
-            };
-            input.click();
-          });
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const base64Image = e.target.result;
+                document.getElementById('eventImage').textContent = base64Image;
+                previewImage.src = base64Image;
+                previewImage.classList.remove('hidden');
+              };
+              reader.readAsDataURL(file);
+            }
+          };
+          input.click();
         }
       });
     });
@@ -318,7 +317,7 @@
         date: document.getElementById('eventDate').value,
         location: document.getElementById('eventLocation').value,
         description: document.getElementById('eventDescription').value,
-        image: document.getElementById('eventImage').value || 'https://via.placeholder.com/150x150?text=Новое+событие',
+        image: document.getElementById('eventImage').textContent || 'https://via.placeholder.com/150x150?text=Новое+событие',
         coords: {
           lat: parseFloat(document.getElementById('eventLat').value),
           lng: parseFloat(document.getElementById('eventLng').value)
@@ -328,7 +327,7 @@
       renderEvents();
       adminForm.reset();
       previewImage.classList.add('hidden');
-      document.getElementById('eventImage').value = '';
+      document.getElementById('eventImage').textContent = '';
       tg.showAlert('Мероприятие успешно добавлено!');
       // Переключение на вкладку мероприятий
       navButtons.forEach(btn => btn.classList.remove('active'));
@@ -339,9 +338,8 @@
 
     // Функция для отображения афиш
     function renderEvents() {
-      console.log('Рендеринг событий:', events);
       if (!events || events.length === 0) {
-        eventsContainer.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
+        eventsContainer.innerHTML = '<p class="text-center text-gray-500">Нет мероприятий</p>';
         return;
       }
       eventsContainer.innerHTML = '';
@@ -352,8 +350,8 @@
         eventCard.innerHTML = `
           <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg">
           <div class="p-2 text-center">
-            <p class="text-sm font-semibold text-white">${event.date}</p>
-            <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
+            <p class="text-sm text-white">${event.date}</p>
+            <p class="text-xs text-gray-500 line-clamp-1">${event.title}</p>
           </div>
         `;
         eventCard.addEventListener('click', () => showEventDetails(event));
@@ -361,12 +359,11 @@
       });
     }
 
-    // Функция для показа деталей мероприятия
+    // Функция для показа деталей
     function showEventDetails(event) {
-      console.log('Открытие деталей:', event);
       document.getElementById('modalTitle').textContent = event.title;
       document.getElementById('modalDate').textContent = `Дата: ${event.date}`;
-      document.getElementById('modalLocation').textContent = `Место: ${event.location}`;
+      document elaborator.getElementById('modalLocation').textContent = `Место: ${event.location}`;
       document.getElementById('modalDescription').textContent = event.description;
       eventModal.classList.remove('hidden');
 
@@ -380,24 +377,24 @@
       eventModal.classList.add('hidden');
     });
 
-    // Записаться на мероприятие
+    // Записаться на событие
     function joinEvent(eventId) {
       tg.showPopup({
-        title: 'Запись на мероприятие',
+        title: 'Записка на мероприятие',
         message: 'Хотите записаться на это мероприятие?',
         buttons: [{ id: 'join', type: 'ok', text: 'Да' }, { type: 'cancel' }]
       }, (buttonId) => {
         if (buttonId === 'join') {
           tg.sendData(JSON.stringify({ action: 'join', eventId }));
-          tg.showAlert('Вы записались на мероприятие!');
+          tg.showAlert('Вы записаны на мероприятие!');
         }
       });
     }
 
-    // Поделиться мероприятием
+    // Поделиться
     function shareEvent(event) {
-      tg.shareToChat({
-        text: `Присоединяйтесь к мероприятию: ${event.title} (${event.date}, ${event.location})`,
+      tg.shareTo({
+        text: `Присоединяйтесь к событию: ${event.title} (${event.date}, ${event.location})`,
         url: `https://t.me/smolville_drift?start=event_${event.id}`
       });
     }
@@ -405,7 +402,7 @@
     // Открыть карту
     function openMap(coords) {
       const url = `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
-      tg.openLink(url);
+      window.open(url);
     }
 
     // Инициализация
