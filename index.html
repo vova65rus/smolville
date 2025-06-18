@@ -178,14 +178,12 @@
           <option value="exhibition">Выставка</option>
           <option value="meetup">Встреча</option>
         </select>
-        <input type="date" id="eventDate" required>
+        <input type="text" id="eventDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="eventLocation" placeholder="Место" required>
         <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
-        <input type="number" id="eventLat" placeholder="Широта (например, 55.7558)" step="any" required>
-        <input type="number" id="eventLng" placeholder="Долгота (например, 37.6173)" step="any" required>
         <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение</button>
         <img id="previewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью">
-        <input type="hidden" id="eventImage">
+        <input type="file" id="imageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
       </form>
     </div>
@@ -206,14 +204,12 @@
           <option value="exhibition">Выставка</option>
           <option value="meetup">Встреча</option>
         </select>
-        <input type="date" id="editDate" required>
+        <input type="text" id="editDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="editLocation" placeholder="Место" required>
         <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
-        <input type="number" id="editLat" placeholder="Широта" step="any" required>
-        <input type="number" id="editLng" placeholder="Долгота" step="any" required>
         <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Изменить изображение</button>
-        <img id="editPreviewImage" class="w-full h-32 object-cover rounded-lg mb-4" alt="Превью">
-        <input type="hidden" id="editImage">
+        <img id="editPreviewImage" class="w-full h-32 object-cover rounded-lg mb-4 hidden" alt="Превью">
+        <input type="file" id="editImageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
         <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
       </form>
@@ -229,7 +225,6 @@
       <div class="flex flex-col space-y-2">
         <button id="joinBtn" class="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600">Записаться</button>
         <button id="shareBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Поделиться</button>
-        <button id="mapBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Карта</button>
         <button id="closeModal" class="bg-gray-700 text-white py-2 rounded-lg hover:bg-gray-800">Закрыть</button>
       </div>
     </div>
@@ -251,15 +246,15 @@
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     document.getElementById('username').textContent = user.first_name || 'Гость';
-    const adminId = 366825437; // Замени на свой Telegram ID
+    const adminId = 366825437; // Твой Telegram ID
     const isAdmin = user.id === adminId;
     if (isAdmin) {
       document.getElementById('adminBtn').classList.remove('hidden');
     }
 
-    const AIRTABLE_API_KEY = 'pat4GDCWliOOHrG1d.b0f72d88e2f9109794415c96617c5afe86dc2f4e1500c4414fb27571c50e04d4'; // Замени на свой API-ключ
-    const AIRTABLE_BASE_ID = 'appjunbLjOT8Seluo'; // Замени на Base ID
-    const AIRTABLE_TABLE_NAME = 'Events'; // Имя таблицы
+    const AIRTABLE_API_KEY = 'pat4GDCWliOOHrG1d.b0f72d88e2f9109794415c96617c5afe86dc2f4e1500c4414fb27571c50e04d4';
+    const AIRTABLE_BASE_ID = 'appjunbLjOT8Seluo';
+    const AIRTABLE_TABLE_NAME = 'Events';
     const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}`;
 
     const eventsContainer = document.getElementById('events');
@@ -269,10 +264,12 @@
     const adminForm = document.getElementById('adminForm');
     const uploadImageBtn = document.getElementById('uploadImageBtn');
     const previewImage = document.getElementById('previewImage');
+    const imageInput = document.getElementById('imageInput');
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
     const editImageBtn = document.getElementById('editImageBtn');
     const editPreviewImage = document.getElementById('editPreviewImage');
+    const editImageInput = document.getElementById('editImageInput');
     const cancelEdit = document.getElementById('cancelEdit');
     const navButtons = document.querySelectorAll('.nav-btn');
     const adminTabs = document.querySelectorAll('.admin-tab');
@@ -307,299 +304,41 @@
       });
     });
 
-    function uploadImage(input, previewImg, imageField) {
-      return new Promise((resolve, reject) => {
-        const file = input.files[0];
-        if (!file) {
-          reject('Файл не выбран');
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          previewImg.src = e.target.result;
-          previewImg.classList.remove('hidden');
-          const formData = new FormData();
-          formData.append('file', file);
-          imageField.value = e.target.result; // Временное значение для превью
-          resolve(file);
-        };
-        reader.readAsDataURL(file);
-      });
+    async function uploadImageToAirtable(file) {
+      if (!file) return null;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const response = await fetch('https://api.airtable.com/v0/attachments', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+          body: formData
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        return [{ url: data.url }];
+      } catch (err) {
+        console.error('Ошибка загрузки изображения:', err);
+        throw err;
+      }
     }
 
     uploadImageBtn.addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = () => {
-        uploadImage(input, previewImage, document.getElementById('eventImage'))
-          .catch(err => tg.showAlert(`Ошибка: ${err}`));
-      };
-      input.click();
+      imageInput.click();
+    });
+
+    imageInput.addEventListener('change', () => {
+      const file = imageInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          previewImage.src = e.target.result;
+          previewImage.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      }
     });
 
     editImageBtn.addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = () => {
-        uploadImage(input, editPreviewImage, document.getElementById('editImage'))
-          .catch(err => tg.showAlert(`Ошибка: ${err}`));
-      };
-      input.click();
+      editImageInput.click();
     });
-
-    adminForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fileInput = document.getElementById('eventImage').value ? document.createElement('input') : null;
-      if (fileInput) {
-        fileInput.type = 'file';
-        fileInput.files = previewImage.src ? [new File([previewImage.src], 'image.jpg')] : [];
-      }
-      const eventData = {
-        fields: {
-          ID: String(Math.floor(Math.random() * 1000000)), // Уникальный ID
-          Title: document.getElementById('eventTitle').value,
-          Type: document.getElementById('eventType').value,
-          Date: document.getElementById('eventDate').value,
-          Location: document.getElementById('eventLocation').value,
-          Description: document.getElementById('eventDescription').value,
-          Lat: parseFloat(document.getElementById('eventLat').value),
-          Lng: parseFloat(document.getElementById('eventLng').value),
-          Image: fileInput && fileInput.files[0] ? [{ url: previewImage.src }] : []
-        }
-      };
-      try {
-        const response = await fetch(AIRTABLE_API_URL, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(eventData)
-        });
-        if (!response.ok) throw new Error(await response.text());
-        adminForm.reset();
-        previewImage.classList.add('hidden');
-        document.getElementById('eventImage').value = '';
-        tg.showAlert('Мероприятие добавлено!');
-        navButtons.forEach(btn => btn.classList.remove('active'));
-        document.querySelector('[data-tab="events"]').classList.add('active');
-        eventsContainer.classList.remove('hidden');
-        adminPanel.classList.add('hidden');
-        renderEvents();
-      } catch (err) {
-        tg.showAlert(`Ошибка: ${err.message}`);
-      }
-    });
-
-    editForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fileInput = document.getElementById('editImage').value ? document.createElement('input') : null;
-      if (fileInput) {
-        fileInput.type = 'file';
-        fileInput.files = editPreviewImage.src ? [new File([editPreviewImage.src], 'image.jpg')] : [];
-      }
-      const eventData = {
-        fields: {
-          ID: document.getElementById('editId').value,
-          Title: document.getElementById('editTitle').value,
-          Type: document.getElementById('editType').value,
-          Date: document.getElementById('editDate').value,
-          Location: document.getElementById('editLocation').value,
-          Description: document.getElementById('editDescription').value,
-          Lat: parseFloat(document.getElementById('editLat').value),
-          Lng: parseFloat(document.getElementById('editLng').value),
-          Image: fileInput && fileInput.files[0] ? [{ url: editPreviewImage.src }] : []
-        }
-      };
-      try {
-        const response = await fetch(`${AIRTABLE_API_URL}/${document.getElementById('editId').value}`, {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(eventData)
-        });
-        if (!response.ok) throw new Error(await response.text());
-        editModal.classList.add('hidden');
-        tg.showAlert('Мероприятие обновлено!');
-        renderEvents();
-        renderPosts();
-      } catch (err) {
-        tg.showAlert(`Ошибка: ${err.message}`);
-      }
-    });
-
-    cancelEdit.addEventListener('click', () => {
-      editModal.classList.add('hidden');
-    });
-
-    async function renderEvents() {
-      eventsContainer.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
-      try {
-        const response = await fetch(AIRTABLE_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(await response.text());
-        const data = await response.json();
-        const events = data.records.map(record => ({
-          id: record.id,
-          eventId: record.fields.ID,
-          title: record.fields.Title,
-          type: record.fields.Type,
-          date: record.fields.Date,
-          location: record.fields.Location,
-          description: record.fields.Description,
-          coords: { lat: record.fields.Lat, lng: record.fields.Lng },
-          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/150'
-        }));
-        console.log('Events:', events);
-        eventsContainer.innerHTML = '';
-        if (events.length === 0) {
-          eventsContainer.innerHTML = '<p class="text-center text-gray-500">Нет мероприятий</p>';
-          return;
-        }
-        events.forEach((event, index) => {
-          const eventCard = document.createElement('div');
-          eventCard.classList = 'event-card fade-in';
-          eventCard.style.animationDelay = `${index * 0.2}s`;
-          eventCard.innerHTML = `
-            <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg">
-            <div class="p-3 text-center">
-              <p class="text-sm font-semibold text-gray-200">${event.date}</p>
-              <p class="text-sm text-gray-400 line-clamp-1">${event.title}</p>
-            </div>
-          `;
-          eventTile.addEventListener('click', () => showEventDetails(event));
-          eventCard.appendChild(eventCard);
-        });
-      } catch (err) {
-        eventsContainer.innerHTML = '<p class="text-center text-gray-500">Ошибка загрузки</p>';
-        console.error('Error:', err);
-      }
-    }
-
-    async function renderManageList() {
-      manageList.innerHTML = '<p class="text-center text-gray-500">Загрузка...</p>';
-      try {
-        const response = await fetch(AIRTABLE_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(await response.text());
-        const data = await response.json();
-        const events = data.records.map(record => ({
-          id: record.id,
-          eventId: record.fields.ID,
-          title: record.fields.Title,
-          date: record.fields.Date
-        }));
-        manageList.innerHTML = '';
-        if (events.length === 0) {
-          manageList.innerHTML = '<p class="text-center text-gray-500">Нет мероприятий</p>';
-          return;
-        }
-        events.forEach(event => {
-          const item = document.createElement('div');
-          item.className = 'flex justify-between items-center p-3 bg-gray-800 rounded-lg';
-          item.innerHTML = `
-            <span class="text-sm text-gray-200 line-clamp-2">${event.title} (${event.date})</span>
-            <div class="flex space-x-2">
-              <button class="edit-btn text-sm py-1 px-3 bg-green-500 rounded-lg" data-id="${event.id}">Редактировать</button>
-              <button class="delete-btn text-sm py-1 px-3 bg-red-600 rounded-lg" data-id="${event.id}">Удалить</button>
-            </div>
-          `;
-          manageList.appendChild(item);
-        });
-        document.querySelectorAll('.edit-btn').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const id = btn.getAttribute('data-id');
-            const response = await fetch(`${AIRTABLE_API_URL}/${id}`, {
-              headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-            });
-            const event = await response.json();
-            document.getElementById('editId').value = id;
-            document.getElementById('editTitle').value = event.fields.Title;
-            document.getElementById('editType').value = event.fields.Type;
-            document.getElementById('editDate').value = event.fields.Date;
-            document.getElementById('editLocation').value = event.fields.Location;
-            document.getElementById('editDescription').value = event.fields.Description;
-            document.getElementById('editLat').value = event.fields.Lat;
-            document.getElementById('editLng').value = event.fields.Lng;
-            document.getElementById('editImage').value = event.fields.Image && event.fields.Image[0]?.url || '';
-            editPreviewImage.src = event.fields.Image && event.fields.Image[0]?.url || 'https://via.placeholder.com/150';
-            editPreviewImage.classList.toggle('hidden', !event.fields.Image);
-            editModal.classList.remove('hidden');
-          });
-        });
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const id = btn.getAttribute('data-id');
-            tg.showConfirm('Удалить событие?', async (confirmed) => {
-              if (confirmed) {
-                try {
-                  const response = await fetch(`${AIRTABLE_API_URL}/${id}`, {
-                    method: 'DELETE',
-                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-                  });
-                  if (!response.ok) throw new Error(await response.text());
-                  tg.showAlert('Мероприятие удалено!');
-                  renderEvents();
-                  renderManageList();
-                } catch (err) {
-                  tg.showAlert(`Ошибка: ${err.message}`);
-                }
-              }
-            });
-          });
-        });
-      } catch (err) {
-        manageList.innerHTML = '<p class="text-center text-gray-500">Ошибка загрузки</p>';
-        console.error('Ошибка:', err);
-      }
-    }
-
-    function showEventDetails(event) {
-      document.getElementById('modalTitle').textContent = event.title;
-      document.getElementById('modalDate').textContent = `Дата: ${event.date}`;
-      document.getElementById('modalLocation').textContent = `Место: ${event.location}`;
-      document.getElementById('modalDescription').value = event.description;
-      eventModal.classList.remove('hidden');
-      document.getElementById('joinBtn').onclick = () => joinEvent(event.id);
-      document.getElementById('shareBtn').onclick = () => shareEvent(event);
-      document.getElementById('mapBtn').onclick = () => openMap(event.coords);
-    }
-
-    closeModalBtn.addEventListener('click', () => {
-      eventModal.classList.add('hidden');
-    });
-
-    function joinEvent(eventId) {
-      tg.showPopup({
-        title: title: 'Записаться',
-        message: 'Записаться на мероприятие?',
-        buttons: [{ id: 'join', type: 'ok', text: 'Да' }, { type: 'cancel' }]
-      }, (buttonId) => {
-        if (buttonId === 'join') {
-          tg.sendData(JSON.stringify({ action: 'join', eventId }));
-          tg.showAlert('Вы записались!');
-        }
-      });
-    }
-
-    function shareEvent(event) {
-      const text = `Присоединяйтесь: ${event.title} (${event.date}, ${event.location})`;
-      const url = `https://t.me/smolville_drift?event_${event.id}`;
-      tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
-    }
-
-    function openMap(coords) {
-      const url = `https://www.google.com/maps?q=${coords.lat},${coords.lng}`;
-      window.open(url);
-    }
-
-    renderEvents();
-  </script>
-</body>
-</html>
