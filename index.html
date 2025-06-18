@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Афиши автоэнтузиастов</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -61,7 +61,7 @@
     }
     .bottom-nav {
       position: fixed;
-      bottom: 0;
+      bottom: env(safe-area-inset-bottom, 0);
       width: 100%;
       background: rgba(28, 28, 30, 0.9);
       backdrop-filter: blur(10px);
@@ -69,6 +69,7 @@
       display: flex;
       justify-content: space-around;
       padding: 10px 0;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom, 0));
     }
     .nav-btn {
       background: none;
@@ -178,7 +179,7 @@
         type: "meetup",
         date: "2025-06-20",
         location: "Казань, Парковка ТЦ",
-        description: "Общение, обмен опытом и крутые тачки!",
+        description: "Общение}
         image: "https://via.placeholder.com/150x150?text=Встреча",
         coords: { lat: 55.8304, lng: 49.0661 }
       },
