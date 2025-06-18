@@ -27,7 +27,6 @@
       from { opacity: 0; transform: translateY(20px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    /* Скрываем скроллбар, но сохраняем прокрутку */
     ::-webkit-scrollbar {
       display: none;
     }
@@ -35,9 +34,18 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
+    .logo {
+      max-width: 150px;
+      height: auto;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col items-center px-4 py-6">
+  <!-- Логотип с гиперссылкой на канал -->
+  <div class="mb-6 cursor-pointer" onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/smolville_drift')">
+    <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo">
+  </div>
+
   <h1 class="text-2xl font-bold text-red-500 mb-6">Афиши автоэнтузиастов</h1>
 
   <!-- Фильтры -->
@@ -175,7 +183,7 @@
     function shareEvent(event) {
       tg.shareToChat({
         text: `Присоединяйтесь к мероприятию: ${event.title} (${event.date}, ${event.location})`,
-        url: `https://t.me/your_bot_name?start=event_${event.id}`
+        url: `https://t.me/smolville_drift?start=event_${event.id}`
       });
     }
 
@@ -197,7 +205,7 @@
       }
 
       // Фильтр по дате
-      const today = new Date('2025-06-18'); // Текущая дата для примера
+      const today = new Date('2025-06-18');
       if (date === 'upcoming') {
         filteredEvents = filteredEvents.filter(event => new Date(event.date) >= today);
       } else if (date === 'thisWeek') {
