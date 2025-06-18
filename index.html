@@ -308,7 +308,7 @@
     const AIRTABLE_ADS_TABLE_NAME = 'tblILQr1xFKmkLTKB';
     const AIRTABLE_EVENTS_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_EVENTS_TABLE_NAME)}`;
     const AIRTABLE_ADS_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_ADS_TABLE_NAME)}`;
-    const IMGBB_API_KEY = 'cfcfd4907b017bc742ce53d162f8a3c9'; // Замени на твой ImgBB API-ключ
+    const IMGBB_API_KEY = 'cfcfd4907b017bc742ce53d162f8a3c9';
 
     const eventsContainer = document.getElementById('events');
     const adBanner = document.getElementById('adBanner');
@@ -415,6 +415,9 @@
 
     async function uploadToImgBB(file) {
       try {
+        if (file.size > 32 * 1024 * 1024) {
+          throw new Error('Файл превышает лимит в 32 МБ');
+        }
         const reader = new FileReader();
         return new Promise((resolve, reject) => {
           reader.onload = async () => {
@@ -427,6 +430,9 @@
             });
             if (!response.ok) throw new Error(await response.text());
             const data = await response.json();
+            if (!data.success || data.status !== 200) {
+              throw new Error('Ошибка загрузки изображения на ImgBB');
+            }
             resolve(data.data.url);
           };
           reader.onerror = () => reject(new Error('Ошибка чтения файла'));
@@ -542,7 +548,7 @@
           headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
         });
         if (!recordsResponse.ok) throw new Error(await recordsResponse.text());
-        const records = await response.json();
+        const records = await recordsResponse.json();
         const existingAd = records.records?.find(record => record.fields.ID === 'ad1');
         let response;
         if (existingAd) {
