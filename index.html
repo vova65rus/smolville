@@ -10,21 +10,17 @@
     body {
       background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.png');
       background-repeat: repeat;
-      background-size: 60px auto;
+      background-size: 50px auto;
       background-color: #1c1c1e;
       color: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       display: flex;
       flex-direction: column;
       min-height: 100vh;
-      position: relative;
       touch-action: pan-y;
       -webkit-font-smoothing: antialiased;
       -webkit-tap-highlight-color: transparent;
       overscroll-behavior: none;
-    }
-    body.admin-open {
-      overflow: hidden;
     }
     body::before {
       content: '';
@@ -38,14 +34,14 @@
     }
     @media (min-width: 768px) {
       body {
-        background-size: 80px auto;
+        background-size: 70px auto;
       }
     }
     .event-card {
       background: #2c2c2e;
-      border-radius: 12px;
+      border-radius: 10px;
       touch-action: manipulation;
-      min-height: 140px;
+      min-height: 120px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -55,7 +51,7 @@
       animation: fadeIn 0.3s ease-in;
     }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
     ::-webkit-scrollbar {
@@ -78,21 +74,21 @@
       border-top: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
       justify-content: space-around;
-      padding: 8px 0;
-      z-index: 2000;
-      min-height: 56px;
+      padding: 6px 0;
+      z-index: 5000;
+      min-height: 48px;
       box-sizing: border-box;
     }
     .nav-btn {
       background: none;
       border: none;
-      padding: 8px;
-      font-size: 13px;
+      padding: 6px;
+      font-size: 12px;
       color: #0a84ff;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
       touch-action: manipulation;
-      min-height: 40px;
+      min-height: 36px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -103,52 +99,61 @@
     }
     .events-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
       width: 100%;
-      padding: 12px;
+      padding: 10px;
       box-sizing: border-box;
     }
     .modal-content, .admin-content {
       background: #2c2c2e;
-      border-radius: 12px;
+      border-radius: 10px;
       box-sizing: border-box;
     }
     .admin-content {
-      padding: 12px;
-      margin-bottom: calc(56px + env(safe-area-inset-bottom));
-      overflow-y: auto;
-      max-height: calc(100vh - 56px - env(safe-area-inset-bottom));
-      min-height: calc(100vh - 56px - env(safe-area-inset-bottom));
-      z-index: 1010;
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      box-sizing: border-box;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 360px;
+      max-height: calc(100vh - 60px - env(safe-area-inset-bottom));
+      overflow-y: auto;
+      padding: 10px;
+      z-index: 4000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
       overscroll-behavior: contain;
+    }
+    .admin-close-btn {
+      background: #ff3b30;
+      color: #ffffff;
+      padding: 6px;
+      border-radius: 6px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 12px;
+      margin-top: 10px;
     }
     .admin-form input, .admin-form textarea, .admin-form select {
       background: #3a3a3c;
       color: #ffffff;
       border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      padding: 8px;
+      border-radius: 6px;
+      padding: 6px;
       width: 100%;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       box-sizing: border-box;
-      font-size: 14px;
+      font-size: 13px;
     }
     .admin-form button, .admin-tab, .delete-btn, .edit-btn {
       background: #0a84ff;
       color: #ffffff;
-      padding: 8px;
-      border-radius: 8px;
+      padding: 6px;
+      border-radius: 6px;
       width: 100%;
       text-align: center;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
     }
     .admin-tab.active {
       background: #1a63d8;
@@ -169,25 +174,25 @@
       display: none;
     }
     .ad-banner {
-      max-width: 300px;
-      margin: 8px auto;
+      max-width: 280px;
+      margin: 6px auto;
       display: block;
-      height: 60px;
+      height: 50px;
       overflow: hidden;
     }
     .ad-banner img {
       width: 100%;
-      height: 60px;
+      height: 50px;
       object-fit: cover;
-      border-radius: 8px;
+      border-radius: 6px;
     }
     @media (max-width: 360px) {
       .ad-banner {
-        max-width: 280px;
-        height: 50px;
+        max-width: 260px;
+        height: 40px;
       }
       .ad-banner img {
-        height: 50px;
+        height: 40px;
       }
     }
     .loading {
@@ -198,13 +203,13 @@
     .loading::after {
       content: '';
       position: absolute;
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border: 2px solid #ffffff;
       border-top: 2px solid transparent;
       border-radius: 50%;
       animation: spin 1s linear infinite;
-      right: 8px;
+      right: 6px;
       top: 50%;
       transform: translateY(-50%);
     }
@@ -213,30 +218,30 @@
       100% { transform: translateY(-50%) rotate(360deg); }
     }
     #previewImage, #adPreviewImage, #editPreviewImage {
-      max-height: 180px;
+      max-height: 160px;
       object-fit: contain;
       width: 100%;
-      border-radius: 8px;
+      border-radius: 6px;
     }
   </style>
 </head>
 <body>
-  <header class="flex justify-between items-center w-full px-3 pt-3 z-10 relative">
-    <div id="adBanner" class="max-w-[100px] h-[40px] overflow-hidden flex items-center z-20">
+  <header class="flex justify-between items-center w-full px-2 pt-2 z-10 relative">
+    <div id="adBanner" class="max-w-[50px] h-[20px] overflow-hidden flex items-center z-20">
       <!-- Реклама будет вставлена динамически -->
     </div>
     <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer z-20">
-      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" class="h-[40px] w-auto object-contain" alt="Логотип Smolville Drift" loading="lazy">
+      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" class="h-[20px] w-auto object-contain" alt="Логотип Smolville Drift" loading="lazy">
     </div>
   </header>
 
-  <h1 class="text-lg font-bold text-white mt-3 mb-3 text-center">Автомобильные события</h1>
+  <h1 class="text-base font-bold text-white mt-2 mb-2 text-center">Автомобильные события</h1>
 
   <div id="events" class="events-grid"></div>
 
-  <div id="adminPanel" class="admin-content p-4 w-full max-w-md mx-auto hidden">
-    <h2 class="text-base font-bold text-white mb-2">Админ-панель</h2>
-    <div class="flex space-x-2 mb-3 overflow-x-auto">
+  <div id="adminPanel" class="admin-content hidden">
+    <h2 class="text-sm font-bold text-white mb-2">Админ-панель</h2>
+    <div class="flex space-x-2 mb-2 overflow-x-auto">
       <button class="admin-tab active" data-tab="add">Добавить</button>
       <button class="admin-tab" data-tab="manage">Управление</button>
       <button class="admin-tab" data-tab="ads">Реклама</button>
@@ -251,31 +256,32 @@
         </select>
         <input type="text" id="eventDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="eventLocation" placeholder="Место" required>
-        <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
-        <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-3">Загрузить изображение</button>
-        <img id="previewImage" class="w-full rounded-lg mb-3 hidden" alt="Превью" loading="lazy">
+        <textarea id="eventDescription" placeholder="Описание" rows="3" required></textarea>
+        <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Загрузить изображение</button>
+        <img id="previewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью" loading="lazy">
         <input type="file" id="imageInput" accept="image/*" class="hidden">
-        <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
+        <button type="submit" class="bg-blue-500 text-white py-1 rounded-lg">Добавить</button>
       </form>
     </div>
     <div id="manageSection" class="admin-section">
       <div id="manageList" class="space-y-2"></div>
     </div>
     <div id="adsSection" class="admin-section">
-      <p id="adStatus" class="text-sm text-gray-400 mb-3 hidden">Реклама не настроена</p>
+      <p id="adStatus" class="text-xs text-gray-400 mb-2 hidden">Реклама не настроена</p>
       <form id="adForm" class="admin-form">
-        <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-3">Загрузить изображение рекламы</button>
-        <img id="adPreviewImage" class="w-full rounded-lg mb-3 hidden" alt="Превью рекламы" loading="lazy">
+        <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Загрузить изображение рекламы</button>
+        <img id="adPreviewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью рекламы" loading="lazy">
         <input type="file" id="adImageInput" accept="image/*" class="hidden">
         <input type="text" id="adLinkUrl" placeholder="URL ссылки рекламы" required>
-        <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить рекламу</button>
+        <button type="submit" class="bg-blue-500 text-white py-1 rounded-lg">Сохранить рекламу</button>
       </form>
     </div>
+    <button class="admin-close-btn" id="adminCloseBtn">Закрыть</button>
   </div>
 
-  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-3000">
-    <div class="modal-content rounded-lg p-4 w-11/12 max-w-md">
-      <h2 class="text-base font-bold text-white mb-2">Редактировать</h2>
+  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-4500">
+    <div class="modal-content rounded-lg p-3 w-11/12 max-w-[360px]">
+      <h2 class="text-sm font-bold text-white mb-2">Редактировать</h2>
       <form id="editForm" class="admin-form">
         <input type="hidden" id="editId">
         <input type="text" id="editTitle" placeholder="Название" required>
@@ -286,26 +292,26 @@
         </select>
         <input type="text" id="editDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="editLocation" placeholder="Место" required>
-        <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
-        <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-3">Изменить изображение</button>
-        <img id="editPreviewImage" class="w-full rounded-lg mb-3 hidden" alt="Превью" loading="lazy">
+        <textarea id="editDescription" placeholder="Описание" rows="3" required></textarea>
+        <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Изменить изображение</button>
+        <img id="editPreviewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью" loading="lazy">
         <input type="file" id="editImageInput" accept="image/*" class="hidden">
-        <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
-        <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
+        <button type="submit" class="bg-blue-500 text-white py-1 rounded-lg">Сохранить</button>
+        <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-1 rounded-lg mt-2">Отмена</button>
       </form>
     </div>
   </div>
 
-  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-3000">
-    <div class="modal-content rounded-lg p-4 w-11/12 max-w-md">
-      <h2 id="modalTitle" class="text-base font-bold text-white mb-2"></h2>
-      <p id="modalDate" class="text-sm text-gray-400 mb-2"></p>
-      <p id="modalLocation" class="text-sm text-gray-400 mb-2"></p>
-      <p id="modalDescription" class="text-sm text-gray-400 mb-3"></p>
+  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-4500">
+    <div class="modal-content rounded-lg p-3 w-11/12 max-w-[360px]">
+      <h2 id="modalTitle" class="text-sm font-bold text-white mb-2"></h2>
+      <p id="modalDate" class="text-xs text-gray-400 mb-1"></p>
+      <p id="modalLocation" class="text-xs text-gray-400 mb-1"></p>
+      <p id="modalDescription" class="text-xs text-gray-400 mb-2"></p>
       <div class="flex flex-col space-y-2">
-        <button id="joinBtn" class="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600">Записаться</button>
-        <button id="shareBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Поделиться</button>
-        <button id="closeModal" class="bg-gray-700 text-white py-2 rounded-lg hover:bg-gray-800">Закрыть</button>
+        <button id="joinBtn" class="bg-blue-500 text-white py-1 rounded-lg hover:bg-blue-600 text-xs">Записаться</button>
+        <button id="shareBtn" class="bg-gray-600 text-white py-1 rounded-lg hover:bg-gray-700 text-xs">Поделиться</button>
+        <button id="closeModal" class="bg-gray-700 text-white py-1 rounded-lg hover:bg-gray-800 text-xs">Закрыть</button>
       </div>
     </div>
   </div>
@@ -346,6 +352,7 @@
     const eventModal = document.getElementById('eventModal');
     const closeModalBtn = document.getElementById('closeModal');
     const adminPanel = document.getElementById('adminPanel');
+    const adminCloseBtn = document.getElementById('adminCloseBtn');
     const adminForm = document.getElementById('adminForm');
     const uploadImageBtn = document.getElementById('uploadImageBtn');
     const previewImage = document.getElementById('previewImage');
@@ -375,19 +382,6 @@
         timeout = setTimeout(later, wait);
       };
     }
-
-    function updateNavPadding() {
-      requestAnimationFrame(() => {
-        const nav = document.querySelector('.bottom-nav');
-        const adminContent = document.querySelector('.admin-content');
-        if (nav && adminContent) {
-          const navHeight = nav.offsetHeight || 56;
-          adminContent.style.marginBottom = `calc(${navHeight}px + env(safe-area-inset-bottom))`;
-        }
-      });
-    }
-
-    const debouncedUpdateNavPadding = debounce(updateNavPadding, 100);
 
     async function compressImage(file) {
       if (file.size < 4 * 1024 * 1024) return file;
@@ -475,13 +469,10 @@
         button.classList.add('active');
         eventsContainer.classList.add('hidden');
         adminPanel.classList.add('hidden');
-        document.body.classList.remove('admin-open');
         if (button.dataset.tab === 'events') {
           eventsContainer.classList.remove('hidden');
         } else if (button.dataset.tab === 'admin' && isAdmin) {
           adminPanel.classList.remove('hidden');
-          document.body.classList.add('admin-open');
-          debouncedUpdateNavPadding();
           renderManageList();
         } else {
           tg.showAlert(`Раздел "${button.dataset.tab}" в разработке!`);
@@ -489,9 +480,12 @@
       });
     });
 
-    window.addEventListener('load', debouncedUpdateNavPadding);
-    window.addEventListener('resize', debouncedUpdateNavPadding);
-    window.addEventListener('orientationchange', debouncedUpdateNavPadding);
+    adminCloseBtn.addEventListener('click', () => {
+      adminPanel.classList.add('hidden');
+      navButtons.forEach(btn => btn.classList.remove('active'));
+      document.querySelector('[data-tab="events"]').classList.add('active');
+      eventsContainer.classList.remove('hidden');
+    });
 
     adminTabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -499,7 +493,6 @@
         tab.classList.add('active');
         document.querySelectorAll('.admin-section').forEach(section => section.classList.remove('active'));
         document.getElementById(`${tab.dataset.tab}Section`).classList.add('active');
-        debouncedUpdateNavPadding();
         if (tab.dataset.tab === 'manage') {
           renderManageList();
         } else if (tab.dataset.tab === 'ads') {
@@ -523,7 +516,6 @@
             previewImage.src = e.target.result;
             previewImage.classList.remove('hidden');
             scrollToSubmitButton('adminForm');
-            debouncedUpdateNavPadding();
           };
           reader.readAsDataURL(compressedFile);
         } catch (err) {
@@ -533,7 +525,7 @@
     });
 
     uploadAdImageBtn.addEventListener('click', () => adImageInput.click());
-    adImageInput.addEventListener('change', async () => {
+    imageInput.addEventListener('change', async () => {
       const file = adImageInput.files[0];
       if (file) {
         if (!file.type.startsWith('image/')) {
@@ -547,7 +539,6 @@
             adPreviewImage.src = e.target.result;
             adPreviewImage.classList.remove('hidden');
             scrollToSubmitButton('adForm');
-            debouncedUpdateNavPadding();
           };
           reader.readAsDataURL(compressedFile);
         } catch (err) {
@@ -571,7 +562,6 @@
             editPreviewImage.src = e.target.result;
             editPreviewImage.classList.remove('hidden');
             scrollToSubmitButton('editForm');
-            debouncedUpdateNavPadding();
           };
           reader.readAsDataURL(compressedFile);
         } catch (err) {
@@ -609,7 +599,7 @@
           date: record.fields.Date,
           location: record.fields.Location,
           description: record.fields.Description,
-          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/140'
+          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/120'
         }));
         eventsContainer.innerHTML = '';
         if (events.length === 0) {
@@ -622,7 +612,7 @@
           eventCard.style.animationDelay = `${index * 0.1}s`;
           eventCard.innerHTML = `
             <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg" loading="lazy">
-            <div class="p-2 text-center">
+            <div class="p-1 text-center">
               <p class="text-xs font-semibold text-white">${event.date}</p>
               <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
             </div>
@@ -689,7 +679,7 @@
         }
         const ad = data.records.find(record => record.fields.ID === 'ad1');
         if (ad) {
-          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/300x60';
+          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/280x50';
           adPreviewImage.classList.toggle('hidden', !ad.fields.IMG);
           document.getElementById('adLinkUrl').value = ad.fields.URL || '';
           adStatus.classList.add('hidden');
@@ -727,10 +717,10 @@
         }
         events.forEach(event => {
           const item = document.createElement('div');
-          item.className = 'flex justify-between items-center bg-gray-800 p-2 rounded-lg';
+          item.className = 'flex justify-between items-center bg-gray-800 p-1 rounded-lg';
           item.innerHTML = `
-            <span class="text-sm text-white line-clamp-1">${event.title} (${event.date})</span>
-            <div class="flex space-x-2">
+            <span class="text-xs text-white line-clamp-1">${event.title} (${event.date})</span>
+            <div class="flex space-x-1">
               <button class="edit-btn text-xs py-1 px-2" data-id="${event.id}">Редактировать</button>
               <button class="delete-btn text-xs py-1 px-2" data-id="${event.id}">Удалить</button>
             </div>
@@ -751,11 +741,10 @@
             document.getElementById('editDate').value = event.fields.Date || '';
             document.getElementById('editLocation').value = event.fields.Location || '';
             document.getElementById('editDescription').value = event.fields.Description || '';
-            editPreviewImage.src = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : 'https://via.placeholder.com/140';
+            editPreviewImage.src = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : 'https://via.placeholder.com/120';
             editPreviewImage.classList.toggle('hidden', !event.fields.Image);
             editModal.classList.remove('hidden');
             scrollToSubmitButton('editForm');
-            debouncedUpdateNavPadding();
           });
         });
         document.querySelectorAll('.delete-btn').forEach(btn => {
@@ -824,11 +813,10 @@
         previewImage.classList.add('hidden');
         imageInput.value = '';
         tg.showAlert('Мероприятие добавлено!');
+        adminPanel.classList.add('hidden');
         navButtons.forEach(btn => btn.classList.remove('active'));
         document.querySelector('[data-tab="events"]').classList.add('active');
         eventsContainer.classList.remove('hidden');
-        adminPanel.classList.add('hidden');
-        document.body.classList.remove('admin-open');
         renderEvents();
       } catch (err) {
         tg.showAlert(`Ошибка: ${err.message}`);
@@ -983,7 +971,6 @@
 
     renderEvents();
     renderAdBanner();
-    debouncedUpdateNavPadding();
   </script>
 </body>
 </html>
