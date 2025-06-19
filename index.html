@@ -200,11 +200,11 @@
 </head>
 <body class="overflow-y-auto">
   <header class="flex justify-between items-center w-full px-4 pt-4 z-10 relative">
-  <div id="adBanner" class="max-w-[120px] sm:max-w-[140px] z-20">
+  <div id="adBanner" class="max-w-[120px] sm:max-w-[140px] h-[48px] sm:h-[56px] overflow-hidden flex items-center z-20">
     <!-- Реклама будет вставлена динамически -->
   </div>
   <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer z-20">
-    <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG"
+    <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" class="h-[48px] sm:h-[56px] w-auto"
          alt="Логотип Smolville Drift"
          class="w-12 sm:w-16 h-auto object-contain"
          loading="lazy">
@@ -215,7 +215,7 @@
 
   <div id="events" class="events-grid"></div>
 
-  <div id="adminPanel" class="admin-content p-6 w-11/12 max-w-md mx-auto hidden">
+  <div id="adminPanel" class="admin-content p-6 w-11/12 max-w-md mx-auto hidden overflow-y-auto" style="padding-bottom: calc(180px + env(safe-area-inset-bottom));">
     <h2 class="text-lg font-bold text-white mb-3">Админ-панель</h2>
     <div class="flex space-x-2 mb-4 overflow-x-auto">
       <button class="admin-tab active" data-tab="add">Добавить</button>
@@ -712,7 +712,7 @@
         if (ad && ad.fields.IMG && ad.fields.IMG[0] && ad.fields.URL) {
           adBanner.innerHTML = `
             <a href="${ad.fields.URL}" target="_blank" rel="noopener noreferrer">
-              <img src="${ad.fields.IMG[0].url}" alt="Реклама" loading="lazy">
+              <img src="${ad.fields.IMG[0].url}" alt="Реклама" class="object-contain h-full w-auto" loading="lazy">
             </a>
           `;
           adBanner.classList.remove('hidden');
