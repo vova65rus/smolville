@@ -21,6 +21,7 @@
       min-height: 100vh;
       position: relative;
       touch-action: pan-y;
+      -webkit-font-smoothing: antialiased;
     }
     body.admin-open {
       overflow: hidden;
@@ -76,24 +77,8 @@
       flex-wrap: wrap;
       gap: 10px;
     }
-    .user-profile {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-    }
-    .user-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-    .user-label {
-      font-size: 12px;
-      color: #ffffff;
-      background: #2c2c2e;
-      padding: 2px 8px;
-      border-radius: 12px;
+    .header img {
+      max-width: 100%;
     }
     .bottom-nav {
       position: fixed;
@@ -125,7 +110,7 @@
     .events-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 12px;
+      gap: 14px;
       width: 100%;
       padding: 16px;
     }
@@ -226,10 +211,6 @@
 </head>
 <body>
   <header class="header">
-    <div class="user-profile">
-      <img id="userAvatar" src="https://via.placeholder.com/40" alt="Аватар пользователя" class="user-avatar" loading="lazy">
-      <span class="user-label">Аккаунт пользователя</span>
-    </div>
     <div id="adBanner" class="ad-banner hidden"></div>
     <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer">
       <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo" loading="lazy">
@@ -330,7 +311,7 @@
     tg.expand();
     tg.enableClosingConfirmation();
 
-    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость', photo_url: '' };
+    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const adminId = 366825437;
     const isAdmin = user.id === adminId;
     if (isAdmin) {
@@ -369,11 +350,6 @@
     const navButtons = document.querySelectorAll('.nav-btn');
     const adminTabs = document.querySelectorAll('.admin-tab');
     const manageList = document.getElementById('manageList');
-    const userAvatar = document.getElementById('userAvatar');
-
-    function initUser() {
-      userAvatar.src = user.photo_url || 'https://via.placeholder.com/40';
-    }
 
     function debounce(func, wait) {
       let timeout;
@@ -932,6 +908,7 @@
     });
 
     editForm.addEventListener('submit', async (e) => {
+      e.prevent_SELLOUT
       e.preventDefault();
       const submitBtn = editForm.querySelector('button[type="submit"]');
       const originalText = submitBtn.textContent;
@@ -1093,7 +1070,6 @@
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
     }
 
-    initUser();
     renderEvents();
     renderAdBanner();
     debouncedUpdateNavPadding();
