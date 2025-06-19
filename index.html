@@ -33,7 +33,7 @@
     }
     @media (max-width: 768px) {
       body {
-        background-size: 100px auto;
+        background-size: 60px auto;
       }
     }
     .event-card {
@@ -128,10 +128,11 @@
       backdrop-filter: blur(10px);
     }
     .admin-content {
-      padding-bottom: 80px;
+      padding-bottom: 60px;
       overflow-y: auto;
-      max-height: 80vh;
+      max-height: calc(100vh - 100px);
       margin-top: 20px;
+      z-index: 1001;
     }
     .admin-form input, .admin-form textarea, .admin-form select {
       background: #2c2c2e;
@@ -209,6 +210,10 @@
       0% { transform: translateY(-50%) rotate(0deg); }
       100% { transform: translateY(-50%) rotate(360deg); }
     }
+    #previewImage, #adPreviewImage, #editPreviewImage {
+      max-height: 200px;
+      object-fit: contain;
+    }
   </style>
 </head>
 <body>
@@ -244,7 +249,7 @@
         <input type="text" id="eventLocation" placeholder="Место" required>
         <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
         <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение</button>
-        <img id="previewImage" class="w-full h-auto object-contain rounded-lg mb-4 hidden" alt="Превью">
+        <img id="previewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью">
         <input type="file" id="imageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
       </form>
@@ -256,7 +261,7 @@
       <p id="adStatus" class="text-sm text-gray-400 mb-4 hidden">Реклама не настроена</p>
       <form id="adForm" class="admin-form">
         <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение рекламы</button>
-        <img id="adPreviewImage" class="w-full h-auto object-contain rounded-lg mb-4 hidden" alt="Превью рекламы">
+        <img id="adPreviewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью рекламы">
         <input type="file" id="adImageInput" accept="image/*" class="hidden">
         <input type="text" id="adLinkUrl" placeholder="URL ссылки рекламы" required>
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить рекламу</button>
@@ -279,7 +284,7 @@
         <input type="text" id="editLocation" placeholder="Место" required>
         <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
         <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Изменить изображение</button>
-        <img id="editPreviewImage" class="w-full h-auto object-contain rounded-lg mb-4 hidden" alt="Превью">
+        <img id="editPreviewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью">
         <input type="file" id="editImageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
         <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
@@ -466,6 +471,7 @@
         const img = new Image();
         const dimensions = await new Promise((resolve) => {
           img.onload = () => resolve({ width: img.width, height: img.height });
+          img.onerror = () => resolve({ width: 'неизвестно', height: 'неизвестно' });
           img.src = URL.createObjectURL(file);
         });
         console.log('Размеры изображения:', dimensions);
