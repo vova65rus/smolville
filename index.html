@@ -64,19 +64,8 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
-    .logo {
-      max-width: 75px;
-      height: auto;
-    }
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      padding: 10px 16px;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
+    
+    
     .header img {
       max-width: 100%;
     }
@@ -209,13 +198,18 @@
     }
   </style>
 </head>
-<body>
-  <header class="header">
-    <div id="adBanner" class="ad-banner hidden"></div>
-    <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer">
-      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo" loading="lazy">
-    </div>
-  </header>
+<body class="overflow-y-auto">
+  <header class="flex justify-between items-center w-full px-4 pt-4 z-10 relative">
+  <div id="adBanner" class="max-w-[120px] sm:max-w-[140px] z-20">
+    <!-- Реклама будет вставлена динамически -->
+  </div>
+  <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer z-20">
+    <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG"
+         alt="Логотип Smolville Drift"
+         class="w-12 sm:w-16 h-auto object-contain"
+         loading="lazy">
+  </div>
+</header>
 
   <h1 class="text-xl font-bold text-white mt-4 mb-4 text-center">Автомобильные события</h1>
 
