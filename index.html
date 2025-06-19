@@ -20,6 +20,7 @@
       flex-direction: column;
       min-height: 100vh;
       position: relative;
+      touch-action: pan-y;
     }
     body.admin-open {
       overflow: hidden;
@@ -40,15 +41,13 @@
       }
     }
     .event-card {
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      background: rgba(28, 28, 30, 0.9);
-      backdrop-filter: blur(10px);
+      background: #2c2c2e;
       border-radius: 12px;
       touch-action: manipulation;
-    }
-    .event-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      min-height: 150px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
     .fade-in {
       animation: fadeIn 0.3s ease-in;
@@ -74,26 +73,39 @@
       justify-content: space-between;
       width: 100%;
       padding: 10px 16px;
+      flex-wrap: wrap;
+      gap: 10px;
     }
-    .username {
-      font-size: 18px;
-      font-weight: 700;
+    .user-profile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .user-label {
+      font-size: 12px;
       color: #ffffff;
       background: #2c2c2e;
-      padding: 4px 12px;
-      border-radius: 16px;
+      padding: 2px 8px;
+      border-radius: 12px;
     }
     .bottom-nav {
       position: fixed;
       bottom: 0;
       width: 100%;
-      background: rgba(28, 28, 30, 0.9);
-      backdrop-filter: blur(10px);
+      background: #2c2c2e;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
       justify-content: space-around;
       padding: 10px 0;
       z-index: 1000;
+      min-height: 60px;
     }
     .nav-btn {
       background: none;
@@ -101,7 +113,6 @@
       padding: 10px;
       font-size: 14px;
       color: #0a84ff;
-      transition: background 0.2s ease;
       border-radius: 8px;
       cursor: pointer;
       touch-action: manipulation;
@@ -113,40 +124,37 @@
     }
     .events-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
       width: 100%;
-      padding: 0 16px 10px 16px;
-    }
-    .event-card {
-      aspect-ratio: 1/1;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 10px;
+      padding: 16px;
     }
     .modal-content, .admin-content {
-      background: rgba(28, 28, 30, 0.95);
-      backdrop-filter: blur(10px);
+      background: #2c2c2e;
+      border-radius: 12px;
     }
     .admin-content {
-      padding-bottom: calc(100px + env(safe-area-inset-bottom));
+      padding: 16px;
+      padding-bottom: calc(120px + env(safe-area-inset-bottom));
       overflow-y: auto;
-      max-height: calc(100vh - 100px);
-      min-height: calc(100vh - 100px);
+      max-height: 100vh;
+      min-height: 100vh;
       margin-top: 20px;
       z-index: 1010;
       position: relative;
       overflow-anchor: none;
+      will-change: scroll-position;
+      box-sizing: border-box;
     }
     .admin-form input, .admin-form textarea, .admin-form select {
-      background: #2c2c2e;
+      background: #3a3a3c;
       color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 8px;
       padding: 8px;
       width: 100%;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      box-sizing: border-box;
     }
     .admin-form button, .admin-tab, .delete-btn, .edit-btn {
       background: #0a84ff;
@@ -176,10 +184,8 @@
       display: none;
     }
     .ad-banner {
-      width: 100%;
       max-width: 320px;
-      margin: 10px auto;
-      padding-bottom: 60px;
+      margin: 0 auto;
       display: block;
     }
     .ad-banner img {
@@ -187,11 +193,6 @@
       max-height: 80px;
       object-fit: contain;
       border-radius: 8px;
-    }
-    @media (min-width: 768px) {
-      .ad-banner {
-        max-width: 400px;
-      }
     }
     .loading {
       position: relative;
@@ -218,14 +219,20 @@
     #previewImage, #adPreviewImage, #editPreviewImage {
       max-height: 200px;
       object-fit: contain;
+      width: 100%;
+      border-radius: 8px;
     }
   </style>
 </head>
 <body>
   <header class="header">
-    <span id="username" class="username">Гость</span>
-    <div onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/smolville_drift')" class="cursor-pointer">
-      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo">
+    <div class="user-profile">
+      <img id="userAvatar" src="https://via.placeholder.com/40" alt="Аватар пользователя" class="user-avatar" loading="lazy">
+      <span class="user-label">Аккаунт пользователя</span>
+    </div>
+    <div id="adBanner" class="ad-banner hidden"></div>
+    <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer">
+      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo" loading="lazy">
     </div>
   </header>
 
@@ -233,9 +240,7 @@
 
   <div id="events" class="events-grid"></div>
 
-  <div id="adBanner" class="ad-banner hidden"></div>
-
-  <div id="adminPanel" class="admin-content rounded-lg p-6 w-11/12 max-w-md mx-auto hidden">
+  <div id="adminPanel" class="admin-content p-6 w-11/12 max-w-md mx-auto hidden">
     <h2 class="text-lg font-bold text-white mb-3">Админ-панель</h2>
     <div class="flex space-x-2 mb-4 overflow-x-auto">
       <button class="admin-tab active" data-tab="add">Добавить</button>
@@ -254,7 +259,7 @@
         <input type="text" id="eventLocation" placeholder="Место" required>
         <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
         <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение</button>
-        <img id="previewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью">
+        <img id="previewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью" loading="lazy">
         <input type="file" id="imageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
       </form>
@@ -266,7 +271,7 @@
       <p id="adStatus" class="text-sm text-gray-400 mb-4 hidden">Реклама не настроена</p>
       <form id="adForm" class="admin-form">
         <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение рекламы</button>
-        <img id="adPreviewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью рекламы">
+        <img id="adPreviewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью рекламы" loading="lazy">
         <input type="file" id="adImageInput" accept="image/*" class="hidden">
         <input type="text" id="adLinkUrl" placeholder="URL ссылки рекламы" required>
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить рекламу</button>
@@ -289,7 +294,7 @@
         <input type="text" id="editLocation" placeholder="Место" required>
         <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
         <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Изменить изображение</button>
-        <img id="editPreviewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью">
+        <img id="editPreviewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью" loading="lazy">
         <input type="file" id="editImageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
         <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
@@ -325,8 +330,7 @@
     tg.expand();
     tg.enableClosingConfirmation();
 
-    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    document.getElementById('username').textContent = user.first_name || 'Гость';
+    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость', photo_url: '' };
     const adminId = 366825437;
     const isAdmin = user.id === adminId;
     if (isAdmin) {
@@ -365,17 +369,26 @@
     const navButtons = document.querySelectorAll('.nav-btn');
     const adminTabs = document.querySelectorAll('.admin-tab');
     const manageList = document.getElementById('manageList');
+    const userAvatar = document.getElementById('userAvatar');
 
-    function scrollToSubmitButton(formId) {
-      const form = document.getElementById(formId);
-      const submitBtn = form.querySelector('button[type="submit"]');
-      if (submitBtn) {
-        submitBtn.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }
+    function initUser() {
+      userAvatar.src = user.photo_url || 'https://via.placeholder.com/40';
+    }
+
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
     }
 
     function updateNavPadding() {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         const nav = document.querySelector('.bottom-nav');
         const adminContent = document.querySelector('.admin-content');
         if (nav && adminContent) {
@@ -383,8 +396,10 @@
           adminContent.style.paddingBottom = `calc(${navHeight}px + env(safe-area-inset-bottom))`;
           console.log('Высота навигации:', navHeight, 'px');
         }
-      }, 100);
+      });
     }
+
+    const debouncedUpdateNavPadding = debounce(updateNavPadding, 100);
 
     async function compressImage(file) {
       if (file.size < 4 * 1024 * 1024) {
@@ -449,126 +464,6 @@
       });
     }
 
-    navButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        navButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        eventsContainer.classList.add('hidden');
-        adminPanel.classList.add('hidden');
-        document.body.classList.remove('admin-open');
-        if (button.dataset.tab === 'events') {
-          eventsContainer.classList.remove('hidden');
-        } else if (button.dataset.tab === 'admin' && isAdmin) {
-          adminPanel.classList.remove('hidden');
-          document.body.classList.add('admin-open');
-          updateNavPadding();
-          renderManageList();
-        } else {
-          tg.showAlert(`Раздел "${button.dataset.tab}" в разработке!`);
-        }
-      });
-    });
-
-    window.addEventListener('load', updateNavPadding);
-    window.addEventListener('resize', updateNavPadding);
-    window.addEventListener('orientationchange', updateNavPadding);
-
-    adminTabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        adminTabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        document.querySelectorAll('.admin-section').forEach(section => section.classList.remove('active'));
-        document.getElementById(`${tab.dataset.tab}Section`).classList.add('active');
-        updateNavPadding();
-        if (tab.dataset.tab === 'manage') {
-          renderManageList();
-        } else if (tab.dataset.tab === 'ads') {
-          loadAdData();
-        }
-      });
-    });
-
-    uploadImageBtn.addEventListener('click', () => {
-      imageInput.click();
-    });
-
-    imageInput.addEventListener('change', async () => {
-      const file = imageInput.files[0];
-      if (file) {
-        if (!file.type.startsWith('image/')) {
-          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
-          return;
-        }
-        try {
-          const compressedFile = await compressImage(file);
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            previewImage.src = e.target.result;
-            previewImage.classList.remove('hidden');
-            scrollToSubmitButton('adminForm');
-            updateNavPadding();
-          };
-          reader.readAsDataURL(compressedFile);
-        } catch (err) {
-          tg.showAlert(`Ошибка сжатия изображения: ${err.message}`);
-        }
-      }
-    });
-
-    uploadAdImageBtn.addEventListener('click', () => {
-      adImageInput.click();
-    });
-
-    adImageInput.addEventListener('change', async () => {
-      const file = adImageInput.files[0];
-      if (file) {
-        if (!file.type.startsWith('image/')) {
-          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
-          return;
-        }
-        try {
-          const compressedFile = await compressImage(file);
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            adPreviewImage.src = e.target.result;
-            adPreviewImage.classList.remove('hidden');
-            scrollToSubmitButton('adForm');
-            updateNavPadding();
-          };
-          reader.readAsDataURL(compressedFile);
-        } catch (err) {
-          tg.showAlert(`Ошибка сжатия изображения: ${err.message}`);
-        }
-      }
-    });
-
-    editImageBtn.addEventListener('click', () => {
-      editImageInput.click();
-    });
-
-    editImageInput.addEventListener('change', async () => {
-      const file = editImageInput.files[0];
-      if (file) {
-        if (!file.type.startsWith('image/')) {
-          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
-          return;
-        }
-        try {
-          const compressedFile = await compressImage(file);
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            editPreviewImage.src = e.target.result;
-            editPreviewImage.classList.remove('hidden');
-            scrollToSubmitButton('editForm');
-            updateNavPadding();
-          };
-          reader.readAsDataURL(compressedFile);
-        } catch (err) {
-          tg.showAlert(`Ошибка сжатия изображения: ${err.message}`);
-        }
-      }
-    });
-
     async function uploadToImgBB(file, button) {
       const originalText = button.textContent;
       button.textContent = 'Загрузка...';
@@ -578,8 +473,8 @@
         if (!file.type.startsWith('image/')) {
           throw new Error('Файл должен быть изображением (JPEG, PNG и т.д.)');
         }
-        if (file.size > 32 * 1024 * 1024) {
-          throw new Error('Файл превышает лимит в 32 МБ');
+        if (file.size > 10 * 1024 * 1024) {
+          throw new Error('Файл превышает лимит в 10 МБ');
         }
         console.log('Начинаем загрузку изображения:', {
           name: file.name,
@@ -640,6 +535,344 @@
       }
     }
 
+    function scrollToSubmitButton(formId) {
+      const form = document.getElementById(formId);
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+    }
+
+    navButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        navButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        eventsContainer.classList.add('hidden');
+        adminPanel.classList.add('hidden');
+        document.body.classList.remove('admin-open');
+        if (button.dataset.tab === 'events') {
+          eventsContainer.classList.remove('hidden');
+        } else if (button.dataset.tab === 'admin' && isAdmin) {
+          adminPanel.classList.remove('hidden');
+          document.body.classList.add('admin-open');
+          debouncedUpdateNavPadding();
+          renderManageList();
+        } else {
+          tg.showAlert(`Раздел "${button.dataset.tab}" в разработке!`);
+        }
+      });
+    });
+
+    window.addEventListener('load', debouncedUpdateNavPadding);
+    window.addEventListener('resize', debouncedUpdateNavPadding);
+    window.addEventListener('orientationchange', debouncedUpdateNavPadding);
+
+    adminTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        adminTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.admin-section').forEach(section => section.classList.remove('active'));
+        document.getElementById(`${tab.dataset.tab}Section`).classList.add('active');
+        debouncedUpdateNavPadding();
+        if (tab.dataset.tab === 'manage') {
+          renderManageList();
+        } else if (tab.dataset.tab === 'ads') {
+          loadAdData();
+        }
+      });
+    });
+
+    uploadImageBtn.addEventListener('click', () => {
+      imageInput.click();
+    });
+
+    imageInput.addEventListener('change', async () => {
+      const file = imageInput.files[0];
+      if (file) {
+        if (!file.type.startsWith('image/')) {
+          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          return;
+        }
+        try {
+          const compressedFile = await compressImage(file);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            previewImage.src = e.target.result;
+            previewImage.classList.remove('hidden');
+            scrollToSubmitButton('adminForm');
+            debouncedUpdateNavPadding();
+          };
+          reader.readAsDataURL(compressedFile);
+        } catch (err) {
+          tg.showAlert(`Ошибка сжатия изображения: ${err.message}`);
+        }
+      }
+    });
+
+    uploadAdImageBtn.addEventListener('click', () => {
+      adImageInput.click();
+    });
+
+    adImageInput.addEventListener('change', async () => {
+      const file = adImageInput.files[0];
+      if (file) {
+        if (!file.type.startsWith('image/')) {
+          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          return;
+        }
+        try {
+          const compressedFile = await compressImage(file);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            adPreviewImage.src = e.target.result;
+            adPreviewImage.classList.remove('hidden');
+            scrollToSubmitButton('adForm');
+            debouncedUpdateNavPadding();
+          };
+          reader.readAsDataURL(compressedFile);
+        } catch (err) {
+          tg.showAlert(`Ошибка сжатия изображения: ${err.message}`);
+        }
+      }
+    });
+
+    editImageBtn.addEventListener('click', () => {
+      editImageInput.click();
+    });
+
+    editImageInput.addEventListener('change', async () => {
+      const file = editImageInput.files[0];
+      if (file) {
+        if (!file.type.startsWith('image/')) {
+          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          return;
+        }
+        try {
+          const compressedFile = await compressImage(file);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            editPreviewImage.src = e.target.result;
+            editPreviewImage.classList.remove('hidden');
+            scrollToSubmitButton('editForm');
+            debouncedUpdateNavPadding();
+          };
+          reader.readAsDataURL(compressedFile);
+        } catch (err) {
+          tg.showAlert(`Ошибка сжатия изображения: ${err.message}`);
+        }
+      }
+    });
+
+    async function getCachedData(key, fetchFn, ttl = 300000) {
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < ttl) {
+          console.log(`Используем кэш для ${key}`);
+          return data;
+        }
+      }
+      const data = await fetchFn();
+      localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+      return data;
+    }
+
+    async function renderEvents() {
+      eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      try {
+        const data = await getCachedData('events', async () => {
+          const response = await fetch(AIRTABLE_EVENTS_API_URL, {
+            headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
+          });
+          if (!response.ok) throw new Error(await response.text());
+          return await response.json();
+        });
+        const events = data.records.map(record => ({
+          id: record.id,
+          eventId: record.fields.ID,
+          title: record.fields.Title,
+          type: record.fields.Type,
+          date: record.fields.Date,
+          location: record.fields.Location,
+          description: record.fields.Description,
+          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/150'
+        }));
+        console.log('События:', events);
+        eventsContainer.innerHTML = '';
+        if (events.length === 0) {
+          eventsContainer.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
+          return;
+        }
+        events.forEach((event, index) => {
+          const eventCard = document.createElement('div');
+          eventCard.className = 'event-card fade-in';
+          eventCard.style.animationDelay = `${index * 0.1}s`;
+          eventCard.innerHTML = `
+            <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg" loading="lazy">
+            <div class="p-2 text-center">
+              <p class="text-sm font-semibold text-white">${event.date}</p>
+              <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
+            </div>
+          `;
+          eventCard.addEventListener('click', () => showEventDetails(event));
+          eventsContainer.appendChild(eventCard);
+        });
+      } catch (err) {
+        eventsContainer.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
+        console.error('Ошибка:', err);
+      }
+    }
+
+    async function renderAdBanner() {
+      try {
+        const data = await getCachedData('ads', async () => {
+          const response = await fetch(AIRTABLE_ADS_API_URL, {
+            headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
+          });
+          if (!response.ok) throw new Error(await response.text());
+          return await response.json();
+        });
+        if (!data.records || data.records.length === 0) {
+          adBanner.classList.add('hidden');
+          adStatus.classList.remove('hidden');
+          adStatus.textContent = 'Реклама не настроена';
+          return;
+        }
+        const ad = data.records.find(record => record.fields.ID === 'ad1');
+        if (ad && ad.fields.IMG && ad.fields.IMG[0] && ad.fields.URL) {
+          adBanner.innerHTML = `
+            <a href="${ad.fields.URL}" target="_blank" rel="noopener noreferrer">
+              <img src="${ad.fields.IMG[0].url}" alt="Реклама" loading="lazy">
+            </a>
+          `;
+          adBanner.classList.remove('hidden');
+          adStatus.classList.add('hidden');
+        } else {
+          adBanner.classList.add('hidden');
+          adStatus.classList.remove('hidden');
+          adStatus.textContent = 'Реклама не настроена';
+        }
+      } catch (err) {
+        adBanner.classList.add('hidden');
+        adStatus.classList.remove('hidden');
+        adStatus.textContent = 'Ошибка загрузки рекламы';
+        console.error('Ошибка загрузки рекламы:', err);
+      }
+    }
+
+    async function loadAdData() {
+      try {
+        const data = await getCachedData('ads', async () => {
+          const response = await fetch(AIRTABLE_ADS_API_URL, {
+            headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
+          });
+          if (!response.ok) throw new Error(await response.text());
+          return await response.json();
+        });
+        if (!data.records || data.records.length === 0) {
+          adStatus.classList.remove('hidden');
+          adStatus.textContent = 'Реклама не настроена';
+          return;
+        }
+        const ad = data.records.find(record => record.fields.ID === 'ad1');
+        if (ad) {
+          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/320x80';
+          adPreviewImage.classList.toggle('hidden', !ad.fields.IMG);
+          document.getElementById('adLinkUrl').value = ad.fields.URL || '';
+          adStatus.classList.add('hidden');
+        } else {
+          adStatus.classList.remove('hidden');
+          adStatus.textContent = 'Реклама не настроена';
+        }
+      } catch (err) {
+        adStatus.classList.remove('hidden');
+        adStatus.textContent = 'Ошибка загрузки данных рекламы';
+        console.error('Ошибка загрузки данных рекламы:', err);
+      }
+    }
+
+    async function renderManageList() {
+      manageList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      try {
+        const data = await getCachedData('events', async () => {
+          const response = await fetch(AIRTABLE_EVENTS_API_URL, {
+            headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
+          });
+          if (!response.ok) throw new Error(await response.text());
+          return await response.json();
+        });
+        const events = data.records.map(record => ({
+          id: record.id,
+          eventId: record.fields.ID,
+          title: record.fields.Title,
+          date: record.fields.Date
+        }));
+        manageList.innerHTML = '';
+        if (events.length === 0) {
+          manageList.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
+          return;
+        }
+        events.forEach(event => {
+          const item = document.createElement('div');
+          item.className = 'flex justify-between items-center bg-gray-800 p-2 rounded-lg';
+          item.innerHTML = `
+            <span class="text-sm text-white line-clamp-1">${event.title} (${event.date})</span>
+            <div class="flex space-x-2">
+              <button class="edit-btn text-sm py-1 px-2" data-id="${event.id}">Редактировать</button>
+              <button class="delete-btn text-sm py-1 px-2" data-id="${event.id}">Удалить</button>
+            </div>
+          `;
+          manageList.appendChild(item);
+        });
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${id}`, {
+              headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
+            });
+            if (!response.ok) throw new Error(await response.text());
+            const event = await response.json();
+            document.getElementById('editId').value = id;
+            document.getElementById('editTitle').value = event.fields.Title || '';
+            document.getElementById('editType').value = event.fields.Type || '';
+            document.getElementById('editDate').value = event.fields.Date || '';
+            document.getElementById('editLocation').value = event.fields.Location || '';
+            document.getElementById('editDescription').value = event.fields.Description || '';
+            editPreviewImage.src = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : 'https://via.placeholder.com/150';
+            editPreviewImage.classList.toggle('hidden', !event.fields.Image);
+            editModal.classList.remove('hidden');
+            scrollToSubmitButton('editForm');
+            debouncedUpdateNavPadding();
+          });
+        });
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            tg.showConfirm('Удалить мероприятие?', async (confirmed) => {
+              if (confirmed) {
+                try {
+                  const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
+                  });
+                  if (!response.ok) throw new Error(await response.text());
+                  localStorage.removeItem('events');
+                  tg.showAlert('Мероприятие удалено!');
+                  renderEvents();
+                  renderManageList();
+                } catch (err) {
+                  tg.showAlert(`Ошибка: ${err.message}`);
+                }
+              }
+            });
+          });
+        });
+      } catch (err) {
+        manageList.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
+        console.error('Ошибка:', err);
+      }
+    }
+
     adminForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitBtn = adminForm.querySelector('button[type="submit"]');
@@ -677,6 +910,7 @@
           body: JSON.stringify(eventData)
         });
         if (!response.ok) throw new Error(await response.text());
+        localStorage.removeItem('events');
         console.log('Событие добавлено в Airtable');
         adminForm.reset();
         previewImage.classList.add('hidden');
@@ -735,6 +969,7 @@
           body: JSON.stringify(eventData)
         });
         if (!response.ok) throw new Error(await response.text());
+        localStorage.removeItem('events');
         console.log('Событие обновлено в Airtable');
         editModal.classList.add('hidden');
         tg.showAlert('Мероприятие обновлено!');
@@ -804,6 +1039,7 @@
           });
         }
         if (!response.ok) throw new Error(await response.text());
+        localStorage.removeItem('ads');
         console.log('Реклама сохранена в Airtable');
         adForm.reset();
         adPreviewImage.classList.add('hidden');
@@ -823,193 +1059,6 @@
     cancelEdit.addEventListener('click', () => {
       editModal.classList.add('hidden');
     });
-
-    async function renderEvents() {
-      eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
-      try {
-        const response = await fetch(AIRTABLE_EVENTS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(await response.text());
-        const data = await response.json();
-        const events = data.records.map(record => ({
-          id: record.id,
-          eventId: record.fields.ID,
-          title: record.fields.Title,
-          type: record.fields.Type,
-          date: record.fields.Date,
-          location: record.fields.Location,
-          description: record.fields.Description,
-          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/150'
-        }));
-        console.log('События:', events);
-        eventsContainer.innerHTML = '';
-        if (events.length === 0) {
-          eventsContainer.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
-          return;
-        }
-        events.forEach((event, index) => {
-          const eventCard = document.createElement('div');
-          eventCard.className = 'event-card fade-in';
-          eventCard.style.animationDelay = `${index * 0.1}s`;
-          eventCard.innerHTML = `
-            <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg">
-            <div class="p-2 text-center">
-              <p class="text-sm font-semibold text-white">${event.date}</p>
-              <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
-            </div>
-          `;
-          eventCard.addEventListener('click', () => showEventDetails(event));
-          eventsContainer.appendChild(eventCard);
-        });
-      } catch (err) {
-        eventsContainer.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
-        console.error('Ошибка:', err);
-      }
-    }
-
-    async function renderAdBanner() {
-      try {
-        const response = await fetch(AIRTABLE_ADS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(await response.text());
-        const data = await response.json();
-        if (!data.records || data.records.length === 0) {
-          adBanner.classList.add('hidden');
-          adStatus.classList.remove('hidden');
-          adStatus.textContent = 'Реклама не настроена';
-          return;
-        }
-        const ad = data.records.find(record => record.fields.ID === 'ad1');
-        if (ad && ad.fields.IMG && ad.fields.IMG[0] && ad.fields.URL) {
-          adBanner.innerHTML = `
-            <a href="${ad.fields.URL}" target="_blank">
-              <img src="${ad.fields.IMG[0].url}" alt="Реклама">
-            </a>
-          `;
-          adBanner.classList.remove('hidden');
-          adStatus.classList.add('hidden');
-        } else {
-          adBanner.classList.add('hidden');
-          adStatus.classList.remove('hidden');
-          adStatus.textContent = 'Реклама не настроена';
-        }
-      } catch (err) {
-        adBanner.classList.add('hidden');
-        adStatus.classList.remove('hidden');
-        adStatus.textContent = 'Ошибка загрузки рекламы';
-        console.error('Ошибка загрузки рекламы:', err);
-      }
-    }
-
-    async function loadAdData() {
-      try {
-        const response = await fetch(AIRTABLE_ADS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(await response.text());
-        const data = await response.json();
-        if (!data.records || data.records.length === 0) {
-          adStatus.classList.remove('hidden');
-          adStatus.textContent = 'Реклама не настроена';
-          return;
-        }
-        const ad = data.records.find(record => record.fields.ID === 'ad1');
-        if (ad) {
-          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/320x80';
-          adPreviewImage.classList.toggle('hidden', !ad.fields.IMG);
-          document.getElementById('adLinkUrl').value = ad.fields.URL || '';
-          adStatus.classList.add('hidden');
-        } else {
-          adStatus.classList.remove('hidden');
-          adStatus.textContent = 'Реклама не настроена';
-        }
-      } catch (err) {
-        adStatus.classList.remove('hidden');
-        adStatus.textContent = 'Ошибка загрузки данных рекламы';
-        console.error('Ошибка загрузки данных рекламы:', err);
-      }
-    }
-
-    async function renderManageList() {
-      manageList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
-      try {
-        const response = await fetch(AIRTABLE_EVENTS_API_URL, {
-          headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(await response.text());
-        const data = await response.json();
-        const events = data.records.map(record => ({
-          id: record.id,
-          eventId: record.fields.ID,
-          title: record.fields.Title,
-          date: record.fields.Date
-        }));
-        manageList.innerHTML = '';
-        if (events.length === 0) {
-          manageList.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
-          return;
-        }
-        events.forEach(event => {
-          const item = document.createElement('div');
-          item.className = 'flex justify-between items-center bg-gray-800 p-2 rounded-lg';
-          item.innerHTML = `
-            <span class="text-sm text-white line-clamp-1">${event.title} (${event.date})</span>
-            <div class="flex space-x-2">
-              <button class="edit-btn text-sm py-1 px-2" data-id="${event.id}">Редактировать</button>
-              <button class="delete-btn text-sm py-1 px-2" data-id="${event.id}">Удалить</button>
-            </div>
-          `;
-          manageList.appendChild(item);
-        });
-        document.querySelectorAll('.edit-btn').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const id = btn.dataset.id;
-            const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${id}`, {
-              headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
-            });
-            if (!response.ok) throw new Error(await response.text());
-            const event = await response.json();
-            document.getElementById('editId').value = id;
-            document.getElementById('editTitle').value = event.fields.Title || '';
-            document.getElementById('editType').value = event.fields.Type || '';
-            document.getElementById('editDate').value = event.fields.Date || '';
-            document.getElementById('editLocation').value = event.fields.Location || '';
-            document.getElementById('editDescription').value = event.fields.Description || '';
-            editPreviewImage.src = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : 'https://via.placeholder.com/150';
-            editPreviewImage.classList.toggle('hidden', !event.fields.Image);
-            editModal.classList.remove('hidden');
-            scrollToSubmitButton('editForm');
-            updateNavPadding();
-          });
-        });
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const id = btn.dataset.id;
-            tg.showConfirm('Удалить мероприятие?', async (confirmed) => {
-              if (confirmed) {
-                try {
-                  const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${id}`, {
-                    method: 'DELETE',
-                    headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
-                  });
-                  if (!response.ok) throw new Error(await response.text());
-                  tg.showAlert('Мероприятие удалено!');
-                  renderEvents();
-                  renderManageList();
-                } catch (err) {
-                  tg.showAlert(`Ошибка: ${err.message}`);
-                }
-              }
-            });
-          });
-        });
-      } catch (err) {
-        manageList.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
-        console.error('Ошибка:', err);
-      }
-    }
 
     function showEventDetails(event) {
       document.getElementById('modalTitle').textContent = event.title;
@@ -1044,9 +1093,10 @@
       tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
     }
 
+    initUser();
     renderEvents();
     renderAdBanner();
-    updateNavPadding();
+    debouncedUpdateNavPadding();
   </script>
 </body>
 </html>
