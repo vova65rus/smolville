@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Автомобильные события</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -10,18 +10,18 @@
     body {
       background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.png');
       background-repeat: repeat;
-      background-size: 80px auto;
+      background-size: 60px auto;
       background-color: #1c1c1e;
-      background-attachment: scroll;
       color: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      overflow-x: hidden;
       display: flex;
       flex-direction: column;
       min-height: 100vh;
       position: relative;
       touch-action: pan-y;
       -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
     }
     body.admin-open {
       overflow: hidden;
@@ -36,19 +36,20 @@
       background: rgba(0, 0, 0, 0.5);
       z-index: -1;
     }
-    @media (max-width: 768px) {
+    @media (min-width: 768px) {
       body {
-        background-size: 60px auto;
+        background-size: 80px auto;
       }
     }
     .event-card {
       background: #2c2c2e;
       border-radius: 12px;
       touch-action: manipulation;
-      min-height: 150px;
+      min-height: 140px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      overflow: hidden;
     }
     .fade-in {
       animation: fadeIn 0.3s ease-in;
@@ -63,34 +64,38 @@
     html {
       -ms-overflow-style: none;
       scrollbar-width: none;
+      overscroll-behavior: none;
     }
-    
-    
     .header img {
       max-width: 100%;
+      height: auto;
     }
     .bottom-nav {
       position: fixed;
-      bottom: 0;
+      bottom: env(safe-area-inset-bottom);
       width: 100%;
       background: #2c2c2e;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
       justify-content: space-around;
-      padding: 10px 0;
-      z-index: 1000;
-      min-height: 60px;
+      padding: 8px 0;
+      z-index: 2000;
+      min-height: 56px;
+      box-sizing: border-box;
     }
     .nav-btn {
       background: none;
       border: none;
-      padding: 10px;
-      font-size: 14px;
+      padding: 8px;
+      font-size: 13px;
       color: #0a84ff;
       border-radius: 8px;
       cursor: pointer;
       touch-action: manipulation;
       min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .nav-btn.active {
       background: #0a84ff;
@@ -98,27 +103,31 @@
     }
     .events-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
       width: 100%;
-      padding: 16px;
+      padding: 12px;
+      box-sizing: border-box;
     }
     .modal-content, .admin-content {
       background: #2c2c2e;
       border-radius: 12px;
+      box-sizing: border-box;
     }
     .admin-content {
-      padding: 16px;
-      padding-bottom: calc(160px + env(safe-area-inset-bottom));
+      padding: 12px;
+      margin-bottom: calc(56px + env(safe-area-inset-bottom));
       overflow-y: auto;
-      max-height: 100vh;
-      min-height: 100vh;
-      margin-top: 20px;
+      max-height: calc(100vh - 56px - env(safe-area-inset-bottom));
+      min-height: calc(100vh - 56px - env(safe-area-inset-bottom));
       z-index: 1010;
-      position: relative;
-      overflow-anchor: none;
-      will-change: scroll-position;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       box-sizing: border-box;
+      overscroll-behavior: contain;
     }
     .admin-form input, .admin-form textarea, .admin-form select {
       background: #3a3a3c;
@@ -127,17 +136,19 @@
       border-radius: 8px;
       padding: 8px;
       width: 100%;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       box-sizing: border-box;
+      font-size: 14px;
     }
     .admin-form button, .admin-tab, .delete-btn, .edit-btn {
       background: #0a84ff;
       color: #ffffff;
-      padding: 10px;
+      padding: 8px;
       border-radius: 8px;
       width: 100%;
       text-align: center;
       cursor: pointer;
+      font-size: 14px;
     }
     .admin-tab.active {
       background: #1a63d8;
@@ -158,15 +169,26 @@
       display: none;
     }
     .ad-banner {
-      max-width: 320px;
-      margin: 0 auto;
+      max-width: 300px;
+      margin: 8px auto;
       display: block;
+      height: 60px;
+      overflow: hidden;
     }
     .ad-banner img {
       width: 100%;
-      max-height: 80px;
-      object-fit: contain;
+      height: 60px;
+      object-fit: cover;
       border-radius: 8px;
+    }
+    @media (max-width: 360px) {
+      .ad-banner {
+        max-width: 280px;
+        height: 50px;
+      }
+      .ad-banner img {
+        height: 50px;
+      }
     }
     .loading {
       position: relative;
@@ -176,13 +198,13 @@
     .loading::after {
       content: '';
       position: absolute;
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       border: 2px solid #ffffff;
       border-top: 2px solid transparent;
       border-radius: 50%;
       animation: spin 1s linear infinite;
-      right: 10px;
+      right: 8px;
       top: 50%;
       transform: translateY(-50%);
     }
@@ -191,33 +213,30 @@
       100% { transform: translateY(-50%) rotate(360deg); }
     }
     #previewImage, #adPreviewImage, #editPreviewImage {
-      max-height: 200px;
+      max-height: 180px;
       object-fit: contain;
       width: 100%;
       border-radius: 8px;
     }
   </style>
 </head>
-<body class="overflow-y-auto">
-  <header class="flex justify-between items-center w-full px-4 pt-4 z-10 relative">
-  <div id="adBanner" class="max-w-[120px] sm:max-w-[140px] h-[48px] sm:h-[56px] overflow-hidden flex items-center z-20">
-    <!-- Реклама будет вставлена динамически -->
-  </div>
-  <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer z-20">
-    <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" class="h-[48px] sm:h-[56px] w-auto"
-         alt="Логотип Smolville Drift"
-         class="w-12 sm:w-16 h-auto object-contain"
-         loading="lazy">
-  </div>
-</header>
+<body>
+  <header class="flex justify-between items-center w-full px-3 pt-3 z-10 relative">
+    <div id="adBanner" class="max-w-[100px] h-[40px] overflow-hidden flex items-center z-20">
+      <!-- Реклама будет вставлена динамически -->
+    </div>
+    <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer z-20">
+      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" class="h-[40px] w-auto object-contain" alt="Логотип Smolville Drift" loading="lazy">
+    </div>
+  </header>
 
-  <h1 class="text-xl font-bold text-white mt-4 mb-4 text-center">Автомобильные события</h1>
+  <h1 class="text-lg font-bold text-white mt-3 mb-3 text-center">Автомобильные события</h1>
 
   <div id="events" class="events-grid"></div>
 
-  <div id="adminPanel" class="admin-content p-6 w-11/12 max-w-md mx-auto hidden overflow-y-auto" style="padding-bottom: calc(180px + env(safe-area-inset-bottom));">
-    <h2 class="text-lg font-bold text-white mb-3">Админ-панель</h2>
-    <div class="flex space-x-2 mb-4 overflow-x-auto">
+  <div id="adminPanel" class="admin-content p-4 w-full max-w-md mx-auto hidden">
+    <h2 class="text-base font-bold text-white mb-2">Админ-панель</h2>
+    <div class="flex space-x-2 mb-3 overflow-x-auto">
       <button class="admin-tab active" data-tab="add">Добавить</button>
       <button class="admin-tab" data-tab="manage">Управление</button>
       <button class="admin-tab" data-tab="ads">Реклама</button>
@@ -233,8 +252,8 @@
         <input type="text" id="eventDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="eventLocation" placeholder="Место" required>
         <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
-        <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение</button>
-        <img id="previewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью" loading="lazy">
+        <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-3">Загрузить изображение</button>
+        <img id="previewImage" class="w-full rounded-lg mb-3 hidden" alt="Превью" loading="lazy">
         <input type="file" id="imageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
       </form>
@@ -243,10 +262,10 @@
       <div id="manageList" class="space-y-2"></div>
     </div>
     <div id="adsSection" class="admin-section">
-      <p id="adStatus" class="text-sm text-gray-400 mb-4 hidden">Реклама не настроена</p>
+      <p id="adStatus" class="text-sm text-gray-400 mb-3 hidden">Реклама не настроена</p>
       <form id="adForm" class="admin-form">
-        <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Загрузить изображение рекламы</button>
-        <img id="adPreviewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью рекламы" loading="lazy">
+        <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-3">Загрузить изображение рекламы</button>
+        <img id="adPreviewImage" class="w-full rounded-lg mb-3 hidden" alt="Превью рекламы" loading="lazy">
         <input type="file" id="adImageInput" accept="image/*" class="hidden">
         <input type="text" id="adLinkUrl" placeholder="URL ссылки рекламы" required>
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить рекламу</button>
@@ -254,9 +273,9 @@
     </div>
   </div>
 
-  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-    <div class="modal-content rounded-lg p-6 w-11/12 max-w-md">
-      <h2 class="text-lg font-bold text-white mb-3">Редактировать</h2>
+  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-3000">
+    <div class="modal-content rounded-lg p-4 w-11/12 max-w-md">
+      <h2 class="text-base font-bold text-white mb-2">Редактировать</h2>
       <form id="editForm" class="admin-form">
         <input type="hidden" id="editId">
         <input type="text" id="editTitle" placeholder="Название" required>
@@ -268,8 +287,8 @@
         <input type="text" id="editDate" placeholder="Дата (например, 10 июля 2025)" required>
         <input type="text" id="editLocation" placeholder="Место" required>
         <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
-        <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-4">Изменить изображение</button>
-        <img id="editPreviewImage" class="w-full rounded-lg mb-4 hidden" alt="Превью" loading="lazy">
+        <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-2 rounded-lg mb-3">Изменить изображение</button>
+        <img id="editPreviewImage" class="w-full rounded-lg mb-3 hidden" alt="Превью" loading="lazy">
         <input type="file" id="editImageInput" accept="image/*" class="hidden">
         <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
         <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
@@ -277,12 +296,12 @@
     </div>
   </div>
 
-  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-    <div class="modal-content rounded-lg p-6 w-11/12 max-w-md">
-      <h2 id="modalTitle" class="text-lg font-bold text-white mb-3"></h2>
+  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-3000">
+    <div class="modal-content rounded-lg p-4 w-11/12 max-w-md">
+      <h2 id="modalTitle" class="text-base font-bold text-white mb-2"></h2>
       <p id="modalDate" class="text-sm text-gray-400 mb-2"></p>
       <p id="modalLocation" class="text-sm text-gray-400 mb-2"></p>
-      <p id="modalDescription" class="text-sm text-gray-400 mb-4"></p>
+      <p id="modalDescription" class="text-sm text-gray-400 mb-3"></p>
       <div class="flex flex-col space-y-2">
         <button id="joinBtn" class="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600">Записаться</button>
         <button id="shareBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Поделиться</button>
@@ -291,7 +310,7 @@
     </div>
   </div>
 
-  <div class="bottom-nav z-50">
+  <div class="bottom-nav">
     <button class="nav-btn active" data-tab="events">Мероприятия</button>
     <button class="nav-btn" data-tab="favorites">Избранное</button>
     <button class="nav-btn" data-tab="map">Карта</button>
@@ -362,9 +381,8 @@
         const nav = document.querySelector('.bottom-nav');
         const adminContent = document.querySelector('.admin-content');
         if (nav && adminContent) {
-          const navHeight = nav.offsetHeight || 60;
-          adminContent.style.paddingBottom = `calc(${navHeight}px + env(safe-area-inset-bottom))`;
-          console.log('Высота навигации:', navHeight, 'px');
+          const navHeight = nav.offsetHeight || 56;
+          adminContent.style.marginBottom = `calc(${navHeight}px + env(safe-area-inset-bottom))`;
         }
       });
     }
@@ -372,24 +390,7 @@
     const debouncedUpdateNavPadding = debounce(updateNavPadding, 100);
 
     async function compressImage(file) {
-      if (file.size < 4 * 1024 * 1024) {
-        console.log('Файл меньше 4 МБ, сжатие не требуется:', {
-          name: file.name,
-          size: (file.size / 1024 / 1024).toFixed(2) + ' МБ'
-        });
-        return file;
-      }
-      if (window.performance && window.performance.memory) {
-        const memory = window.performance.memory;
-        console.log('Память:', {
-          totalJSHeapSize: (memory.totalJSHeapSize / 1024 / 1024).toFixed(2) + ' МБ',
-          usedJSHeapSize: (memory.usedJSHeapSize / 1024 / 1024).toFixed(2) + ' МБ',
-          jsHeapSizeLimit: (memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2) + ' МБ'
-        });
-        if (memory.usedJSHeapSize > memory.jsHeapSizeLimit * 0.9) {
-          throw new Error('Недостаточно памяти для сжатия изображения');
-        }
-      }
+      if (file.size < 4 * 1024 * 1024) return file;
       return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
@@ -406,30 +407,20 @@
           canvas.width = width;
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
-          try {
-            canvas.toBlob(
-              (blob) => {
-                if (blob) {
-                  const compressedFile = new File([blob], file.name, { type: file.type, lastModified: Date.now() });
-                  console.log('Сжатое изображение:', {
-                    originalSize: (file.size / 1024 / 1024).toFixed(2) + ' МБ',
-                    compressedSize: (compressedFile.size / 1024 / 1024).toFixed(2) + ' МБ',
-                    dimensions: `${width}x${height}`
-                  });
-                  resolve(compressedFile);
-                } else {
-                  reject(new Error('Не удалось сжать изображение'));
-                }
-              },
-              file.type,
-              0.6
-            );
-          } catch (err) {
-            console.error('Ошибка сжатия в canvas:', err);
-            reject(new Error(`Ошибка сжатия: ${err.message}`));
-          }
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, { type: file.type, lastModified: Date.now() });
+                resolve(compressedFile);
+              } else {
+                reject(new Error('Не удалось сжать изображение'));
+              }
+            },
+            file.type,
+            0.6
+          );
         };
-        img.onerror = () => reject(new Error('Ошибка загрузки изображения для сжатия'));
+        img.onerror = () => reject(new Error('Ошибка загрузки изображения'));
         img.src = URL.createObjectURL(file);
       });
     }
@@ -438,65 +429,30 @@
       const originalText = button.textContent;
       button.textContent = 'Загрузка...';
       button.classList.add('loading');
-      const startTime = Date.now();
       try {
-        if (!file.type.startsWith('image/')) {
-          throw new Error('Файл должен быть изображением (JPEG, PNG и т.д.)');
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          throw new Error('Файл превышает лимит в 10 МБ');
-        }
-        console.log('Начинаем загрузку изображения:', {
-          name: file.name,
-          size: (file.size / 1024 / 1024).toFixed(2) + ' МБ',
-          type: file.type
-        });
-        let uploadFile = file;
-        if (file.size > 4 * 1024 * 1024) {
-          console.log('Сжатие изображения перед загрузкой');
-          uploadFile = await compressImage(file);
-        }
+        if (!file.type.startsWith('image/')) throw new Error('Файл должен быть изображением');
+        if (file.size > 10 * 1024 * 1024) throw new Error('Файл превышает лимит в 10 МБ');
+        let uploadFile = file.size > 4 * 1024 * 1024 ? await compressImage(file) : file;
         return new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('POST', `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, true);
-          xhr.setRequestHeader('Cache-Control', 'no-cache');
           const formData = new FormData();
           formData.append('image', uploadFile);
           xhr.timeout = 60000;
           xhr.onload = () => {
-            console.log('Ответ от ImgBB:', {
-              status: xhr.status,
-              headers: xhr.getAllResponseHeaders(),
-              body: xhr.responseText
-            });
-            console.log('Время загрузки:', ((Date.now() - startTime) / 1000).toFixed(2) + ' сек');
             if (xhr.status === 200) {
               const data = JSON.parse(xhr.responseText);
-              if (data.success && data.status === 200) {
-                resolve(data.data.url);
-              } else {
-                reject(new Error(data.error?.message || `Ошибка загрузки на ImgBB (HTTP ${xhr.status})`));
-              }
+              if (data.success) resolve(data.data.url);
+              else reject(new Error(data.error?.message || 'Ошибка загрузки'));
             } else {
-              reject(new Error(`Ошибка загрузки на ImgBB (HTTP ${xhr.status})`));
+              reject(new Error(`Ошибка загрузки (HTTP ${xhr.status})`));
             }
           };
-          xhr.onerror = () => {
-            console.error('Ошибка сети при загрузке на ImgBB');
-            reject(new Error('Ошибка сети при загрузке изображения'));
-          };
-          xhr.ontimeout = () => {
-            console.error('Превышено время ожидания загрузки (60 секунд)');
-            reject(new Error('Превышено время ожидания загрузки (60 секунд)'));
-          };
+          xhr.onerror = () => reject(new Error('Ошибка сети'));
+          xhr.ontimeout = () => reject(new Error('Превышено время ожидания'));
           xhr.send(formData);
         });
       } catch (err) {
-        console.error('ImgBB ошибка:', {
-          message: err.message,
-          name: err.name,
-          stack: err.stack
-        });
         tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
         return null;
       } finally {
@@ -552,15 +508,12 @@
       });
     });
 
-    uploadImageBtn.addEventListener('click', () => {
-      imageInput.click();
-    });
-
+    uploadImageBtn.addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', async () => {
       const file = imageInput.files[0];
       if (file) {
         if (!file.type.startsWith('image/')) {
-          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          tg.showAlert('Выберите изображение (JPEG, PNG и т.д.)');
           return;
         }
         try {
@@ -579,15 +532,12 @@
       }
     });
 
-    uploadAdImageBtn.addEventListener('click', () => {
-      adImageInput.click();
-    });
-
+    uploadAdImageBtn.addEventListener('click', () => adImageInput.click());
     adImageInput.addEventListener('change', async () => {
       const file = adImageInput.files[0];
       if (file) {
         if (!file.type.startsWith('image/')) {
-          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          tg.showAlert('Выберите изображение (JPEG, PNG и т.д.)');
           return;
         }
         try {
@@ -606,15 +556,12 @@
       }
     });
 
-    editImageBtn.addEventListener('click', () => {
-      editImageInput.click();
-    });
-
+    editImageBtn.addEventListener('click', () => editImageInput.click());
     editImageInput.addEventListener('change', async () => {
       const file = editImageInput.files[0];
       if (file) {
         if (!file.type.startsWith('image/')) {
-          tg.showAlert('Пожалуйста, выберите изображение (JPEG, PNG и т.д.)');
+          tg.showAlert('Выберите изображение (JPEG, PNG и т.д.)');
           return;
         }
         try {
@@ -637,10 +584,7 @@
       const cached = localStorage.getItem(key);
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < ttl) {
-          console.log(`Используем кэш для ${key}`);
-          return data;
-        }
+        if (Date.now() - timestamp < ttl) return data;
       }
       const data = await fetchFn();
       localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
@@ -665,9 +609,8 @@
           date: record.fields.Date,
           location: record.fields.Location,
           description: record.fields.Description,
-          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/150'
+          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/140'
         }));
-        console.log('События:', events);
         eventsContainer.innerHTML = '';
         if (events.length === 0) {
           eventsContainer.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
@@ -680,7 +623,7 @@
           eventCard.innerHTML = `
             <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg" loading="lazy">
             <div class="p-2 text-center">
-              <p class="text-sm font-semibold text-white">${event.date}</p>
+              <p class="text-xs font-semibold text-white">${event.date}</p>
               <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
             </div>
           `;
@@ -712,7 +655,7 @@
         if (ad && ad.fields.IMG && ad.fields.IMG[0] && ad.fields.URL) {
           adBanner.innerHTML = `
             <a href="${ad.fields.URL}" target="_blank" rel="noopener noreferrer">
-              <img src="${ad.fields.IMG[0].url}" alt="Реклама" class="object-contain h-full w-auto" loading="lazy">
+              <img src="${ad.fields.IMG[0].url}" alt="Реклама" class="object-cover h-full w-full" loading="lazy">
             </a>
           `;
           adBanner.classList.remove('hidden');
@@ -746,7 +689,7 @@
         }
         const ad = data.records.find(record => record.fields.ID === 'ad1');
         if (ad) {
-          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/320x80';
+          adPreviewImage.src = ad.fields.IMG && ad.fields.IMG[0] ? ad.fields.IMG[0].url : 'https://via.placeholder.com/300x60';
           adPreviewImage.classList.toggle('hidden', !ad.fields.IMG);
           document.getElementById('adLinkUrl').value = ad.fields.URL || '';
           adStatus.classList.add('hidden');
@@ -788,8 +731,8 @@
           item.innerHTML = `
             <span class="text-sm text-white line-clamp-1">${event.title} (${event.date})</span>
             <div class="flex space-x-2">
-              <button class="edit-btn text-sm py-1 px-2" data-id="${event.id}">Редактировать</button>
-              <button class="delete-btn text-sm py-1 px-2" data-id="${event.id}">Удалить</button>
+              <button class="edit-btn text-xs py-1 px-2" data-id="${event.id}">Редактировать</button>
+              <button class="delete-btn text-xs py-1 px-2" data-id="${event.id}">Удалить</button>
             </div>
           `;
           manageList.appendChild(item);
@@ -808,7 +751,7 @@
             document.getElementById('editDate').value = event.fields.Date || '';
             document.getElementById('editLocation').value = event.fields.Location || '';
             document.getElementById('editDescription').value = event.fields.Description || '';
-            editPreviewImage.src = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : 'https://via.placeholder.com/150';
+            editPreviewImage.src = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : 'https://via.placeholder.com/140';
             editPreviewImage.classList.toggle('hidden', !event.fields.Image);
             editModal.classList.remove('hidden');
             scrollToSubmitButton('editForm');
@@ -850,14 +793,11 @@
       submitBtn.textContent = 'Загрузка...';
       submitBtn.classList.add('loading');
       try {
-        console.log('Отправка формы добавления события');
         let imageUrl = null;
         const file = imageInput.files[0];
         if (file) {
-          console.log('Загрузка изображения для события');
           imageUrl = await uploadToImgBB(file, uploadImageBtn);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение');
-          console.log('Изображение загружено:', imageUrl);
         }
         const eventData = {
           fields: {
@@ -870,7 +810,6 @@
             Image: imageUrl ? [{ url: imageUrl }] : []
           }
         };
-        console.log('Отправка данных в Airtable:', eventData);
         const response = await fetch(AIRTABLE_EVENTS_API_URL, {
           method: 'POST',
           headers: {
@@ -881,7 +820,6 @@
         });
         if (!response.ok) throw new Error(await response.text());
         localStorage.removeItem('events');
-        console.log('Событие добавлено в Airtable');
         adminForm.reset();
         previewImage.classList.add('hidden');
         imageInput.value = '';
@@ -893,7 +831,6 @@
         document.body.classList.remove('admin-open');
         renderEvents();
       } catch (err) {
-        console.error('Ошибка добавления события:', err);
         tg.showAlert(`Ошибка: ${err.message}`);
       } finally {
         submitBtn.textContent = originalText;
@@ -902,21 +839,17 @@
     });
 
     editForm.addEventListener('submit', async (e) => {
-      e.prevent_SELLOUT
       e.preventDefault();
       const submitBtn = editForm.querySelector('button[type="submit"]');
       const originalText = submitBtn.textContent;
       submitBtn.textContent = 'Загрузка...';
       submitBtn.classList.add('loading');
       try {
-        console.log('Отправка формы редактирования события');
         let imageUrl = null;
         const file = editImageInput.files[0];
         if (file) {
-          console.log('Загрузка нового изображения для события');
           imageUrl = await uploadToImgBB(file, editImageBtn);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение');
-          console.log('Изображение загружено:', imageUrl);
         }
         const editId = document.getElementById('editId').value;
         if (!editId) throw new Error('ID события не найден');
@@ -930,7 +863,6 @@
             Image: imageUrl ? [{ url: imageUrl }] : (editPreviewImage.src && !editPreviewImage.src.includes('placeholder') ? [{ url: editPreviewImage.src }] : [])
           }
         };
-        console.log('Отправка данных в Airtable для редактирования:', eventData);
         const response = await fetch(`${AIRTABLE_EVENTS_API_URL}/${editId}`, {
           method: 'PATCH',
           headers: {
@@ -941,13 +873,11 @@
         });
         if (!response.ok) throw new Error(await response.text());
         localStorage.removeItem('events');
-        console.log('Событие обновлено в Airtable');
         editModal.classList.add('hidden');
         tg.showAlert('Мероприятие обновлено!');
         renderEvents();
         renderManageList();
       } catch (err) {
-        console.error('Ошибка редактирования события:', err);
         tg.showAlert(`Ошибка: ${err.message}`);
       } finally {
         submitBtn.textContent = originalText;
@@ -962,14 +892,11 @@
       submitBtn.textContent = 'Загрузка...';
       submitBtn.classList.add('loading');
       try {
-        console.log('Отправка формы рекламы');
         let imageUrl = null;
         const file = adImageInput.files[0];
         if (file) {
-          console.log('Загрузка изображения для рекламы');
           imageUrl = await uploadToImgBB(file, uploadAdImageBtn);
           if (!imageUrl) throw new Error('Не удалось загрузить изображение рекламы');
-          console.log('Изображение рекламы загружено:', imageUrl);
         }
         const adData = {
           fields: {
@@ -978,18 +905,15 @@
             URL: document.getElementById('adLinkUrl').value
           }
         };
-        console.log('Проверка существующей рекламы в Airtable');
         const recordsResponse = await fetch(AIRTABLE_ADS_API_URL, {
           headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
         });
         if (!recordsResponse.ok) throw new Error(await recordsResponse.text());
         const records = await recordsResponse.json();
-        console.log('Записи рекламы:', records);
-        const existingAd = records.records?.find(record => record.fields.ID === 'ad1');
         let response;
+        const existingAd = records.records?.find(record => record.fields.ID === 'ad1');
         if (existingAd) {
           adData.fields.IMG = imageUrl ? [{ url: imageUrl }] : (existingAd.fields.IMG && existingAd.fields.IMG[0] ? [{ url: existingAd.fields.IMG[0].url }] : []);
-          console.log('Обновление рекламы:', adData);
           response = await fetch(`${AIRTABLE_ADS_API_URL}/${existingAd.id}`, {
             method: 'PATCH',
             headers: {
@@ -999,7 +923,6 @@
             body: JSON.stringify(adData)
           });
         } else {
-          console.log('Создание новой рекламы:', adData);
           response = await fetch(AIRTABLE_ADS_API_URL, {
             method: 'POST',
             headers: {
@@ -1011,7 +934,6 @@
         }
         if (!response.ok) throw new Error(await response.text());
         localStorage.removeItem('ads');
-        console.log('Реклама сохранена в Airtable');
         adForm.reset();
         adPreviewImage.classList.add('hidden');
         adImageInput.value = '';
@@ -1019,7 +941,6 @@
         tg.showAlert('Реклама обновлена!');
         renderAdBanner();
       } catch (err) {
-        console.error('Ошибка сохранения рекламы:', err);
         tg.showAlert(`Ошибка: ${err.message}`);
       } finally {
         submitBtn.textContent = originalText;
@@ -1027,9 +948,7 @@
       }
     });
 
-    cancelEdit.addEventListener('click', () => {
-      editModal.classList.add('hidden');
-    });
+    cancelEdit.addEventListener('click', () => editModal.classList.add('hidden'));
 
     function showEventDetails(event) {
       document.getElementById('modalTitle').textContent = event.title;
@@ -1041,9 +960,7 @@
       document.getElementById('shareBtn').onclick = () => shareEvent(event);
     }
 
-    closeModalBtn.addEventListener('click', () => {
-      eventModal.classList.add('hidden');
-    });
+    closeModalBtn.addEventListener('click', () => eventModal.classList.add('hidden'));
 
     function joinEvent(eventId) {
       tg.showPopup({
