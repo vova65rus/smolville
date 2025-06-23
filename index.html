@@ -221,7 +221,7 @@
   </header>
 
   <nav>
-    <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="profile">
+    <button class="flex flex-col items-center text-gray-400 hover:text-white active" data-action="profile">
       <i class="fas fa-user fa-lg"></i>
       <span class="text-xs mt-1">Профиль</span>
     </button>
@@ -241,17 +241,13 @@
       <i class="fas fa-heart fa-lg"></i>
       <span class="text-xs mt-1">Избранное</span>
     </button>
-    <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="map">
-      <i class="fas fa-map-marker-alt fa-lg"></i>
-      <span class="text-xs mt-1">Карта</span>
-    </button>
     <button id="adminBtn" class="flex flex-col items-center text-gray-400 hover:text-white hidden" data-action="admin">
       <i class="fas fa-cog fa-lg"></i>
       <span class="text-xs mt-1">Админ</span>
     </button>
   </nav>
 
-  <div id="content" class="content hidden">
+  <div id="content" class="content">
     <div id="events" class="events">
       <h1 class="text-2xl font-bold mb-4">Афиша</h1>
       <div id="eventsList"></div>
@@ -263,22 +259,36 @@
     <div id="voting" class="voting hidden">
       <h1 class="text-2xl font-bold mb-4">Голосование</h1>
       <div id="votingContent"></div>
+      <form id="createVotingForm" class="mt-4 hidden">
+        <input type="text" id="votingTitle" placeholder="Название" class="w-full p-2 bg-gray-700 rounded mb-2">
+        <input type="date" id="votingDate" class="w-full p-2 bg-gray-700 rounded mb-2">
+        <input type="text" id="votingLocation" placeholder="Место" class="w-full p-2 bg-gray-700 rounded mb-2">
+        <input type="number" id="votingLat" placeholder="Широта" class="w-full p-2 bg-gray-700 rounded mb-2" step="0.0001">
+        <input type="number" id="votingLon" placeholder="Долгота" class="w-full p-2 bg-gray-700 rounded mb-2" step="0.0001">
+        <textarea id="votingCategories" placeholder='[{"name": "Категория", "cars": ["Car1", "Car2"]}]' class="w-full p-2 bg-gray-700 rounded mb-2" rows="3"></textarea>
+        <button type="submit" class="w-full p-2 bg-blue-600 rounded text-white">Создать</button>
+      </form>
     </div>
     <div id="marketplace" class="marketplace hidden">
       <h1 class="text-2xl font-bold mb-4">Барахолка</h1>
-      <p class="text-gray-400">В разработке</p>
+      <div id="marketplaceContent"></div>
+      <form id="createItemForm" class="mt-4 hidden">
+        <input type="text" id="itemTitle" placeholder="Название" class="w-full p-2 bg-gray-700 rounded mb-2">
+        <input type="number" id="itemPrice" placeholder="Цена" class="w-full p-2 bg-gray-700 rounded mb-2" step="0.01">
+        <textarea id="itemDescription" placeholder="Описание" class="w-full p-2 bg-gray-700 rounded mb-2" rows="3"></textarea>
+        <button type="submit" class="w-full p-2 bg-blue-600 rounded text-white">Добавить</button>
+      </form>
     </div>
     <div id="favorites" class="favorites hidden">
       <h1 class="text-2xl font-bold mb-4">Избранное</h1>
-      <p class="text-gray-400">В разработке</p>
-    </div>
-    <div id="map" class="map hidden">
-      <h1 class="text-2xl font-bold mb-4">Карта</h1>
-      <p class="text-gray-400">В разработке</p>
+      <div id="favoritesContent"></div>
     </div>
     <div id="admin" class="admin hidden">
       <h1 class="text-2xl font-bold mb-4">Админ-панель</h1>
-      <p class="text-gray-400">В разработке</p>
+      <button id="toggleEventForm" class="w-full p-2 bg-blue-600 rounded text-white mb-2">Добавить мероприятие</button>
+      <button id="toggleVotingForm" class="w-full p-2 bg-blue-600 rounded text-white mb-2">Добавить голосование</button>
+      <button id="toggleItemForm" class="w-full p-2 bg-blue-600 rounded text-white mb-2">Добавить товар</button>
+      <div id="adminEventsList"></div>
     </div>
   </div>
 
@@ -324,26 +334,38 @@
     const AIRTABLE_EVENTS_TABLE = 'tblEvents';
     const AIRTABLE_VOTING_TABLE = 'tblVoting';
     const AIRTABLE_USERS_TABLE = 'tblUsers';
+    const AIRTABLE_MARKETPLACE_TABLE = 'tblMarketplace';
     const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}`;
     const EVENTS_API_URL = `${AIRTABLE_API_URL}/${encodeURIComponent(AIRTABLE_EVENTS_TABLE)}`;
     const VOTING_API_URL = `${AIRTABLE_API_URL}/${encodeURIComponent(AIRTABLE_VOTING_TABLE)}`;
     const USERS_API_URL = `${AIRTABLE_API_URL}/${encodeURIComponent(AIRTABLE_USERS_TABLE)}`;
+    const MARKETPLACE_API_URL = `${AIRTABLE_API_URL}/${encodeURIComponent(AIRTABLE_MARKETPLACE_TABLE)}`;
     const APP_URL = 'https://your-miniapp-url'; // Замените на URL вашего приложения
 
-    let userEvents = [];
-    let userVotes = {};
+    let userEvents = JSON.parse(localStorage.getItem('userEvents') || '[]');
+    let userVotes = JSON.parse(localStorage.getItem('userVotes') || '{}');
+    let favoriteEvents = JSON.parse(localStorage.getItem('favoriteEvents') || '[]');
 
     const content = document.getElementById('content');
     const eventsList = document.getElementById('eventsList');
     const profileContent = document.getElementById('profileContent');
     const votingContent = document.getElementById('votingContent');
+    const marketplaceContent = document.getElementById('marketplaceContent');
+    const favoritesContent = document.getElementById('favoritesContent');
+    const adminEventsList = document.getElementById('adminEventsList');
     const eventModal = document.getElementById('eventModal');
     const votingModal = document.getElementById('votingModal');
+    const createVotingForm = document.getElementById('createVotingForm');
+    const createItemForm = document.getElementById('createItemForm');
     const navButtons = document.querySelectorAll('nav button');
 
     function showSection(sectionId) {
       content.querySelectorAll('div').forEach(div => div.classList.add('hidden'));
       document.getElementById(sectionId).classList.remove('hidden');
+      if (sectionId === 'admin' && !isAdmin) {
+        tg.showAlert('Доступ только для администраторов');
+        showSection('profile');
+      }
     }
 
     navButtons.forEach(button => {
@@ -355,8 +377,9 @@
         if (action === 'events') renderEvents();
         else if (action === 'profile') renderProfile();
         else if (action === 'voting') renderVoting();
-        else if (action === 'marketplace' || action === 'favorites' || action === 'map') tg.showAlert(`${button.querySelector('span').textContent} в разработке`);
-        else if (action === 'admin' && isAdmin) tg.showAlert('Админ-панель в разработке');
+        else if (action === 'marketplace') renderMarketplace();
+        else if (action === 'favorites') renderFavorites();
+        else if (action === 'admin') renderAdmin();
       });
     });
 
@@ -382,10 +405,12 @@
             <div class="buttons">
               <button class="join-btn" data-id="${event.id}">Я пойду</button>
               <button class="map-btn" data-id="${event.id}">На карте</button>
+              ${isAdmin ? '<button class="delete-btn" data-id="' + event.id + '">Удалить</button>' : ''}
             </div>
           `;
           card.querySelector('.join-btn').addEventListener('click', () => joinEvent(event.id));
           card.querySelector('.map-btn').addEventListener('click', () => showEventDetails(event));
+          if (isAdmin) card.querySelector('.delete-btn').addEventListener('click', () => deleteEvent(event.id));
           eventsList.appendChild(card);
         });
       } catch (err) {
@@ -401,13 +426,19 @@
           headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
         });
         const data = await response.json();
-        const userData = data.records[0]?.fields || {};
+        const userData = data.records[0]?.fields || { Events: [], Votes: {} };
+        userEvents = userData.Events || [];
+        userVotes = userData.Votes || {};
+        localStorage.setItem('userEvents', JSON.stringify(userEvents));
+        localStorage.setItem('userVotes', JSON.stringify(userVotes));
         profileContent.innerHTML = `
           <h2 class="text-xl font-semibold">${userData.Name || user.first_name || 'Гость'}</h2>
           <img src="${userData.Avatar || user.photo_url || 'https://via.placeholder.com/100'}" alt="Avatar" class="w-24 h-24 rounded-full mt-2">
           <p class="mt-2">${userData.Contacts || 'Нет контактов'}</p>
           <h3 class="text-lg font-semibold mt-4">Участие в событиях</h3>
-          <div id="profileEvents" class="mt-2">${userEvents.length ? userEvents.map(id => `<p>${id}</p>`).join('') : '<p>Нет событий</p>'}</div>
+          <div class="mt-2">${userEvents.length ? userEvents.map(id => `<p>${id}</p>`).join('') : '<p>Нет событий</p>'}</div>
+          <h3 class="text-lg font-semibold mt-4">Мои голоса</h3>
+          <div class="mt-2">${Object.keys(userVotes).length ? Object.entries(userVotes).map(([id, votes]) => `<p>Голосование ${id}: ${JSON.stringify(votes)}</p>`).join('') : '<p>Нет голосов</p>'}</div>
         `;
       } catch (err) {
         profileContent.innerHTML = '<p class="text-gray-400 text-center">Ошибка загрузки</p>';
@@ -434,26 +465,142 @@
             <h2>${voting.fields.Title}</h2>
             <p>${voting.fields.Date || 'Дата не указана'}</p>
             <button class="vote-btn" data-id="${voting.id}">Голосовать</button>
+            ${isAdmin ? '<button class="delete-voting-btn" data-id="' + voting.id + '">Удалить</button>' : ''}
           `;
           card.querySelector('.vote-btn').addEventListener('click', () => showVotingDetails(voting));
+          if (isAdmin) card.querySelector('.delete-voting-btn').addEventListener('click', () => deleteVoting(voting.id));
           votingContent.appendChild(card);
         });
+        if (isAdmin) createVotingForm.classList.remove('hidden');
       } catch (err) {
         votingContent.innerHTML = '<p class="text-gray-400 text-center">Ошибка загрузки</p>';
         console.error(err);
       }
     }
 
-    async function joinEvent(eventId) {
+    async function renderMarketplace() {
+      marketplaceContent.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
       try {
+        const response = await fetch(MARKETPLACE_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        const data = await response.json();
+        marketplaceContent.innerHTML = '';
+        if (!data.records || data.records.length === 0) {
+          marketplaceContent.innerHTML = '<p class="text-gray-400 text-center">Нет товаров</p>';
+          return;
+        }
+        data.records.forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'event-card';
+          card.innerHTML = `
+            <h2>${item.fields.Title}</h2>
+            <p>Цена: ${item.fields.Price || 'Не указана'} руб.</p>
+            <p>${item.fields.Description || 'Без описания'}</p>
+            ${isAdmin ? '<button class="delete-item-btn" data-id="' + item.id + '">Удалить</button>' : ''}
+          `;
+          if (isAdmin) card.querySelector('.delete-item-btn').addEventListener('click', () => deleteItem(item.id));
+          marketplaceContent.appendChild(card);
+        });
+        if (isAdmin) createItemForm.classList.remove('hidden');
+      } catch (err) {
+        marketplaceContent.innerHTML = '<p class="text-gray-400 text-center">Ошибка загрузки</p>';
+        console.error(err);
+      }
+    }
+
+    async function renderFavorites() {
+      favoritesContent.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
+      try {
+        const response = await fetch(EVENTS_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        const data = await response.json();
+        favoritesContent.innerHTML = '';
+        const favoriteEventsData = data.records.filter(event => favoriteEvents.includes(event.id));
+        if (favoriteEventsData.length === 0) {
+          favoritesContent.innerHTML = '<p class="text-gray-400 text-center">Нет избранных мероприятий</p>';
+          return;
+        }
+        favoriteEventsData.forEach(event => {
+          const card = document.createElement('div');
+          card.className = 'event-card';
+          card.innerHTML = `
+            <img src="${event.fields.Image?.[0]?.url || 'https://via.placeholder.com/300x180'}" alt="${event.fields.Title}">
+            <h2>${event.fields.Title}</h2>
+            <p>${event.fields.Date || 'Дата не указана'}</p>
+            <button class="remove-fav-btn" data-id="${event.id}">Удалить из избранного</button>
+          `;
+          card.querySelector('.remove-fav-btn').addEventListener('click', () => removeFavorite(event.id));
+          favoritesContent.appendChild(card);
+        });
+      } catch (err) {
+        favoritesContent.innerHTML = '<p class="text-gray-400 text-center">Ошибка загрузки</p>';
+        console.error(err);
+      }
+    }
+
+    async function renderAdmin() {
+      adminEventsList.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
+      try {
+        const [eventsResp, votingResp, marketplaceResp] = await Promise.all([
+          fetch(EVENTS_API_URL, { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` } }),
+          fetch(VOTING_API_URL, { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` } }),
+          fetch(MARKETPLACE_API_URL, { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` } })
+        ]);
+        const [eventsData, votingData, marketplaceData] = await Promise.all([eventsResp.json(), votingResp.json(), marketplaceResp.json()]);
+        adminEventsList.innerHTML = `
+          <h2 class="text-xl font-semibold mb-2">Мероприятия</h2>
+          ${eventsData.records.map(e => `<p>${e.fields.Title} <button class="delete-btn" data-id="${e.id}" data-type="event">Удалить</button></p>`).join('')}
+          <h2 class="text-xl font-semibold mb-2 mt-4">Голосования</h2>
+          ${votingData.records.map(v => `<p>${v.fields.Title} <button class="delete-btn" data-id="${v.id}" data-type="voting">Удалить</button></p>`).join('')}
+          <h2 class="text-xl font-semibold mb-2 mt-4">Товары</h2>
+          ${marketplaceData.records.map(m => `<p>${m.fields.Title} <button class="delete-btn" data-id="${m.id}" data-type="item">Удалить</button></p>`).join('')}
+        `;
+        document.querySelectorAll('#adminEventsList .delete-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const { id, type } = btn.dataset;
+            if (type === 'event') deleteEvent(id);
+            else if (type === 'voting') deleteVoting(id);
+            else if (type === 'item') deleteItem(id);
+          });
+        });
+        document.getElementById('toggleEventForm').addEventListener('click', () => {
+          // Здесь можно добавить форму для создания мероприятия
+          tg.showAlert('Форма создания мероприятия в разработке');
+        });
+        document.getElementById('toggleVotingForm').addEventListener('click', () => createVotingForm.classList.toggle('hidden'));
+        document.getElementById('toggleItemForm').addEventListener('click', () => createItemForm.classList.toggle('hidden'));
+      } catch (err) {
+        adminEventsList.innerHTML = '<p class="text-gray-400 text-center">Ошибка загрузки</p>';
+        console.error(err);
+      }
+    }
+
+    async function joinEvent(eventId) {
+      if (!userEvents.includes(eventId)) {
         userEvents.push(eventId);
+        localStorage.setItem('userEvents', JSON.stringify(userEvents));
         await saveUserData();
         tg.showAlert('Вы записаны на мероприятие!');
         renderProfile();
-      } catch (err) {
-        tg.showAlert('Ошибка записи');
-        console.error(err);
       }
+    }
+
+    async function addFavorite(eventId) {
+      if (!favoriteEvents.includes(eventId)) {
+        favoriteEvents.push(eventId);
+        localStorage.setItem('favoriteEvents', JSON.stringify(favoriteEvents));
+        tg.showAlert('Добавлено в избранное!');
+        renderFavorites();
+      }
+    }
+
+    async function removeFavorite(eventId) {
+      favoriteEvents = favoriteEvents.filter(id => id !== eventId);
+      localStorage.setItem('favoriteEvents', JSON.stringify(favoriteEvents));
+      tg.showAlert('Удалено из избранного!');
+      renderFavorites();
     }
 
     async function saveUserData() {
@@ -462,7 +609,8 @@
           TgId: String(user.id),
           Name: user.first_name,
           Avatar: user.photo_url || '',
-          Events: userEvents
+          Events: userEvents,
+          Votes: userVotes
         }
       };
       try {
@@ -487,14 +635,9 @@
       document.getElementById('modalDescription').textContent = event.fields.Description || 'Описание отсутствует';
       document.getElementById('modalImage').src = event.fields.Image?.[0]?.url || 'https://via.placeholder.com/300x200';
       document.getElementById('mapBtn').onclick = () => window.open(event.fields.MapLink || '#', '_blank');
+      document.getElementById('joinBtn').onclick = () => joinEvent(event.id);
       eventModal.classList.remove('hidden');
     }
-
-    document.getElementById('joinBtn').addEventListener('click', () => {
-      const eventId = eventModal.querySelector('.map-btn')?.dataset.id;
-      if (eventId) joinEvent(eventId);
-      eventModal.classList.add('hidden');
-    });
 
     document.getElementById('closeModal').addEventListener('click', () => eventModal.classList.add('hidden'));
 
@@ -528,6 +671,7 @@
         votes[select.previousElementSibling.textContent] = select.value;
       });
       userVotes[votingId] = votes;
+      localStorage.setItem('userVotes', JSON.stringify(userVotes));
       saveUserData().then(() => {
         tg.showAlert('Ваш голос учтен!');
         votingModal.classList.add('hidden');
@@ -535,6 +679,114 @@
     });
 
     document.getElementById('closeVotingModal').addEventListener('click', () => votingModal.classList.add('hidden'));
+
+    async function createVoting(event) {
+      event.preventDefault();
+      const votingData = {
+        fields: {
+          Title: document.getElementById('votingTitle').value,
+          Date: document.getElementById('votingDate').value,
+          Location: document.getElementById('votingLocation').value,
+          Latitude: parseFloat(document.getElementById('votingLat').value),
+          Longitude: parseFloat(document.getElementById('votingLon').value),
+          Categories: document.getElementById('votingCategories').value
+        }
+      };
+      try {
+        const response = await fetch(VOTING_API_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(votingData)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        tg.showAlert('Голосование создано!');
+        createVotingForm.reset();
+        createVotingForm.classList.add('hidden');
+        renderVoting();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    }
+
+    createVotingForm.addEventListener('submit', createVoting);
+
+    async function createItem(event) {
+      event.preventDefault();
+      const itemData = {
+        fields: {
+          Title: document.getElementById('itemTitle').value,
+          Price: parseFloat(document.getElementById('itemPrice').value),
+          Description: document.getElementById('itemDescription').value
+        }
+      };
+      try {
+        const response = await fetch(MARKETPLACE_API_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(itemData)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        tg.showAlert('Товар добавлен!');
+        createItemForm.reset();
+        createItemForm.classList.add('hidden');
+        renderMarketplace();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    }
+
+    createItemForm.addEventListener('submit', createItem);
+
+    async function deleteEvent(eventId) {
+      try {
+        const response = await fetch(`${EVENTS_API_URL}/${eventId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        tg.showAlert('Мероприятие удалено!');
+        renderEvents();
+        renderAdmin();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    }
+
+    async function deleteVoting(votingId) {
+      try {
+        const response = await fetch(`${VOTING_API_URL}/${votingId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        tg.showAlert('Голосование удалено!');
+        renderVoting();
+        renderAdmin();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    }
+
+    async function deleteItem(itemId) {
+      try {
+        const response = await fetch(`${MARKETPLACE_API_URL}/${itemId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        tg.showAlert('Товар удален!');
+        renderMarketplace();
+        renderAdmin();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    }
 
     function checkGeolocation(lat, lon) {
       return new Promise((resolve) => {
@@ -554,7 +806,7 @@
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // Радиус Земли в метрах
+      const R = 6371e3;
       const φ1 = (lat1 * Math.PI) / 180;
       const φ2 = (lat2 * Math.PI) / 180;
       const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -566,8 +818,7 @@
       return R * c;
     }
 
-    // Инициализация
-    navButtons[0].click(); // Открыть профиль по умолчанию
+    navButtons[0].click();
   </script>
 </body>
 </html>
