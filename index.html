@@ -81,7 +81,6 @@
     .content {
       margin-top: 120px;
       padding: 16px;
-      padding-bottom: 60px;
       flex: 1;
       overflow-y: auto;
     }
@@ -199,43 +198,6 @@
       background-color: #4a4a4c;
     }
 
-    .bottom-nav {
-      position: fixed;
-      bottom: 0;
-      width: 100%;
-      z-index: 1000;
-      background: #1a1a1c;
-      border-top: 1px solid #2c2c2e;
-      display: flex;
-      justify-content: space-around;
-      padding: 8px 0;
-    }
-
-    .bottom-nav button {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 4px;
-      border: none;
-      background: none;
-      color: #a0a0a0;
-      cursor: pointer;
-      transition: color 0.2s;
-    }
-
-    .bottom-nav button i {
-      font-size: 20px;
-    }
-
-    .bottom-nav button span {
-      font-size: 10px;
-      margin-top: 4px;
-    }
-
-    .bottom-nav button.active {
-      color: #0a84ff;
-    }
-
     .hidden {
       display: none;
     }
@@ -258,7 +220,7 @@
     <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Smolville Drift Logo" class="h-6 w-auto">
   </header>
 
-  <nav class="main-menu">
+  <nav>
     <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="profile">
       <i class="fas fa-user fa-lg"></i>
       <span class="text-xs mt-1">Профиль</span>
@@ -274,6 +236,18 @@
     <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="marketplace">
       <i class="fas fa-shopping-cart fa-lg"></i>
       <span class="text-xs mt-1">Барахолка</span>
+    </button>
+    <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="favorites">
+      <i class="fas fa-heart fa-lg"></i>
+      <span class="text-xs mt-1">Избранное</span>
+    </button>
+    <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="map">
+      <i class="fas fa-map-marker-alt fa-lg"></i>
+      <span class="text-xs mt-1">Карта</span>
+    </button>
+    <button id="adminBtn" class="flex flex-col items-center text-gray-400 hover:text-white hidden" data-action="admin">
+      <i class="fas fa-cog fa-lg"></i>
+      <span class="text-xs mt-1">Админ</span>
     </button>
   </nav>
 
@@ -292,6 +266,18 @@
     </div>
     <div id="marketplace" class="marketplace hidden">
       <h1 class="text-2xl font-bold mb-4">Барахолка</h1>
+      <p class="text-gray-400">В разработке</p>
+    </div>
+    <div id="favorites" class="favorites hidden">
+      <h1 class="text-2xl font-bold mb-4">Избранное</h1>
+      <p class="text-gray-400">В разработке</p>
+    </div>
+    <div id="map" class="map hidden">
+      <h1 class="text-2xl font-bold mb-4">Карта</h1>
+      <p class="text-gray-400">В разработке</p>
+    </div>
+    <div id="admin" class="admin hidden">
+      <h1 class="text-2xl font-bold mb-4">Админ-панель</h1>
       <p class="text-gray-400">В разработке</p>
     </div>
   </div>
@@ -320,29 +306,6 @@
       <button id="submitVoteBtn">Проголосовать</button>
       <button id="closeVotingModal">Закрыть</button>
     </div>
-  </div>
-
-  <div class="bottom-nav">
-    <button class="nav-btn active" data-tab="menu">
-      <i class="fas fa-bars"></i>
-      <span>Меню</span>
-    </button>
-    <button class="nav-btn" data-tab="favorites">
-      <i class="fas fa-heart"></i>
-      <span>Избранное</span>
-    </button>
-    <button class="nav-btn" data-tab="map">
-      <i class="fas fa-map-marker-alt"></i>
-      <span>Карта</span>
-    </button>
-    <button class="nav-btn" data-tab="profile">
-      <i class="fas fa-user"></i>
-      <span>Профиль</span>
-    </button>
-    <button id="adminBtn" class="nav-btn hidden" data-tab="admin">
-      <i class="fas fa-cog"></i>
-      <span>Админ</span>
-    </button>
   </div>
 
   <script>
@@ -376,9 +339,7 @@
     const votingContent = document.getElementById('votingContent');
     const eventModal = document.getElementById('eventModal');
     const votingModal = document.getElementById('votingModal');
-    const mainMenu = document.querySelector('.main-menu');
-    const navButtons = document.querySelectorAll('.nav-btn');
-    const menuButtons = document.querySelectorAll('.main-menu button');
+    const navButtons = document.querySelectorAll('nav button');
 
     function showSection(sectionId) {
       content.querySelectorAll('div').forEach(div => div.classList.add('hidden'));
@@ -389,30 +350,13 @@
       button.addEventListener('click', () => {
         navButtons.forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
-        if (button.dataset.tab === 'menu') {
-          mainMenu.classList.remove('hidden');
-          content.classList.add('hidden');
-        } else if (button.dataset.tab === 'admin' && isAdmin) {
-          // Админ-панель (заглушка, можно расширить)
-          tg.showAlert('Админ-панель в разработке');
-        } else {
-          mainMenu.classList.add('hidden');
-          content.classList.remove('hidden');
-          showSection(button.dataset.tab);
-        }
-      });
-    });
-
-    menuButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        mainMenu.classList.add('hidden');
-        content.classList.remove('hidden');
         const action = button.dataset.action;
         showSection(action);
         if (action === 'events') renderEvents();
         else if (action === 'profile') renderProfile();
         else if (action === 'voting') renderVoting();
-        else if (action === 'marketplace') tg.showAlert('Барахолка в разработке');
+        else if (action === 'marketplace' || action === 'favorites' || action === 'map') tg.showAlert(`${button.querySelector('span').textContent} в разработке`);
+        else if (action === 'admin' && isAdmin) tg.showAlert('Админ-панель в разработке');
       });
     });
 
@@ -623,7 +567,7 @@
     }
 
     // Инициализация
-    navButtons[0].click(); // Открыть меню по умолчанию
+    navButtons[0].click(); // Открыть профиль по умолчанию
   </script>
 </body>
 </html>
