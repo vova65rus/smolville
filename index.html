@@ -354,31 +354,50 @@
     const votingModal = document.getElementById('votingModal');
     const createVotingForm = document.getElementById('createVotingForm');
     const createItemForm = document.getElementById('createItemForm');
-    const navButtons = document.querySelectorAll('nav button');
+
+    // Обеспечение загрузки DOM перед инициализацией
+    document.addEventListener('DOMContentLoaded', () => {
+      const navButtons = document.querySelectorAll('nav button');
+      console.log('Найдено кнопок в меню:', navButtons.length); // Отладка
+
+      if (navButtons.length === 0) {
+        console.error('Кнопки навигации не найдены!');
+        return;
+      }
+
+      navButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          console.log('Нажата кнопка:', button.dataset.action); // Отладка
+          navButtons.forEach(btn => btn.classList.remove('active'));
+          button.classList.add('active');
+          const action = button.dataset.action;
+          showSection(action);
+          if (action === 'events') renderEvents();
+          else if (action === 'profile') renderProfile();
+          else if (action === 'voting') renderVoting();
+          else if (action === 'marketplace') renderMarketplace();
+          else if (action === 'favorites') renderFavorites();
+          else if (action === 'admin') renderAdmin();
+        });
+      });
+
+      // Инициализация по умолчанию
+      navButtons[0].click();
+    });
 
     function showSection(sectionId) {
       content.querySelectorAll('div').forEach(div => div.classList.add('hidden'));
-      document.getElementById(sectionId).classList.remove('hidden');
+      const section = document.getElementById(sectionId);
+      if (section) {
+        section.classList.remove('hidden');
+      } else {
+        console.error('Секция не найдена:', sectionId);
+      }
       if (sectionId === 'admin' && !isAdmin) {
         tg.showAlert('Доступ только для администраторов');
         showSection('profile');
       }
     }
-
-    navButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        navButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        const action = button.dataset.action;
-        showSection(action);
-        if (action === 'events') renderEvents();
-        else if (action === 'profile') renderProfile();
-        else if (action === 'voting') renderVoting();
-        else if (action === 'marketplace') renderMarketplace();
-        else if (action === 'favorites') renderFavorites();
-        else if (action === 'admin') renderAdmin();
-      });
-    });
 
     async function fetchData(endpoint) {
       try {
@@ -778,8 +797,6 @@
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
-
-    navButtons[0].click();
   </script>
 </body>
 </html>
