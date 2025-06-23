@@ -2,223 +2,272 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Автомобильные события</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css" rel="stylesheet">
   <style>
     body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f0f0f0;
-      overflow-x: hidden;
+      background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.png');
+      background-repeat: repeat;
+      background-size: 50px auto;
+      background-color: #1c1c1e;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      touch-action: pan-y;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain;
     }
-    .panel {
-      display: none;
-      position: fixed;
+    body::before {
+      content: '';
+      position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: white;
-      z-index: 1000;
-      overflow-y: auto;
-      padding: 20px;
-      box-sizing: border-box;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: -1;
     }
-    .panel.active {
-      display: block;
+    @media (min-width: 768px) {
+      body {
+        background-size: 70px auto;
+      }
     }
-    .nav {
+    .event-card {
+      background: #2c2c2e;
+      border-radius: 10px;
+      touch-action: manipulation;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    html {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+      overscroll-behavior-y: contain;
+    }
+    .header img {
+      max-width: 100%;
+      height: auto;
+    }
+    .bottom-nav {
       position: fixed;
-      bottom: 0;
+      bottom: env(safe-area-inset-bottom);
       width: 100%;
+      background: #2c2c2e;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
       justify-content: space-around;
-      background-color: #fff;
-      padding: 10px 0;
-      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-    }
-    .nav button {
-      background: none;
-      border: none;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    .nav button.active {
-      color: #007bff;
-    }
-    button {
-      background-color: #007bff;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      margin: 5px;
-      cursor: pointer;
-      border-radius: 5px;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    select, input[type="file"], input[type="text"] {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      border: 1px solid #ccc;
-      border-radius: 5px;
+      padding: 6px 0;
+      z-index: 5000;
+      min-height: 48px;
       box-sizing: border-box;
     }
-    h1, h2 {
+    .nav-btn {
+      background: none;
+      border: none;
+      padding: 6px;
+      font-size: 12px;
+      color: #0a84ff;
+      border-radius: 6px;
+      cursor: pointer;
+      touch-action: manipulation;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-btn.active {
+      background: #0a84ff;
+      color: #ffffff;
+    }
+    .events-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      width: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    .modal-content, .admin-content {
+      background: #2c2c2e;
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+    .admin-content {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 360px;
+      max-height: calc(100vh - 60px - env(safe-area-inset-bottom));
+      overflow-y: auto;
+      padding: 10px;
+      z-index: 4000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      overscroll-behavior: contain;
+    }
+    .admin-close-btn {
+      background: #ff3b30;
+      color: #ffffff;
+      padding: 6px;
+      border-radius: 6px;
       text-align: center;
+      cursor: pointer;
+      font-size: 12px;
+      margin-top: 10px;
     }
-    .close-btn {
-      background-color: #dc3545;
+    .admin-form input, .admin-form textarea, .admin-form select {
+      background: #3a3a3c;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 6px;
+      width: 100%;
+      margin-bottom: 8px;
+      box-sizing: border-box;
+      font-size: 13px;
     }
-    .close-btn:hover {
-      background-color: #c82333;
+    .admin-form button, .admin-tab, .delete-btn, .edit-btn {
+      background: #0a84ff;
+      color: #ffffff;
+      padding: 6px;
+      border-radius: 6px;
+      width: 100%;
+      text-align: center;
+      cursor: pointer;
+      font-size: 13px;
     }
-    .content {
-      padding-bottom: 60px; /* Space for nav bar */
+    .admin-tab.active {
+      background: #1a63d8;
+    }
+    .delete-btn {
+      background: #ff3b30;
+    }
+    .edit-btn {
+      background: #34c759;
+    }
+    .admin-section {
+      display: none;
+    }
+    .admin-section.active {
+      display: block;
+    }
+    .hidden {
+      display: none;
+    }
+    .ad-banner {
+      max-width: 90vw;
+      margin: 6px auto;
+      display: block;
+      height: 50px;
+      overflow: hidden;
+    }
+    .ad-banner img {
+      width: 100%;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 6px;
+    }
+    @media (max-width: 360px) {
+      .ad-banner {
+        max-width: 80vw;
+        height: 40px;
+      }
+      .ad-banner img {
+        height: 40px;
+      }
+    }
+    .loading {
+      position: relative;
+      opacity: 0.8;
+      pointer-events: none;
+    }
+    .loading::after {
+      content: '';
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border: 2px solid #ffffff;
+      border-top: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    @keyframes spin {
+      0% { transform: translateY(-50%) rotate(0deg); }
+      100% { transform: translateY(-50%) rotate(360deg); }
+    }
+    #previewImage, #adPreviewImage, #editPreviewImage {
+      max-height: 160px;
+      object-fit: contain;
+      width: 100%;
+      border-radius: 6px;
     }
   </style>
 </head>
 <body>
-  <div id="main-panel" class="panel active">
-    <h1>Автомобильные события</h1>
-    <div class="content">
-      <!-- Placeholder for events list -->
-      <div id="events-list">Список мероприятий будет здесь</div>
+  <header class="flex justify-between items-center w-full px-2 pt-2 z-10 relative">
+    <div id="adBanner" class="max-w-[50px] h-[20px] overflow-hidden flex items-center z-20">
+      <!-- Реклама будет вставлена динамически -->
     </div>
-  </div>
-
-  <div id="admin-panel" class="panel">
-    <h2>Админ-панель</h2>
-    <button onclick="showPanel('add-event-panel')">Добавить</button>
-    <button onclick="showPanel('manage-events-panel')">Управление</button>
-    <button onclick="showPanel('advertisement-panel')">Реклама</button>
-    <button class="close-btn" onclick="showPanel('main-panel')">Закрыть</button>
-  </div>
-
-  <div id="add-event-panel" class="panel">
-    <h2>Добавить событие</h2>
-    <select id="event-category">
-      <option value="">Выбери категорию</option>
-      <option value="sport">Спорт</option>
-      <option value="exhibition">Выставки</option>
-    </select>
-    <input type="text" id="event-title" placeholder="Название события">
-    <input type="file" id="event-image" accept="image/*">
-    <button onclick="addEvent()">Добавить</button>
-    <button class="close-btn" onclick="showPanel('admin-panel')">Закрыть</button>
-  </div>
-
-  <div id="manage-events-panel" class="panel">
-    <h2>Управление событиями</h2>
-    <!-- Placeholder for events management -->
-    <div id="manage-events-list">Список для управления будет здесь</div>
-    <button class="close-btn" onclick="showPanel('admin-panel')">Закрыть</button>
-  </div>
-
-  <div id="advertisement-panel" class="panel">
-    <h2>Реклама</h2>
-    <p id="ad-status">Реклама не настроена</p>
-    <input type="file" id="ad-image" accept="image/*">
-    <input type="text" id="ad-link" placeholder="URL рекламы">
-    <button onclick="saveAd()">Сохранить рекламу</button>
-    <button class="button" type="button" onclick="saveAd()">+</button>
-    <button class="close-btn" onclick="showPanel('admin-panel')">Закрыть</button>
-  </div>
-
-  <div id="edit-event-panel" class="panel">
-    <h2>Редактировать событие</h2>
-    <select id="edit-event-category">
-      <option value="sport">Категория</option>
-      <option value="sport">Спорт</option>
-      <option value="exhibition">Выставки</option>
-    </select>
-    <input type="text" id="edit-event-title" placeholder="Название события">
-      <input type="file" id="edit-event-image" accept="image/*">
-      <button onclick="saveEvent()">Сохранить</button>
-      <button onclick="showPanel('manage-events-panel')">Отмена</button>
+    <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer z-20">
+      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" class="h-[20px] w-auto object-contain" alt="Логотип Smolville Drift" loading="lazy">
     </div>
+  </header>
 
-    <div id="event-details-panel" class="panel">
-      <h2>Детали события</h2>
-      <!-- Placeholder for event details -->
-      <div id="event-details">Детали события будут здесь</div>
-      <button onclick="registerForEvent()">Записаться</button>
-      <button onclick="shareEvent()">Поделиться</button>
-      <button class="close-btn" onclick="showPanel('main-panel')">Закрыть</button>
+  <h1 class="text-base font-bold text-white mt-2 mb-2 text-center">Автомобильные события</h1>
+
+  <div id="events" class="events-grid"></div>
+
+  <div id="adminPanel" class="admin-content hidden">
+    <h2 class="text-sm font-bold text-white mb-2">Админ-панель</h2>
+    <div class="flex space-x-2 mb-2 overflow-x-auto">
+      <button class="admin-tab active" data-tab="add">Добавить</button>
+      <button class="admin-tab" data-tab="manage">Управление</button>
+      <button class="admin-tab" data-tab="ads">Реклама</button>
     </div>
-
-    <div class="nav">
-      <button id="nav-events" class="showNavPanel('events')" class="active">Мероприятия</button>
-      <button id="nav-favorites" onclick="showNavPanel('favorites')">Избранное</button>
-      <button id="nav-map" onclick="showNavPanel('map')">Карта</button>
-      <button id="nav-profile" onclick="showNavPanel('profile')">Профиль</button>
-      <button id="nav-admin" onclick="showPanel('admin-panel')">Админ</button>
+    <div id="addSection" class="admin-section active">
+      <form id="adminForm" class="admin-form">
+        <input type="text" id="eventTitle" placeholder="Название мероприятия" required>
+        <select id="eventType" required>
+          <option value="" disabled selected>Выбери категорию</option>
+          <option value="Спорт">Спорт</option>
+          <option value="Выставки">Выставки</option>
+        </select>
+        <input type="text" id="eventDate" placeholder="Дата (например, 10 июля 2025)" required pattern="\d{1,2}\s[а-яА-Я]+\s\d{4}">
+        <input type="text" id="eventLocation" placeholder="Место" required>
+        <textarea id="eventDescription" placeholder="Описание" rows="3" required></textarea>
+        <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Загрузить изображение</button>
+        <img id="previewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью" loading="lazy">
+        <input type="file" id="imageInput" accept="image/*" class="hidden">
+        <button type="submit" class="bg-blue-500 text-white py-1 rounded-lg">Добавить</button>
+      </form>
     </div>
-
-    <script>
-      // Initialize Telegram Web App
-      window.Telegram.WebApp.ready();
-      window.Telegram.WebApp.expand();
-
-      // Store events (mock data)
-      let events = [];
-
-      function showPanel(panelId) {
-        document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
-        document.getElementById(panelId).classList.add('active');
-      }
-
-      function showNavPanel(section) {
-        document.querySelectorAll('.nav button').forEach(btn => btn.classList.remove('active'));
-        document.getElementById(`nav-${section}`).classList.add('active');
-        // Placeholder for section content
-        document.getElementById('events-list').innerText = `Содержимое раздела: ${section}`;
-      }
-
-      function addEvent() {
-        const category = document.getElementById('event-category').value;
-        const title = document.getElementById('event-title').value;
-        const image = document.getElementById('event-image').files[0];
-        if (category && title) {
-          events.push({ category, title, image });
-          alert('Событие добавлено!');
-          showPanel('admin-panel');
-        } else {
-          alert('Заполните все поля!');
-        }
-      }
-
-      function saveAd() {
-        const image = document.getElementById('ad-image').files[0];
-        const link = document.getElementById('ad-link').value;
-        if (image || link) {
-          document.getElementById('ad-status').innerText = 'Реклама сохранена!';
-        } else {
-          alert('Загрузите изображение или укажите ссылку!');
-        }
-      }
-
-      function saveEvent() {
-        alert('Изменения сохранены!');
-        showPanel('manage-events-panel');
-      }
-
-      function registerForEvent() {
-        alert('Вы записались на событие!');
-      }
-
-      function shareEvent() {
-        window.Telegram.WebApp.shareToStory('https://example.com/event', {
-          text: 'Check out this event!'
-        });
-      }
-
-      // Initialize main panel
-      showNavPanel('events');
-    </script>
-  </body>
-</html>
+    <div id="manageSection" class="admin-section">
+      <div id="manageList" class="space-y-2"></div>
+    </div>
+    <div id="adsSection" class="admin-section">
+      <p id="adStatus" class="text-xs text-gray-400 mb-2 hidden">Реклама не настроена</p>
+      <form id="adForm" class="admin-form">
+        <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Загрузить изображение рекламы</button>
+        <img id="adPreviewImage" class="w-full rounded-lg mb
