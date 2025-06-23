@@ -2,801 +2,223 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Smolville Drift</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Автомобильные события</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <style>
     body {
-      background-color: #1c1c1e;
-      color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      touch-action: pan-y;
-      -webkit-font-smoothing: antialiased;
-      -webkit-tap-highlight-color: transparent;
-      overscroll-behavior: none;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f0f0;
+      overflow-x: hidden;
     }
-
-    header {
-      position: fixed;
-      top: 0;
-      width: 100%;
-      z-index: 1000;
-      background: linear-gradient(to bottom, #1a1a1c, #1c1c1e);
-      padding: 8px 16px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    header .ad-placeholder {
-      font-size: 16px;
-      color: #888;
-    }
-
-    nav {
-      position: fixed;
-      top: 56px;
-      width: 100%;
-      z-index: 900;
-      background: #1a1a1c;
-      padding: 8px 0;
-      border-bottom: 1px solid #2c2c2e;
-      display: flex;
-      justify-content: space-around;
-    }
-
-    nav button {
-      flex: 1;
-      padding: 4px;
-      border: none;
-      background: none;
-      cursor: pointer;
-      transition: color 0.2s;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    nav button i {
-      font-size: 24px;
-    }
-
-    nav button span {
-      font-size: 12px;
-      margin-top: 4px;
-    }
-
-    .content {
-      margin-top: 120px;
-      padding: 16px;
-      flex: 1;
-      overflow-y: auto;
-    }
-
-    .event-card {
-      background: #2c2c2e;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    }
-
-    .event-card img {
-      width: 100%;
-      height: 180px;
-      object-fit: cover;
-      border-radius: 8px;
-      margin-bottom: 12px;
-    }
-
-    .event-card h2 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .event-card p {
-      font-size: 14px;
-      color: #a0a0a0;
-      margin-bottom: 12px;
-    }
-
-    .event-card .buttons {
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .event-card button {
-      flex: 1;
-      padding: 8px;
-      background: #3a3a3c;
-      border: none;
-      border-radius: 8px;
-      color: #ffffff;
-      font-size: 14px;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-
-    .event-card button:hover {
-      background-color: #4a4a4c;
-    }
-
-    .modal {
+    .panel {
+      display: none;
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      background-color: white;
       z-index: 1000;
-    }
-
-    .modal-content {
-      background: #2c2c2e;
-      border-radius: 12px;
-      padding: 16px;
-      width: 90%;
-      max-width: 400px;
-      max-height: 80vh;
       overflow-y: auto;
+      padding: 20px;
+      box-sizing: border-box;
     }
-
-    .modal-content h2 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 12px;
+    .panel.active {
+      display: block;
     }
-
-    .modal-content img {
+    .nav {
+      position: fixed;
+      bottom: 0;
       width: 100%;
-      height: 200px;
-      object-fit: cover;
-      border-radius: 8px;
-      margin-bottom: 12px;
-    }
-
-    .modal-content p {
-      font-size: 14px;
-      color: #a0a0a0;
-      margin-bottom: 12px;
-    }
-
-    .modal-content .buttons {
       display: flex;
-      flex-direction: column;
-      gap: 8px;
+      justify-content: space-around;
+      background-color: #fff;
+      padding: 10px 0;
+      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
     }
-
-    .modal-content button {
-      padding: 10px;
-      background: #3a3a3c;
+    .nav button {
+      background: none;
       border: none;
-      border-radius: 8px;
-      color: #ffffff;
-      font-size: 14px;
+      font-size: 16px;
       cursor: pointer;
-      transition: background-color 0.2s;
     }
-
-    .modal-content button:hover {
-      background-color: #4a4a4c;
+    .nav button.active {
+      color: #007bff;
     }
-
-    .hidden {
-      display: none;
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      border-radius: 5px;
     }
-
-    ::-webkit-scrollbar {
-      display: none;
+    button:hover {
+      background-color: #0056b3;
     }
-    html {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
+    select, input[type="file"], input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    .close-btn {
+      background-color: #dc3545;
+    }
+    .close-btn:hover {
+      background-color: #c82333;
+    }
+    .content {
+      padding-bottom: 60px; /* Space for nav bar */
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="flex items-center space-x-2">
-      <div class="ad-placeholder">AD</div>
-      <div class="text-sm">Telegram Mini App</div>
-    </div>
-    <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Smolville Drift Logo" class="h-6 w-auto">
-  </header>
-
-  <nav>
-    <button class="flex flex-col items-center text-gray-400 hover:text-white active" data-action="profile">
-      <i class="fas fa-user fa-lg"></i>
-      <span class="text-xs mt-1">Профиль</span>
-    </button>
-    <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="events">
-      <i class="fas fa-calendar-alt fa-lg"></i>
-      <span class="text-xs mt-1">Афиша</span>
-    </button>
-    <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="voting">
-      <i class="fas fa-poll fa-lg"></i>
-      <span class="text-xs mt-1">Голосование</span>
-    </button>
-    <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="marketplace">
-      <i class="fas fa-shopping-cart fa-lg"></i>
-      <span class="text-xs mt-1">Барахолка</span>
-    </button>
-    <button class="flex flex-col items-center text-gray-400 hover:text-white" data-action="favorites">
-      <i class="fas fa-heart fa-lg"></i>
-      <span class="text-xs mt-1">Избранное</span>
-    </button>
-    <button id="adminBtn" class="flex flex-col items-center text-gray-400 hover:text-white hidden" data-action="admin">
-      <i class="fas fa-cog fa-lg"></i>
-      <span class="text-xs mt-1">Админ</span>
-    </button>
-  </nav>
-
-  <div id="content" class="content">
-    <div id="events" class="events">
-      <h1 class="text-2xl font-bold mb-4">Афиша</h1>
-      <div id="eventsList"></div>
-    </div>
-    <div id="profile" class="profile hidden">
-      <h1 class="text-2xl font-bold mb-4">Профиль</h1>
-      <div id="profileContent"></div>
-    </div>
-    <div id="voting" class="voting hidden">
-      <h1 class="text-2xl font-bold mb-4">Голосование</h1>
-      <div id="votingContent"></div>
-      <form id="createVotingForm" class="mt-4 hidden">
-        <input type="text" id="votingTitle" placeholder="Название" class="w-full p-2 bg-gray-700 rounded mb-2">
-        <input type="date" id="votingDate" class="w-full p-2 bg-gray-700 rounded mb-2">
-        <input type="text" id="votingLocation" placeholder="Место" class="w-full p-2 bg-gray-700 rounded mb-2">
-        <input type="number" id="votingLat" placeholder="Широта" class="w-full p-2 bg-gray-700 rounded mb-2" step="0.0001">
-        <input type="number" id="votingLon" placeholder="Долгота" class="w-full p-2 bg-gray-700 rounded mb-2" step="0.0001">
-        <textarea id="votingCategories" placeholder='[{"name": "Категория", "cars": ["Car1", "Car2"]}]' class="w-full p-2 bg-gray-700 rounded mb-2" rows="3"></textarea>
-        <button type="submit" class="w-full p-2 bg-blue-600 rounded text-white">Создать</button>
-      </form>
-    </div>
-    <div id="marketplace" class="marketplace hidden">
-      <h1 class="text-2xl font-bold mb-4">Барахолка</h1>
-      <div id="marketplaceContent"></div>
-      <form id="createItemForm" class="mt-4 hidden">
-        <input type="text" id="itemTitle" placeholder="Название" class="w-full p-2 bg-gray-700 rounded mb-2">
-        <input type="number" id="itemPrice" placeholder="Цена" class="w-full p-2 bg-gray-700 rounded mb-2" step="0.01">
-        <textarea id="itemDescription" placeholder="Описание" class="w-full p-2 bg-gray-700 rounded mb-2" rows="3"></textarea>
-        <button type="submit" class="w-full p-2 bg-blue-600 rounded text-white">Добавить</button>
-      </form>
-    </div>
-    <div id="favorites" class="favorites hidden">
-      <h1 class="text-2xl font-bold mb-4">Избранное</h1>
-      <div id="favoritesContent"></div>
-    </div>
-    <div id="admin" class="admin hidden">
-      <h1 class="text-2xl font-bold mb-4">Админ-панель</h1>
-      <button id="toggleVotingForm" class="w-full p-2 bg-blue-600 rounded text-white mb-2">Добавить голосование</button>
-      <button id="toggleItemForm" class="w-full p-2 bg-blue-600 rounded text-white mb-2">Добавить товар</button>
-      <div id="adminEventsList"></div>
+  <div id="main-panel" class="panel active">
+    <h1>Автомобильные события</h1>
+    <div class="content">
+      <!-- Placeholder for events list -->
+      <div id="events-list">Список мероприятий будет здесь</div>
     </div>
   </div>
 
-  <div id="eventModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="modalTitle"></h2>
-      <img id="modalImage" alt="Event Image">
-      <p id="modalDate"></p>
-      <p id="modalLocation"></p>
-      <p id="modalDescription"></p>
-      <div class="buttons">
-        <button id="joinBtn">Я пойду</button>
-        <button id="mapBtn">На карте</button>
-        <button id="addFavBtn">В избранное</button>
-        <button id="closeModal">Закрыть</button>
-      </div>
-    </div>
+  <div id="admin-panel" class="panel">
+    <h2>Админ-панель</h2>
+    <button onclick="showPanel('add-event-panel')">Добавить</button>
+    <button onclick="showPanel('manage-events-panel')">Управление</button>
+    <button onclick="showPanel('advertisement-panel')">Реклама</button>
+    <button class="close-btn" onclick="showPanel('main-panel')">Закрыть</button>
   </div>
 
-  <div id="votingModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="votingModalTitle"></h2>
-      <p id="votingModalDate"></p>
-      <p id="votingModalLocation"></p>
-      <div id="votingCategories"></div>
-      <button id="submitVoteBtn">Проголосовать</button>
-      <button id="closeVotingModal">Закрыть</button>
-    </div>
+  <div id="add-event-panel" class="panel">
+    <h2>Добавить событие</h2>
+    <select id="event-category">
+      <option value="">Выбери категорию</option>
+      <option value="sport">Спорт</option>
+      <option value="exhibition">Выставки</option>
+    </select>
+    <input type="text" id="event-title" placeholder="Название события">
+    <input type="file" id="event-image" accept="image/*">
+    <button onclick="addEvent()">Добавить</button>
+    <button class="close-btn" onclick="showPanel('admin-panel')">Закрыть</button>
   </div>
 
-  <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
-    tg.enableClosingConfirmation();
+  <div id="manage-events-panel" class="panel">
+    <h2>Управление событиями</h2>
+    <!-- Placeholder for events management -->
+    <div id="manage-events-list">Список для управления будет здесь</div>
+    <button class="close-btn" onclick="showPanel('admin-panel')">Закрыть</button>
+  </div>
 
-    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость', photo_url: '' };
-    const adminId = 366825437; // Замените на реальный ID админа
-    const isAdmin = user.id === adminId;
-    if (isAdmin) document.getElementById('adminBtn').classList.remove('hidden');
+  <div id="advertisement-panel" class="panel">
+    <h2>Реклама</h2>
+    <p id="ad-status">Реклама не настроена</p>
+    <input type="file" id="ad-image" accept="image/*">
+    <input type="text" id="ad-link" placeholder="URL рекламы">
+    <button onclick="saveAd()">Сохранить рекламу</button>
+    <button class="button" type="button" onclick="saveAd()">+</button>
+    <button class="close-btn" onclick="showPanel('admin-panel')">Закрыть</button>
+  </div>
 
-    const AIRTABLE_API_KEY = 'your_airtable_api_key'; // Замените на реальный ключ
-    const AIRTABLE_BASE_ID = 'your_airtable_base_id';
-    const AIRTABLE_EVENTS_TABLE = 'tblEvents';
-    const AIRTABLE_VOTING_TABLE = 'tblVoting';
-    const AIRTABLE_USERS_TABLE = 'tblUsers';
-    const AIRTABLE_MARKETPLACE_TABLE = 'tblMarketplace';
-    const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}`;
-    const endpoints = {
-      events: `${AIRTABLE_API_URL}/${encodeURIComponent(AIRTABLE_EVENTS_TABLE)}`,
-      voting: `${AIRTABLE_API_URL}/${encodeURIComponent(AIRTABLE_VOTING_TABLE)}`,
-      users: `${AIRTABLE_API_URL}/${encodeURIComponent(AIRTABLE_USERS_TABLE)}`,
-      marketplace: `${AIRTABLE_API_URL}/${encodeURIComponent(AIRTABLE_MARKETPLACE_TABLE)}`
-    };
+  <div id="edit-event-panel" class="panel">
+    <h2>Редактировать событие</h2>
+    <select id="edit-event-category">
+      <option value="sport">Категория</option>
+      <option value="sport">Спорт</option>
+      <option value="exhibition">Выставки</option>
+    </select>
+    <input type="text" id="edit-event-title" placeholder="Название события">
+      <input type="file" id="edit-event-image" accept="image/*">
+      <button onclick="saveEvent()">Сохранить</button>
+      <button onclick="showPanel('manage-events-panel')">Отмена</button>
+    </div>
 
-    let cache = {
-      userEvents: JSON.parse(localStorage.getItem('userEvents') || '[]'),
-      userVotes: JSON.parse(localStorage.getItem('userVotes') || '{}'),
-      favoriteEvents: JSON.parse(localStorage.getItem('favoriteEvents') || '[]')
-    };
+    <div id="event-details-panel" class="panel">
+      <h2>Детали события</h2>
+      <!-- Placeholder for event details -->
+      <div id="event-details">Детали события будут здесь</div>
+      <button onclick="registerForEvent()">Записаться</button>
+      <button onclick="shareEvent()">Поделиться</button>
+      <button class="close-btn" onclick="showPanel('main-panel')">Закрыть</button>
+    </div>
 
-    const content = document.getElementById('content');
-    const eventsList = document.getElementById('eventsList');
-    const profileContent = document.getElementById('profileContent');
-    const votingContent = document.getElementById('votingContent');
-    const marketplaceContent = document.getElementById('marketplaceContent');
-    const favoritesContent = document.getElementById('favoritesContent');
-    const adminEventsList = document.getElementById('adminEventsList');
-    const eventModal = document.getElementById('eventModal');
-    const votingModal = document.getElementById('votingModal');
-    const createVotingForm = document.getElementById('createVotingForm');
-    const createItemForm = document.getElementById('createItemForm');
+    <div class="nav">
+      <button id="nav-events" class="showNavPanel('events')" class="active">Мероприятия</button>
+      <button id="nav-favorites" onclick="showNavPanel('favorites')">Избранное</button>
+      <button id="nav-map" onclick="showNavPanel('map')">Карта</button>
+      <button id="nav-profile" onclick="showNavPanel('profile')">Профиль</button>
+      <button id="nav-admin" onclick="showPanel('admin-panel')">Админ</button>
+    </div>
 
-    // Обеспечение загрузки DOM перед инициализацией
-    document.addEventListener('DOMContentLoaded', () => {
-      const navButtons = document.querySelectorAll('nav button');
-      console.log('Найдено кнопок в меню:', navButtons.length); // Отладка
+    <script>
+      // Initialize Telegram Web App
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
 
-      if (navButtons.length === 0) {
-        console.error('Кнопки навигации не найдены!');
-        return;
+      // Store events (mock data)
+      let events = [];
+
+      function showPanel(panelId) {
+        document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
+        document.getElementById(panelId).classList.add('active');
       }
 
-      navButtons.forEach(button => {
-        button.addEventListener('click', () => {
-          console.log('Нажата кнопка:', button.dataset.action); // Отладка
-          navButtons.forEach(btn => btn.classList.remove('active'));
-          button.classList.add('active');
-          const action = button.dataset.action;
-          showSection(action);
-          if (action === 'events') renderEvents();
-          else if (action === 'profile') renderProfile();
-          else if (action === 'voting') renderVoting();
-          else if (action === 'marketplace') renderMarketplace();
-          else if (action === 'favorites') renderFavorites();
-          else if (action === 'admin') renderAdmin();
-        });
-      });
-
-      // Инициализация по умолчанию
-      navButtons[0].click();
-    });
-
-    function showSection(sectionId) {
-      content.querySelectorAll('div').forEach(div => div.classList.add('hidden'));
-      const section = document.getElementById(sectionId);
-      if (section) {
-        section.classList.remove('hidden');
-      } else {
-        console.error('Секция не найдена:', sectionId);
+      function showNavPanel(section) {
+        document.querySelectorAll('.nav button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`nav-${section}`).classList.add('active');
+        // Placeholder for section content
+        document.getElementById('events-list').innerText = `Содержимое раздела: ${section}`;
       }
-      if (sectionId === 'admin' && !isAdmin) {
-        tg.showAlert('Доступ только для администраторов');
-        showSection('profile');
-      }
-    }
 
-    async function fetchData(endpoint) {
-      try {
-        const response = await fetch(endpoint, {
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return await response.json();
-      } catch (err) {
-        console.error(`Ошибка при загрузке ${endpoint}:`, err);
-        return { records: [] };
-      }
-    }
-
-    async function renderEvents() {
-      eventsList.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
-      const data = await fetchData(endpoints.events);
-      eventsList.innerHTML = '';
-      if (!data.records || data.records.length === 0) {
-        eventsList.innerHTML = '<p class="text-gray-400 text-center">Нет мероприятий</p>';
-        return;
-      }
-      data.records.forEach(event => {
-        const card = document.createElement('div');
-        card.className = 'event-card';
-        card.innerHTML = `
-          <img src="${event.fields.Image?.[0]?.url || 'https://via.placeholder.com/300x180'}" alt="${event.fields.Title || 'Мероприятие'}">
-          <h2>${event.fields.Title || 'Без названия'}</h2>
-          <p>${event.fields.Date || 'Дата не указана'}</p>
-          <div class="buttons">
-            <button class="join-btn" data-id="${event.id}">Я пойду</button>
-            <button class="map-btn" data-id="${event.id}">На карте</button>
-            ${isAdmin ? '<button class="delete-btn" data-id="' + event.id + '">Удалить</button>' : ''}
-          </div>
-        `;
-        card.querySelector('.join-btn').addEventListener('click', () => joinEvent(event.id));
-        card.querySelector('.map-btn').addEventListener('click', () => showEventDetails(event));
-        if (isAdmin) card.querySelector('.delete-btn').addEventListener('click', () => deleteEvent(event.id));
-        eventsList.appendChild(card);
-      });
-    }
-
-    async function renderProfile() {
-      profileContent.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
-      const data = await fetchData(`${endpoints.users}?filterByFormula={TgId}="${user.id}"`);
-      const userData = data.records[0]?.fields || { Events: [], Votes: {} };
-      cache.userEvents = userData.Events || [];
-      cache.userVotes = userData.Votes || {};
-      localStorage.setItem('userEvents', JSON.stringify(cache.userEvents));
-      localStorage.setItem('userVotes', JSON.stringify(cache.userVotes));
-      profileContent.innerHTML = `
-        <h2 class="text-xl font-semibold">${userData.Name || user.first_name || 'Гость'}</h2>
-        <img src="${userData.Avatar || user.photo_url || 'https://via.placeholder.com/100'}" alt="Avatar" class="w-24 h-24 rounded-full mt-2">
-        <p class="mt-2">${userData.Contacts || 'Нет контактов'}</p>
-        <h3 class="text-lg font-semibold mt-4">Участие в событиях</h3>
-        <div class="mt-2">${cache.userEvents.length ? cache.userEvents.map(id => `<p>${id}</p>`).join('') : '<p>Нет событий</p>'}</div>
-        <h3 class="text-lg font-semibold mt-4">Мои голоса</h3>
-        <div class="mt-2">${Object.keys(cache.userVotes).length ? Object.entries(cache.userVotes).map(([id, votes]) => `<p>Голосование ${id}: ${JSON.stringify(votes)}</p>`).join('') : '<p>Нет голосов</p>'}</div>
-      `;
-    }
-
-    async function renderVoting() {
-      votingContent.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
-      const data = await fetchData(endpoints.voting);
-      votingContent.innerHTML = '';
-      if (!data.records || data.records.length === 0) {
-        votingContent.innerHTML = '<p class="text-gray-400 text-center">Нет голосований</p>';
-        return;
-      }
-      data.records.forEach(voting => {
-        const card = document.createElement('div');
-        card.className = 'event-card';
-        card.innerHTML = `
-          <h2>${voting.fields.Title || 'Без названия'}</h2>
-          <p>${voting.fields.Date || 'Дата не указана'}</p>
-          <button class="vote-btn" data-id="${voting.id}">Голосовать</button>
-          ${isAdmin ? '<button class="delete-voting-btn" data-id="' + voting.id + '">Удалить</button>' : ''}
-        `;
-        card.querySelector('.vote-btn').addEventListener('click', () => showVotingDetails(voting));
-        if (isAdmin) card.querySelector('.delete-voting-btn').addEventListener('click', () => deleteVoting(voting.id));
-        votingContent.appendChild(card);
-      });
-      if (isAdmin) createVotingForm.classList.remove('hidden');
-    }
-
-    async function renderMarketplace() {
-      marketplaceContent.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
-      const data = await fetchData(endpoints.marketplace);
-      marketplaceContent.innerHTML = '';
-      if (!data.records || data.records.length === 0) {
-        marketplaceContent.innerHTML = '<p class="text-gray-400 text-center">Нет товаров</p>';
-        return;
-      }
-      data.records.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'event-card';
-        card.innerHTML = `
-          <h2>${item.fields.Title || 'Без названия'}</h2>
-          <p>Цена: ${item.fields.Price || 'Не указана'} руб.</p>
-          <p>${item.fields.Description || 'Без описания'}</p>
-          ${isAdmin ? '<button class="delete-item-btn" data-id="' + item.id + '">Удалить</button>' : ''}
-        `;
-        if (isAdmin) card.querySelector('.delete-item-btn').addEventListener('click', () => deleteItem(item.id));
-        marketplaceContent.appendChild(card);
-      });
-      if (isAdmin) createItemForm.classList.remove('hidden');
-    }
-
-    async function renderFavorites() {
-      favoritesContent.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
-      const data = await fetchData(endpoints.events);
-      favoritesContent.innerHTML = '';
-      const favoriteEventsData = data.records.filter(event => cache.favoriteEvents.includes(event.id));
-      if (favoriteEventsData.length === 0) {
-        favoritesContent.innerHTML = '<p class="text-gray-400 text-center">Нет избранных мероприятий</p>';
-        return;
-      }
-      favoriteEventsData.forEach(event => {
-        const card = document.createElement('div');
-        card.className = 'event-card';
-        card.innerHTML = `
-          <img src="${event.fields.Image?.[0]?.url || 'https://via.placeholder.com/300x180'}" alt="${event.fields.Title || 'Мероприятие'}">
-          <h2>${event.fields.Title || 'Без названия'}</h2>
-          <p>${event.fields.Date || 'Дата не указана'}</p>
-          <button class="remove-fav-btn" data-id="${event.id}">Удалить из избранного</button>
-        `;
-        card.querySelector('.remove-fav-btn').addEventListener('click', () => removeFavorite(event.id));
-        favoritesContent.appendChild(card);
-      });
-    }
-
-    async function renderAdmin() {
-      adminEventsList.innerHTML = '<p class="text-gray-400 text-center">Загрузка...</p>';
-      const [eventsData, votingData, marketplaceData] = await Promise.all([
-        fetchData(endpoints.events),
-        fetchData(endpoints.voting),
-        fetchData(endpoints.marketplace)
-      ]);
-      adminEventsList.innerHTML = `
-        <h2 class="text-xl font-semibold mb-2">Мероприятия</h2>
-        ${eventsData.records.map(e => `<p>${e.fields.Title || 'Без названия'} <button class="delete-btn" data-id="${e.id}" data-type="event">Удалить</button></p>`).join('')}
-        <h2 class="text-xl font-semibold mb-2 mt-4">Голосования</h2>
-        ${votingData.records.map(v => `<p>${v.fields.Title || 'Без названия'} <button class="delete-btn" data-id="${v.id}" data-type="voting">Удалить</button></p>`).join('')}
-        <h2 class="text-xl font-semibold mb-2 mt-4">Товары</h2>
-        ${marketplaceData.records.map(m => `<p>${m.fields.Title || 'Без названия'} <button class="delete-btn" data-id="${m.id}" data-type="item">Удалить</button></p>`).join('')}
-      `;
-      document.querySelectorAll('#adminEventsList .delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const { id, type } = btn.dataset;
-          if (type === 'event') deleteEvent(id);
-          else if (type === 'voting') deleteVoting(id);
-          else if (type === 'item') deleteItem(id);
-        });
-      });
-      document.getElementById('toggleVotingForm').addEventListener('click', () => createVotingForm.classList.toggle('hidden'));
-      document.getElementById('toggleItemForm').addEventListener('click', () => createItemForm.classList.toggle('hidden'));
-    }
-
-    async function joinEvent(eventId) {
-      if (!cache.userEvents.includes(eventId)) {
-        cache.userEvents.push(eventId);
-        localStorage.setItem('userEvents', JSON.stringify(cache.userEvents));
-        await saveUserData();
-        tg.showAlert('Вы записаны на мероприятие!');
-        renderProfile();
-      }
-    }
-
-    async function addFavorite(eventId) {
-      if (!cache.favoriteEvents.includes(eventId)) {
-        cache.favoriteEvents.push(eventId);
-        localStorage.setItem('favoriteEvents', JSON.stringify(cache.favoriteEvents));
-        tg.showAlert('Добавлено в избранное!');
-        renderFavorites();
-      }
-    }
-
-    async function removeFavorite(eventId) {
-      cache.favoriteEvents = cache.favoriteEvents.filter(id => id !== eventId);
-      localStorage.setItem('favoriteEvents', JSON.stringify(cache.favoriteEvents));
-      tg.showAlert('Удалено из избранного!');
-      renderFavorites();
-    }
-
-    async function saveUserData() {
-      const userData = {
-        fields: {
-          TgId: String(user.id),
-          Name: user.first_name,
-          Avatar: user.photo_url || '',
-          Events: cache.userEvents,
-          Votes: cache.userVotes
+      function addEvent() {
+        const category = document.getElementById('event-category').value;
+        const title = document.getElementById('event-title').value;
+        const image = document.getElementById('event-image').files[0];
+        if (category && title) {
+          events.push({ category, title, image });
+          alert('Событие добавлено!');
+          showPanel('admin-panel');
+        } else {
+          alert('Заполните все поля!');
         }
-      };
-      try {
-        const response = await fetch(endpoints.users, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(userData)
-        });
-        if (!response.ok) throw new Error(await response.text());
-      } catch (err) {
-        console.error('Ошибка сохранения данных:', err);
       }
-    }
 
-    function showEventDetails(event) {
-      document.getElementById('modalTitle').textContent = event.fields.Title || 'Без названия';
-      document.getElementById('modalDate').textContent = event.fields.Date || 'Дата не указана';
-      document.getElementById('modalLocation').textContent = event.fields.Location || 'Место не указано';
-      document.getElementById('modalDescription').textContent = event.fields.Description || 'Описание отсутствует';
-      document.getElementById('modalImage').src = event.fields.Image?.[0]?.url || 'https://via.placeholder.com/300x200';
-      document.getElementById('mapBtn').onclick = () => window.open(event.fields.MapLink || '#', '_blank');
-      document.getElementById('joinBtn').onclick = () => joinEvent(event.id);
-      document.getElementById('addFavBtn').onclick = () => addFavorite(event.id);
-      eventModal.classList.remove('hidden');
-    }
-
-    document.getElementById('closeModal').addEventListener('click', () => eventModal.classList.add('hidden'));
-
-    async function showVotingDetails(voting) {
-      const isWithinRange = await checkGeolocation(voting.fields.Latitude, voting.fields.Longitude);
-      if (!isWithinRange) {
-        tg.showAlert('Вы не находитесь в зоне голосования (1000 м)');
-        return;
-      }
-      document.getElementById('votingModalTitle').textContent = voting.fields.Title || 'Без названия';
-      document.getElementById('votingModalDate').textContent = voting.fields.Date || 'Дата не указана';
-      document.getElementById('votingModalLocation').textContent = voting.fields.Location || 'Место не указано';
-      const categories = JSON.parse(voting.fields.Categories || '[]');
-      const votingCategories = document.getElementById('votingCategories');
-      votingCategories.innerHTML = categories.map(cat => `
-        <div>
-          <p class="font-semibold">${cat.name}</p>
-          <select class="w-full p-2 bg-gray-700 rounded mt-1">
-            ${cat.cars.map(car => `<option value="${car}">${car}</option>`).join('')}
-          </select>
-        </div>
-      `).join('');
-      votingModal.dataset.votingId = voting.id;
-      votingModal.classList.remove('hidden');
-    }
-
-    document.getElementById('submitVoteBtn').addEventListener('click', () => {
-      const votingId = votingModal.dataset.votingId;
-      const votes = {};
-      document.querySelectorAll('#votingCategories select').forEach(select => {
-        votes[select.previousElementSibling.textContent] = select.value;
-      });
-      cache.userVotes[votingId] = votes;
-      localStorage.setItem('userVotes', JSON.stringify(cache.userVotes));
-      saveUserData().then(() => {
-        tg.showAlert('Ваш голос учтен!');
-        votingModal.classList.add('hidden');
-      });
-    });
-
-    document.getElementById('closeVotingModal').addEventListener('click', () => votingModal.classList.add('hidden'));
-
-    async function createVoting(event) {
-      event.preventDefault();
-      const votingData = {
-        fields: {
-          Title: document.getElementById('votingTitle').value,
-          Date: document.getElementById('votingDate').value,
-          Location: document.getElementById('votingLocation').value,
-          Latitude: parseFloat(document.getElementById('votingLat').value) || 0,
-          Longitude: parseFloat(document.getElementById('votingLon').value) || 0,
-          Categories: document.getElementById('votingCategories').value
+      function saveAd() {
+        const image = document.getElementById('ad-image').files[0];
+        const link = document.getElementById('ad-link').value;
+        if (image || link) {
+          document.getElementById('ad-status').innerText = 'Реклама сохранена!';
+        } else {
+          alert('Загрузите изображение или укажите ссылку!');
         }
-      };
-      try {
-        const response = await fetch(endpoints.voting, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(votingData)
-        });
-        if (!response.ok) throw new Error(await response.text());
-        tg.showAlert('Голосование создано!');
-        createVotingForm.reset();
-        createVotingForm.classList.add('hidden');
-        renderVoting();
-      } catch (err) {
-        tg.showAlert(`Ошибка: ${err.message}`);
       }
-    }
 
-    createVotingForm.addEventListener('submit', createVoting);
-
-    async function createItem(event) {
-      event.preventDefault();
-      const itemData = {
-        fields: {
-          Title: document.getElementById('itemTitle').value,
-          Price: parseFloat(document.getElementById('itemPrice').value) || 0,
-          Description: document.getElementById('itemDescription').value
-        }
-      };
-      try {
-        const response = await fetch(endpoints.marketplace, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(itemData)
-        });
-        if (!response.ok) throw new Error(await response.text());
-        tg.showAlert('Товар добавлен!');
-        createItemForm.reset();
-        createItemForm.classList.add('hidden');
-        renderMarketplace();
-      } catch (err) {
-        tg.showAlert(`Ошибка: ${err.message}`);
+      function saveEvent() {
+        alert('Изменения сохранены!');
+        showPanel('manage-events-panel');
       }
-    }
 
-    createItemForm.addEventListener('submit', createItem);
-
-    async function deleteEvent(eventId) {
-      try {
-        const response = await fetch(`${endpoints.events}/${eventId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(await response.text());
-        tg.showAlert('Мероприятие удалено!');
-        renderEvents();
-        renderAdmin();
-      } catch (err) {
-        tg.showAlert(`Ошибка: ${err.message}`);
+      function registerForEvent() {
+        alert('Вы записались на событие!');
       }
-    }
 
-    async function deleteVoting(votingId) {
-      try {
-        const response = await fetch(`${endpoints.voting}/${votingId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+      function shareEvent() {
+        window.Telegram.WebApp.shareToStory('https://example.com/event', {
+          text: 'Check out this event!'
         });
-        if (!response.ok) throw new Error(await response.text());
-        tg.showAlert('Голосование удалено!');
-        renderVoting();
-        renderAdmin();
-      } catch (err) {
-        tg.showAlert(`Ошибка: ${err.message}`);
       }
-    }
 
-    async function deleteItem(itemId) {
-      try {
-        const response = await fetch(`${endpoints.marketplace}/${itemId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-        });
-        if (!response.ok) throw new Error(await response.text());
-        tg.showAlert('Товар удален!');
-        renderMarketplace();
-        renderAdmin();
-      } catch (err) {
-        tg.showAlert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    function checkGeolocation(lat, lon) {
-      return new Promise((resolve) => {
-        if (!navigator.geolocation) {
-          resolve(false);
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const distance = getDistance(lat, lon, position.coords.latitude, position.coords.longitude);
-            resolve(distance <= 1000);
-          },
-          () => resolve(false),
-          { enableHighAccuracy: true, timeout: 5000 }
-        );
-      });
-    }
-
-    function getDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371e3;
-      const φ1 = (lat1 * Math.PI) / 180;
-      const φ2 = (lat2 * Math.PI) / 180;
-      const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-      const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-  </script>
-</body>
+      // Initialize main panel
+      showNavPanel('events');
+    </script>
+  </body>
 </html>
