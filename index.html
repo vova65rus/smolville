@@ -1,131 +1,85 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Афиша мероприятий</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      margin: 0;
-      padding: 15px;
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .events-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 15px;
-    }
-    .event {
-      background: #fff;
-      border-radius: 10px;
-      padding: 15px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      position: relative;
-    }
-    .event img {
-      width: 100%;
-      border-radius: 8px;
-      margin-bottom: 10px;
-    }
-    .event h3 {
-      margin: 5px 0;
-      font-size: 1.1rem;
-    }
-    .event p {
-      margin: 3px 0;
-      color: #666;
-      font-size: 0.9rem;
-    }
-    .btn {
-      display: inline-block;
-      padding: 8px 12px;
-      margin: 5px 5px 0 0;
-      background: #e63946;
-      color: #fff;
-      border-radius: 6px;
-      text-decoration: none;
-      cursor: pointer;
-      font-size: 0.9rem;
-      border: none;
-    }
-    .btn-map {
-      background: #457b9d;
-    }
-    .status {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: #2a9d8f;
-      color: #fff;
-      padding: 5px 8px;
-      border-radius: 5px;
-      font-size: 0.8rem;
-      display: none;
-    }
-    .status.active {
-      display: block;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini App: Афиша и Магазин</title>
+<style>
+  body { font-family: Arial; background: #f5f5f5; margin:0; padding:15px; }
+  h2 { text-align:center; margin-bottom:20px; }
+  .section { margin-bottom:30px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+  .card { background:#fff; border-radius:10px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.1); position:relative; }
+  .card img { width:100%; border-radius:8px; margin-bottom:10px; }
+  .card h3 { margin:5px 0; font-size:1.1rem; }
+  .card p { margin:3px 0; color:#666; font-size:0.9rem; }
+  .btn { padding:8px 12px; margin:5px 5px 0 0; border:none; border-radius:6px; color:#fff; cursor:pointer; font-size:0.9rem; }
+  .btn-go { background:#e63946; }
+  .btn-map { background:#457b9d; }
+  .btn-cart { background:#2a9d8f; }
+  .status { position:absolute; top:10px; right:10px; background:#2a9d8f; color:#fff; padding:5px 8px; border-radius:5px; font-size:0.8rem; display:none; }
+  .status.active { display:block; }
+</style>
 </head>
 <body>
-  <h2>🚗 Афиша мероприятий</h2>
-  <div class="events-grid" id="events"></div>
 
-  <script>
-    // Подключение Telegram WebApp
-    let tg = null;
-    try {
-      if (window.Telegram && window.Telegram.WebApp) {
-        tg = window.Telegram.WebApp;
-        tg.expand();
-      }
-    } catch (e) {
-      console.log("Работаем без Telegram API");
-    }
+<h2>🚗 Афиша мероприятий</h2>
+<div class="section">
+  <input type="text" id="searchEvents" placeholder="Поиск по названию..." style="width:100%; padding:8px; margin-bottom:10px;">
+  <div class="grid" id="events"></div>
+</div>
 
-    const events = [
-      {
-        title: "Drift Weekend 2025",
-        date: "12 сентября 2025",
-        place: "Южно-Сахалинск, картодром",
-        coords: "46.9591,142.7386",
-        image: "https://picsum.photos/400/200?random=1"
-      },
-      {
-        title: "AutoFest Show",
-        date: "20 сентября 2025",
-        place: "Владивосток, стадион",
-        coords: "43.1155,131.8855",
-        image: "https://picsum.photos/400/200?random=2"
-      },
-      {
-        title: "Street Racing Meet",
-        date: "28 сентября 2025",
-        place: "Хабаровск, центральная площадь",
-        coords: "48.4820,135.0711",
-        image: "https://picsum.photos/400/200?random=3"
-      }
-    ];
+<h2>🛍 Магазин мерча</h2>
+<div class="section">
+  <input type="text" id="searchShop" placeholder="Поиск по товару..." style="width:100%; padding:8px; margin-bottom:10px;">
+  <div class="grid" id="shop"></div>
+</div>
 
-    const container = document.getElementById("events");
+<h2>👤 Мой кабинет</h2>
+<div class="section">
+  <h3>Отмеченные мероприятия</h3>
+  <ul id="myEvents"></ul>
+  <h3>Корзина</h3>
+  <ul id="myCart"></ul>
+</div>
 
-    // Загружаем статус событий из localStorage
-    let savedStatus = JSON.parse(localStorage.getItem("goingStatus")) || {};
+<script>
+  // Telegram WebApp
+  let tg=null;
+  try { if(window.Telegram && window.Telegram.WebApp){ tg=window.Telegram.WebApp; tg.expand(); } } catch(e){ console.log("Без Telegram"); }
 
-    events.forEach((ev, index) => {
-      const card = document.createElement("div");
-      card.className = "event";
+  // Данные мероприятий
+  const eventsData=[
+    {title:"Drift Weekend", date:"12 сентября", place:"Южно-Сахалинск", coords:"46.9591,142.7386", image:"https://picsum.photos/400/200?random=1"},
+    {title:"AutoFest Show", date:"20 сентября", place:"Владивосток", coords:"43.1155,131.8855", image:"https://picsum.photos/400/200?random=2"},
+    {title:"Street Racing Meet", date:"28 сентября", place:"Хабаровск", coords:"48.4820,135.0711", image:"https://picsum.photos/400/200?random=3"}
+  ];
 
-      card.innerHTML = `
-        <div class="status ${savedStatus[index] ? "active" : ""}">Отмечено ✅</div>
+  // Данные магазина
+  const shopData=[
+    {name:"Футболка Drift", price:"1500₽", image:"https://picsum.photos/200/200?random=10"},
+    {name:"Кепка AutoFest", price:"800₽", image:"https://picsum.photos/200/200?random=11"},
+    {name:"Наклейка Street Racing", price:"200₽", image:"https://picsum.photos/200/200?random=12"}
+  ];
+
+  // LocalStorage
+  let eventStatus=JSON.parse(localStorage.getItem("goingStatus"))||{};
+  let cart=JSON.parse(localStorage.getItem("cart"))||[];
+
+  const eventsContainer=document.getElementById("events");
+  const shopContainer=document.getElementById("shop");
+  const myEventsList=document.getElementById("myEvents");
+  const myCartList=document.getElementById("myCart");
+
+  // Функция рендера афиши
+  function renderEvents(filter=""){
+    eventsContainer.innerHTML="";
+    eventsData.forEach((ev,i)=>{
+      if(!ev.title.toLowerCase().includes(filter.toLowerCase())) return;
+      const card=document.createElement("div");
+      card.className="card";
+      card.innerHTML=`
+        <div class="status ${eventStatus[i]?"active":""}">Отмечено ✅</div>
         <img src="${ev.image}" alt="${ev.title}">
         <h3>${ev.title}</h3>
         <p>📅 ${ev.date}</p>
@@ -133,23 +87,74 @@
         <button class="btn btn-go">Хочу пойти</button>
         <button class="btn btn-map">Открыть на карте</button>
       `;
+      const btnGo=card.querySelector(".btn-go");
+      const btnMap=card.querySelector(".btn-map");
+      const statusEl=card.querySelector(".status");
 
-      const btnGo = card.querySelector(".btn-go");
-      const btnMap = card.querySelector(".btn-map");
-      const statusEl = card.querySelector(".status");
-
-      btnGo.addEventListener("click", () => {
+      btnGo.addEventListener("click",()=>{
         statusEl.classList.add("active");
-        savedStatus[index] = true;
-        localStorage.setItem("goingStatus", JSON.stringify(savedStatus));
+        eventStatus[i]=true;
+        localStorage.setItem("goingStatus", JSON.stringify(eventStatus));
+        updateMyEvents();
       });
-
-      btnMap.addEventListener("click", () => {
-        window.open(`https://www.google.com/maps/search/?api=1&query=${ev.coords}`, "_blank");
-      });
-
-      container.appendChild(card);
+      btnMap.addEventListener("click",()=>window.open(`https://www.google.com/maps/search/?api=1&query=${ev.coords}`,"_blank"));
+      eventsContainer.appendChild(card);
     });
-  </script>
+  }
+
+  // Функция рендера магазина
+  function renderShop(filter=""){
+    shopContainer.innerHTML="";
+    shopData.forEach((item,i)=>{
+      if(!item.name.toLowerCase().includes(filter.toLowerCase())) return;
+      const card=document.createElement("div");
+      card.className="card";
+      card.innerHTML=`
+        <img src="${item.image}" alt="${item.name}">
+        <h3>${item.name}</h3>
+        <p>💰 ${item.price}</p>
+        <button class="btn btn-cart">Добавить в корзину</button>
+      `;
+      const btnCart=card.querySelector(".btn-cart");
+      btnCart.addEventListener("click",()=>{
+        cart.push(item);
+        localStorage.setItem("cart", JSON.stringify(cart));
+        updateMyCart();
+      });
+      shopContainer.appendChild(card);
+    });
+  }
+
+  // Обновление личного кабинета
+  function updateMyEvents(){
+    myEventsList.innerHTML="";
+    eventsData.forEach((ev,i)=>{
+      if(eventStatus[i]){
+        const li=document.createElement("li");
+        li.textContent=ev.title+" ("+ev.date+")";
+        myEventsList.appendChild(li);
+      }
+    });
+  }
+
+  function updateMyCart(){
+    myCartList.innerHTML="";
+    cart.forEach(item=>{
+      const li=document.createElement("li");
+      li.textContent=item.name+" - "+item.price;
+      myCartList.appendChild(li);
+    });
+  }
+
+  // Поиск
+  document.getElementById("searchEvents").addEventListener("input",(e)=>renderEvents(e.target.value));
+  document.getElementById("searchShop").addEventListener("input",(e)=>renderShop(e.target.value));
+
+  // Инициализация
+  renderEvents();
+  renderShop();
+  updateMyEvents();
+  updateMyCart();
+</script>
 </body>
 </html>
