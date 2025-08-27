@@ -59,48 +59,50 @@
 <div class="grid" id="events"></div>
 
 <script>
-const eventsData=[
-  {title:"Drift Weekend", date:"12 сентября", place:"Южно-Сахалинск", coords:"46.9591,142.7386", image:"https://picsum.photos/400/400?random=1"},
-  {title:"AutoFest Show", date:"20 сентября", place:"Владивосток", coords:"43.1155,131.8855", image:"https://picsum.photos/400/400?random=2"},
-  {title:"Street Racing Meet", date:"28 сентября", place:"Хабаровск", coords:"48.4820,135.0711", image:"https://picsum.photos/400/400?random=3"},
-  {title:"Night Drift Party", date:"5 октября", place:"Сахалин, стадион", coords:"46.958,142.74", image:"https://picsum.photos/400/400?random=4"}
-];
+  // Очистим старое localStorage для надёжности (только при первом запуске)
+  // localStorage.removeItem("goingStatus");
 
-let eventStatus=JSON.parse(localStorage.getItem("goingStatus"))||{};
+  const eventsData=[
+    {title:"Drift Weekend", date:"12 сентября", place:"Южно-Сахалинск", coords:"46.9591,142.7386", image:"https://picsum.photos/400/400?random=1"},
+    {title:"AutoFest Show", date:"20 сентября", place:"Владивосток", coords:"43.1155,131.8855", image:"https://picsum.photos/400/400?random=2"},
+    {title:"Street Racing Meet", date:"28 сентября", place:"Хабаровск", coords:"48.4820,135.0711", image:"https://picsum.photos/400/400?random=3"},
+    {title:"Night Drift Party", date:"5 октября", place:"Сахалин, стадион", coords:"46.958,142.74", image:"https://picsum.photos/400/400?random=4"}
+  ];
 
-const container=document.getElementById("events");
+  let eventStatus=JSON.parse(localStorage.getItem("goingStatus"))||{};
+  const container=document.getElementById("events");
 
-function renderEvents(){
-  container.innerHTML="";
-  eventsData.forEach((ev,i)=>{
-    const card=document.createElement("div");
-    card.className="card";
-    card.innerHTML=`
-      <img src="${ev.image}" alt="${ev.title}">
-      <div class="overlay">
-        <span>${ev.title} | ${ev.date}</span>
-        <button class="btn-icon btn-go">${eventStatus[i]?"❤️":"🤍"}</button>
-        <button class="btn-icon btn-map">📍</button>
-      </div>
-    `;
-    const btnGo=card.querySelector(".btn-go");
-    const btnMap=card.querySelector(".btn-map");
+  function renderEvents(){
+    container.innerHTML="";
+    eventsData.forEach((ev,i)=>{
+      const card=document.createElement("div");
+      card.className="card";
+      card.innerHTML=`
+        <img src="${ev.image}" alt="${ev.title}">
+        <div class="overlay">
+          <span>${ev.title} | ${ev.date}</span>
+          <button class="btn-icon btn-go">${eventStatus[i]?"❤️":"🤍"}</button>
+          <button class="btn-icon btn-map">📍</button>
+        </div>
+      `;
+      const btnGo=card.querySelector(".btn-go");
+      const btnMap=card.querySelector(".btn-map");
 
-    btnGo.addEventListener("click",()=>{
-      eventStatus[i]=!eventStatus[i];
-      localStorage.setItem("goingStatus", JSON.stringify(eventStatus));
-      btnGo.textContent=eventStatus[i]?"❤️":"🤍";
+      btnGo.addEventListener("click",()=>{
+        eventStatus[i]=!eventStatus[i];
+        localStorage.setItem("goingStatus", JSON.stringify(eventStatus));
+        btnGo.textContent=eventStatus[i]?"❤️":"🤍";
+      });
+
+      btnMap.addEventListener("click",()=>{
+        window.open(`https://www.google.com/maps/search/?api=1&query=${ev.coords}`,"_blank");
+      });
+
+      container.appendChild(card);
     });
+  }
 
-    btnMap.addEventListener("click",()=>{
-      window.open(`https://www.google.com/maps/search/?api=1&query=${ev.coords}`,"_blank");
-    });
-
-    container.appendChild(card);
-  });
-}
-
-renderEvents();
+  renderEvents();
 </script>
 
 </body>
