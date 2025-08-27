@@ -41,30 +41,31 @@
   </style>
 </head>
 <body>
-  <h2>Афиша авто-мероприятий</h2>
+  <h2>🚗 Афиша мероприятий</h2>
   <div id="events"></div>
 
   <script>
-    // Подключаем Telegram WebApp API
-    let tg = window.Telegram.WebApp;
-    tg.expand(); // разворачиваем на весь экран
+    // Заглушка для браузера (чтобы код не падал без Telegram)
+    let tg = { expand: () => {} };
+    tg.expand();
 
-    // Данные (пока вручную)
+    // Данные мероприятий
     const events = [
       {
-        title: "Крылья Сахалина",
-        date: "5-7 сентября 2025",
-        place: "Корсаков, Аэродром Пушистый",
+        title: "Drift Weekend 2025",
+        date: "12 сентября 2025",
+        place: "Южно-Сахалинск, картодром",
         image: "https://picsum.photos/400/200?random=1"
       },
       {
-        title: "Pandora - Аатовыставка",
-        date: "28 сентября 2025",
-        place: "Южно-Сахалинск, ул. Ленина 413",
+        title: "AutoFest Show",
+        date: "20 сентября 2025",
+        place: "Владивосток, стадион",
         image: "https://picsum.photos/400/200?random=2"
       }
     ];
 
+    // Рендер карточек
     const container = document.getElementById("events");
 
     events.forEach(ev => {
@@ -72,13 +73,4 @@
       card.className = "event";
       card.innerHTML = `
         <img src="${ev.image}" alt="${ev.title}">
-        <h3>${ev.title}</h3>
-        <p>📅 ${ev.date}</p>
-        <p>📍 ${ev.place}</p>
-        <a href="#" class="btn">Хочу пойти</a>
-      `;
-      container.appendChild(card);
-    });
-  </script>
-</body>
-</html>
+        <h3>${ev
