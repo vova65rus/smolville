@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Афиша</title>
+<title>Афиша MVP</title>
 <style>
+  /* Фон и логотип */
   body {
-    font-family: Arial;
+    font-family: Arial, sans-serif;
     background: url('your-background-url.jpg') no-repeat center center fixed;
     background-size: cover;
     margin: 0;
@@ -26,12 +27,14 @@
     text-shadow: 1px 1px 4px rgba(0,0,0,0.7);
   }
 
+  /* Сетка карточек */
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 12px;
   }
 
+  /* Карточка */
   .card {
     position: relative;
     border-radius: 12px;
@@ -39,6 +42,8 @@
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
   }
 
   .card:hover {
@@ -52,20 +57,25 @@
     border-radius: 12px 12px 0 0;
   }
 
+  /* Подпись под фото */
   .card-info {
     background: rgba(0,0,0,0.6);
     color: #fff;
     padding: 6px;
     text-align: center;
     font-size: 0.9rem;
+    border-radius: 0 0 12px 12px;
+    flex-shrink: 0;
   }
 
+  /* Кнопки поверх фото */
   .btn-group {
     position: absolute;
     top: 8px;
     right: 8px;
     display: flex;
     gap: 5px;
+    z-index: 2;
   }
 
   .btn-icon {
@@ -77,6 +87,7 @@
     text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
   }
 
+  /* Метка "Отмечено" */
   .status-label {
     position: absolute;
     top: 8px;
@@ -89,25 +100,31 @@
     display: none;
     font-weight: bold;
     text-transform: uppercase;
+    z-index: 2;
   }
 
   .status-label.active {
     display: block;
   }
 
+  /* Адаптивность */
   @media(max-width:400px){
     .grid { grid-template-columns: repeat(2, 1fr); gap:8px; }
   }
+
 </style>
 </head>
 <body>
 
+<!-- Логотип -->
 <img src="your-logo-url.png" alt="Логотип" class="logo">
+
 <h2>🚗 Афиша мероприятий</h2>
 
 <div class="grid" id="events"></div>
 
 <script>
+/* Данные афиши — можно потом заменить на fetch с сервера */
 const eventsData=[
   {title:"Drift Weekend", date:"12 сентября", place:"Южно-Сахалинск", coords:"46.9591,142.7386", image:"https://picsum.photos/400/400?random=1"},
   {title:"AutoFest Show", date:"20 сентября", place:"Владивосток", coords:"43.1155,131.8855", image:"https://picsum.photos/400/400?random=2"},
@@ -115,9 +132,11 @@ const eventsData=[
   {title:"Night Drift Party", date:"5 октября", place:"Сахалин, стадион", coords:"46.958,142.74", image:"https://picsum.photos/400/400?random=4"}
 ];
 
+/* Состояние "Хочу пойти" сохраняем локально */
 let eventStatus=JSON.parse(localStorage.getItem("goingStatus"))||{};
 const container=document.getElementById("events");
 
+/* Функция рендера */
 function renderEvents(){
   container.innerHTML="";
   eventsData.forEach((ev,i)=>{
@@ -148,10 +167,18 @@ function renderEvents(){
       window.open(`https://www.google.com/maps/search/?api=1&query=${ev.coords}`,"_blank");
     });
 
+    /* Можно добавить клик по карточке для подробной информации */
+    card.addEventListener("click", (e)=>{
+      if(e.target !== btnGo && e.target !== btnMap){
+        alert(`${ev.title}\nДата: ${ev.date}\nМесто: ${ev.place}`);
+      }
+    });
+
     container.appendChild(card);
   });
 }
 
+/* Инициализация */
 renderEvents();
 </script>
 
