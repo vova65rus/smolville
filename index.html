@@ -45,11 +45,8 @@
   <div id="events"></div>
 
   <script>
-    // Заглушка для браузера (чтобы код не падал без Telegram)
-    let tg = { expand: () => {} };
-    tg.expand();
+    console.log("Скрипт работает!"); // проверка
 
-    // Данные мероприятий
     const events = [
       {
         title: "Drift Weekend 2025",
@@ -65,7 +62,6 @@
       }
     ];
 
-    // Рендер карточек
     const container = document.getElementById("events");
 
     events.forEach(ev => {
@@ -73,4 +69,13 @@
       card.className = "event";
       card.innerHTML = `
         <img src="${ev.image}" alt="${ev.title}">
-        <h3>${ev
+        <h3>${ev.title}</h3>
+        <p>📅 ${ev.date}</p>
+        <p>📍 ${ev.place}</p>
+        <a href="#" class="btn">Хочу пойти</a>
+      `;
+      container.appendChild(card);
+    });
+  </script>
+</body>
+</html>
