@@ -1,45 +1,155 @@
-<script>
-  function log(msg) {
-    document.body.insertAdjacentHTML("beforeend", "<p style='color:red'>" + msg + "</p>");
-  }
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Афиша мероприятий</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 15px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .events-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+    }
+    .event {
+      background: #fff;
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+    .event img {
+      width: 100%;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .event h3 {
+      margin: 5px 0;
+      font-size: 1.1rem;
+    }
+    .event p {
+      margin: 3px 0;
+      color: #666;
+      font-size: 0.9rem;
+    }
+    .btn {
+      display: inline-block;
+      padding: 8px 12px;
+      margin: 5px 5px 0 0;
+      background: #e63946;
+      color: #fff;
+      border-radius: 6px;
+      text-decoration: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border: none;
+    }
+    .btn-map {
+      background: #457b9d;
+    }
+    .status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #2a9d8f;
+      color: #fff;
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-size: 0.8rem;
+      display: none;
+    }
+    .status.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h2>🚗 Афиша мероприятий</h2>
+  <div class="events-grid" id="events"></div>
 
-  log("Скрипт запустился!");
+  <script>
+    // Подключение Telegram WebApp
+    let tg = null;
+    try {
+      if (window.Telegram && window.Telegram.WebApp) {
+        tg = window.Telegram.WebApp;
+        tg.expand();
+      }
+    } catch (e) {
+      console.log("Работаем без Telegram API");
+    }
 
-  try {
     const events = [
       {
         title: "Drift Weekend 2025",
         date: "12 сентября 2025",
         place: "Южно-Сахалинск, картодром",
+        coords: "46.9591,142.7386",
         image: "https://picsum.photos/400/200?random=1"
       },
       {
         title: "AutoFest Show",
         date: "20 сентября 2025",
         place: "Владивосток, стадион",
+        coords: "43.1155,131.8855",
         image: "https://picsum.photos/400/200?random=2"
+      },
+      {
+        title: "Street Racing Meet",
+        date: "28 сентября 2025",
+        place: "Хабаровск, центральная площадь",
+        coords: "48.4820,135.0711",
+        image: "https://picsum.photos/400/200?random=3"
       }
     ];
 
     const container = document.getElementById("events");
-    log("Наш контейнер: " + (container ? "OK" : "НЕ НАЙДЕН"));
 
-    events.forEach(ev => {
-      log("Добавляем событие: " + ev.title);
-      let card = document.createElement("div");
+    // Загружаем статус событий из localStorage
+    let savedStatus = JSON.parse(localStorage.getItem("goingStatus")) || {};
+
+    events.forEach((ev, index) => {
+      const card = document.createElement("div");
       card.className = "event";
+
       card.innerHTML = `
+        <div class="status ${savedStatus[index] ? "active" : ""}">Отмечено ✅</div>
         <img src="${ev.image}" alt="${ev.title}">
         <h3>${ev.title}</h3>
         <p>📅 ${ev.date}</p>
         <p>📍 ${ev.place}</p>
-        <a href="#" class="btn">Хочу пойти</a>
+        <button class="btn btn-go">Хочу пойти</button>
+        <button class="btn btn-map">Открыть на карте</button>
       `;
+
+      const btnGo = card.querySelector(".btn-go");
+      const btnMap = card.querySelector(".btn-map");
+      const statusEl = card.querySelector(".status");
+
+      btnGo.addEventListener("click", () => {
+        statusEl.classList.add("active");
+        savedStatus[index] = true;
+        localStorage.setItem("goingStatus", JSON.stringify(savedStatus));
+      });
+
+      btnMap.addEventListener("click", () => {
+        window.open(`https://www.google.com/maps/search/?api=1&query=${ev.coords}`, "_blank");
+      });
+
       container.appendChild(card);
     });
-
-    log("Все события добавлены!");
-  } catch (err) {
-    log("Ошибка в скрипте: " + err.message);
-  }
-</script>
+  </script>
+</body>
+</html>
