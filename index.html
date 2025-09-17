@@ -2,383 +2,225 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Автомобильные события</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smolville</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* ... (тот же CSS, как в предыдущем коде — не меняется) */
     body {
-      background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.png');
-      background-repeat: repeat;
-      background-size: 50px auto;
-      background-color: #1c1c1e;
-      color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      touch-action: pan-y;
-      -webkit-font-smoothing: antialiased;
-      -webkit-tap-highlight-color: transparent;
-      overscroll-behavior: none;
-    }
-    body::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: -1;
-    }
-    @media (min-width: 768px) {
-      body {
-        background-size: 70px auto;
-      }
+      background-image: url('bg.png');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      color: white;
+      font-family: Arial, sans-serif;
     }
     .event-card {
-      background: #2c2c2e;
-      border-radius: 10px;
-      touch-action: manipulation;
-      min-height: 120px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      overflow: hidden;
-    }
-    .fade-in {
-      animation: fadeIn 0.3s ease-in;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    ::-webkit-scrollbar {
-      display: none;
-    }
-    html {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-      overscroll-behavior: none;
-    }
-    .header img {
-      max-width: 100%;
-      height: auto;
-    }
-    .bottom-nav {
-      position: fixed;
-      bottom: env(safe-area-inset-bottom);
-      width: 100%;
-      background: #2c2c2e;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-      display: flex;
-      justify-content: space-around;
-      padding: 6px 0;
-      z-index: 5000;
-      min-height: 48px;
-      box-sizing: border-box;
-    }
-    .nav-btn {
-      background: none;
-      border: none;
-      padding: 6px;
-      font-size: 12px;
-      color: #0a84ff;
-      border-radius: 6px;
-      cursor: pointer;
-      touch-action: manipulation;
-      min-height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .nav-btn.active {
-      background: #0a84ff;
-      color: #ffffff;
-    }
-    .events-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 10px;
-      width: 100%;
-      padding: 10px;
-      box-sizing: border-box;
-    }
-    .modal-content, .admin-content {
-      background: #2c2c2e;
-      border-radius: 10px;
-      box-sizing: border-box;
-    }
-    .admin-content {
-      position: fixed;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 90%;
-      max-width: 360px;
-      max-height: calc(100vh - 60px - env(safe-area-inset-bottom));
-      overflow-y: auto;
-      padding: 10px;
-      z-index: 4000;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-      overscroll-behavior: contain;
-    }
-    .admin-close-btn {
-      background: #ff3b30;
-      color: #ffffff;
-      padding: 6px;
-      border-radius: 6px;
-      text-align: center;
-      cursor: pointer;
-      font-size: 12px;
-      margin-top: 10px;
-    }
-    .admin-form input, .admin-form textarea, .admin-form select {
-      background: #3a3a3c;
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 6px;
-      padding: 6px;
-      width: 100%;
-      margin-bottom: 8px;
-      box-sizing: border-box;
-      font-size: 13px;
-    }
-    .admin-form button, .admin-tab, .delete-btn, .edit-btn {
-      background: #0a84ff;
-      color: #ffffff;
-      padding: 6px;
-      border-radius: 6px;
-      width: 100%;
-      text-align: center;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .admin-tab.active {
-      background: #1a63d8;
-    }
-    .delete-btn {
-      background: #ff3b30;
-    }
-    .edit-btn {
-      background: #34c759;
-    }
-    .admin-section {
-      display: none;
-    }
-    .admin-section.active {
-      display: block;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      backdrop-filter: blur(5px);
+      margin-bottom: 10px;
     }
     .hidden {
       display: none;
     }
-    .ad-banner {
-      max-width: 280px;
-      margin: 6px auto;
-      display: block;
-      height: 50px;
-      overflow: hidden;
+    .modal {
+      background: rgba(0, 0, 0, 0.8);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
     }
-    .ad-banner img {
-      width: 100%;
-      height: 50px;
-      object-fit: cover;
-      border-radius: 6px;
+    .modal-content {
+      background: white;
+      color: black;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 90%;
+      max-height: 80%;
+      overflow-y: auto;
     }
-    @media (max-width: 360px) {
-      .ad-banner {
-        max-width: 260px;
-        height: 40px;
-      }
-      .ad-banner img {
-        height: 40px;
-      }
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
     }
-    .loading {
-      position: relative;
-      opacity: 0.8;
-      pointer-events: none;
-    }
-    .loading::after {
-      content: '';
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      border: 2px solid #ffffff;
-      border-top: 2px solid transparent;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      right: 6px;
-      top: 50%;
-      transform: translateY(-50%);
-    }
-    @keyframes spin {
-      0% { transform: translateY(-50%) rotate(0deg); }
-      100% { transform: translateY(-50%) rotate(360deg); }
-    }
-    #previewImage, #adPreviewImage, #editPreviewImage {
-      max-height: 160px;
-      object-fit: contain;
-      width: 100%;
-      border-radius: 6px;
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
   </style>
 </head>
-<body>
-  <!-- HTML структура та же, как в предыдущем коде -->
-  <header class="flex justify-between items-center w-full px-2 pt-2 z-10 relative">
-    <div id="adBanner" class="max-w-[50px] h-[20px] overflow-hidden flex items-center z-20">
-      <!-- Реклама будет вставлена динамически -->
-    </div>
-    <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer z-20">
-      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" class="h-[20px] w-auto object-contain" alt="Логотип Smolville Drift" loading="lazy">
-    </div>
-  </header>
-
-  <h1 class="text-base font-bold text-white mt-2 mb-2 text-center">Автомобильные события</h1>
-
-  <div id="events" class="events-grid"></div>
-
-  <div id="adminPanel" class="admin-content hidden">
-    <h2 class="text-sm font-bold text-white mb-2">Админ-панель</h2>
-    <div class="flex space-x-2 mb-2 overflow-x-auto">
-      <button class="admin-tab active" data-tab="add">Добавить</button>
-      <button class="admin-tab" data-tab="manage">Управление</button>
-      <button class="admin-tab" data-tab="ads">Реклама</button>
-    </div>
-    <div id="addSection" class="admin-section active">
-      <form id="adminForm" class="admin-form">
-        <input type="text" id="eventTitle" placeholder="Название мероприятия" required>
-        <select id="eventType" required>
-          <option value="" disabled selected>Выбери категорию</option>
-          <option value="Спорт">Спорт</option>
-          <option value="Выставки">Выставки</option>
-        </select>
-        <input type="text" id="eventDate" placeholder="Дата (например, 10 июля 2025)" required>
-        <input type="text" id="eventLocation" placeholder="Место" required>
-        <textarea id="eventDescription" placeholder="Описание" rows="3" required></textarea>
-        <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Загрузить изображение</button>
-        <img id="previewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью" loading="lazy">
-        <input type="file" id="imageInput" accept="image/*" class="hidden">
-        <button type="submit" class="bg-blue-500 text-white py-1 rounded-lg">Добавить</button>
-      </form>
-    </div>
-    <div id="manageSection" class="admin-section">
-      <div id="manageList" class="space-y-2"></div>
-    </div>
-    <div id="adsSection" class="admin-section">
-      <p id="adStatus" class="text-xs text-gray-400 mb-2 hidden">Реклама не настроена</p>
-      <form id="adForm" class="admin-form">
-        <button type="button" id="uploadAdImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Загрузить изображение рекламы</button>
-        <img id="adPreviewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью рекламы" loading="lazy">
-        <input type="file" id="adImageInput" accept="image/*" class="hidden">
-        <input type="text" id="adLinkUrl" placeholder="URL ссылки рекламы" required>
-        <button type="submit" class="bg-blue-500 text-white py-1 rounded-lg">Сохранить рекламу</button>
-      </form>
-    </div>
-    <button class="admin-close-btn" id="adminCloseBtn">Закрыть</button>
+<body class="min-h-screen flex flex-col">
+  <div class="container mx-auto p-4 flex-grow">
+    <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
+    <h1 class="text-2xl font-bold text-center mb-4">Smolville Events</h1>
+    <div id="events" class="grid grid-cols-1 gap-4"></div>
+    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg" onclick="showAdminModal()">Админ</button>
   </div>
 
-  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-5000">
-    <div class="modal-content rounded-lg p-3 w-11/12 max-w-[360px]">
-      <h2 class="text-sm font-bold text-white mb-2">Редактировать</h2>
-      <form id="editForm" class="admin-form">
-        <input type="hidden" id="editId">
-        <input type="text" id="editTitle" placeholder="Название" required>
-        <select id="editType" required>
-          <option value="" disabled>Категория</option>
-          <option value="Спорт">Спорт</option>
-          <option value="Выставки">Выставки</option>
-        </select>
-        <input type="text" id="editDate" placeholder="Дата (например, 10 июля 2025)" required>
-        <input type="text" id="editLocation" placeholder="Место" required>
-        <textarea id="editDescription" placeholder="Описание" rows="3" required></textarea>
-        <button type="button" id="editImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Изменить изображение</button>
-        <img id="editPreviewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью" loading="lazy">
-        <input type="file" id="editImageInput" accept="image/*" class="hidden">
-        <button type="submit" class="bg-blue-500 text-white py-1 rounded-lg">Сохранить</button>
-        <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-1 rounded-lg mt-2">Отмена</button>
-      </form>
+  <div id="eventModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 id="modalTitle" class="text-lg font-bold"></h2>
+      <p id="modalDate"></p>
+      <p id="modalLocation"></p>
+      <p id="modalDescription"></p>
+      <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
+      <button class="bg-blue-500 text-white px-4 py-2 mt-4 rounded-lg" onclick="closeEventModal()">Закрыть</button>
     </div>
   </div>
 
-  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-5000">
-    <div class="modal-content rounded-lg p-3 w-11/12 max-w-[360px]">
-      <h2 id="modalTitle" class="text-sm font-bold text-white mb-2"></h2>
-      <p id="modalDate" class="text-xs text-gray-400 mb-1"></p>
-      <p id="modalLocation" class="text-xs text-gray-400 mb-1"></p>
-      <p id="modalDescription" class="text-xs text-gray-400 mb-2"></p>
-      <div class="flex flex-col space-y-2">
-        <button id="joinBtn" class="bg-blue-500 text-white py-1 rounded-lg hover:bg-blue-600 text-xs">Записаться</button>
-        <button id="shareBtn" class="bg-gray-600 text-white py-1 rounded-lg hover:bg-gray-700 text-xs">Поделиться</button>
-        <button id="closeModal" class="bg-gray-700 text-white py-1 rounded-lg hover:bg-gray-800 text-xs">Закрыть</button>
-      </div>
+  <div id="adminModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 class="text-lg font-bold">Админ-панель</h2>
+      <form id="eventForm">
+        <input type="text" id="eventId" placeholder="ID (например, event1)" class="border p-2 w-full mb-2">
+        <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
+        <input type="text" id="eventType" placeholder="Тип (Спорт, Выставки)" class="border p-2 w-full mb-2">
+        <input type="text" id="eventDate" placeholder="Дата (например, 2025-06-22)" class="border p-2 w-full mb-2">
+        <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
+        <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
+        <input type="file" id="eventImage" accept="image/*" class="mb-2">
+        <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded-lg">Добавить/Обновить</button>
+      </form>
+      <button class="bg-red-500 text-white px-4 py-2 mt-2 rounded-lg" onclick="closeAdminModal()">Закрыть</button>
     </div>
-  </div>
-
-  <div class="bottom-nav">
-    <button class="nav-btn active" data-tab="events" aria-label="Открыть раздел мероприятий">Мероприятия</button>
-    <button class="nav-btn hidden" data-tab="favorites" aria-label="Открыть избранное">Избранное</button>
-    <button class="nav-btn hidden" data-tab="map" aria-label="Открыть карту">Карта</button>
-    <button class="nav-btn hidden" data-tab="profile" aria-label="Открыть профиль">Профиль</button>
-    <button id="adminBtn" class="nav-btn hidden" data-tab="admin" aria-label="Открыть админ-панель">Админ</button>
   </div>
 
   <script>
-    const BACKEND_URL = 'https://smolville.onrender.com'; // Ваш реальный URL Render
-
+    const BACKEND_URL = 'https://smolville.onrender.com'; // Ваш бэкенд URL
     const tg = window.Telegram?.WebApp;
     if (!tg) {
       document.body.innerHTML = '<p class="text-center text-white">Ошибка: Запустите в Telegram WebApp</p>';
-      return;
+      throw new Error('Telegram WebApp not found');
     }
     tg.ready();
     tg.expand();
     tg.enableClosingConfirmation();
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    console.log('User ID:', user.id); // Для отладки: проверьте в DevTools, совпадает ли с adminId
-    const adminId = 366825437; // Измените на ваш ID, если нужно
+    console.log('User ID:', user.id); // Для отладки
+    const adminId = 366825437; // Замените на ваш Telegram ID
     const isAdmin = user.id === adminId;
-    console.log('Is Admin:', isAdmin); // Для отладки
+    console.log('Is Admin:', isAdmin);
     if (isAdmin) {
       document.getElementById('adminBtn').classList.remove('hidden');
     } else {
       console.log('Admin panel hidden - wrong user ID');
     }
 
-    // ... (остальной JS код такой же, как в предыдущем ответе, но с улучшенными ошибками)
-
-    // Пример улучшения в renderEvents():
     async function renderEvents() {
+      const eventsContainer = document.getElementById('events');
       eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
       try {
-        const data = await getCachedData('events', async () => {
-          console.log('Fetching events from:', `${BACKEND_URL}/api/events`);
-          const response = await fetchWithNetworkCheck(`${BACKEND_URL}/api/events`);
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Backend error:', errorText);
-            throw new Error(`Backend error: ${response.status} - ${errorText}`);
-          }
-          return await response.json();
-        });
-        // ... (остальной код без изменений)
+        const response = await fetch(`${BACKEND_URL}/api/events`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Backend error:', errorText);
+          throw new Error(`Backend error: ${response.status} - ${errorText}`);
+        }
+        const data = await response.json();
+        console.log('Events data:', data); // Для отладки
+        eventsContainer.innerHTML = '';
+        if (data.records && data.records.length > 0) {
+          data.records.forEach(record => {
+            const event = record.fields;
+            const div = document.createElement('div');
+            div.className = 'event-card p-2 fade-in';
+            div.innerHTML = `
+              <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
+              <p class="text-xs text-gray-400">${event.Date || 'Без даты'}</p>
+              <p class="text-xs text-gray-400">${event.Location || 'Без места'}</p>
+              <img src="${event.Image?.[0]?.url || ''}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+            `;
+            div.addEventListener('click', () => showEventModal(record));
+            eventsContainer.appendChild(div);
+          });
+        } else {
+          eventsContainer.innerHTML = '<p class="text-center text-gray-400">Мероприятия не найдены</p>';
+        }
       } catch (err) {
         console.error('Render events error:', err);
-        eventsContainer.innerHTML = `<p class="text-center text-gray-400">Ошибка загрузки: ${err.message}. Проверьте бэкенд на Render.</p>`;
-        tg.showAlert(`Ошибка: ${err.message}. Убедитесь, что бэкенд запущен.`);
+        eventsContainer.innerHTML = `<p class="text-center text-gray-400">Ошибка: ${err.message}</p>`;
+        tg.showAlert(`Ошибка загрузки мероприятий: ${err.message}`);
       }
     }
 
-    // Аналогично для других функций (renderAdBanner, uploadToBackend и т.д.) добавьте console.log и детальные ошибки
+    function showEventModal(record) {
+      const modal = document.getElementById('eventModal');
+      document.getElementById('modalTitle').textContent = record.fields.Title || 'Без названия';
+      document.getElementById('modalDate').textContent = record.fields.Date || 'Без даты';
+      document.getElementById('modalLocation').textContent = record.fields.Location || 'Без места';
+      document.getElementById('modalDescription').textContent = record.fields.Description || 'Без описания';
+      document.getElementById('modalImage').src = record.fields.Image?.[0]?.url || '';
+      modal.classList.remove('hidden');
+    }
 
-    // ... (полный JS из предыдущего ответа, вставьте сюда)
+    function closeEventModal() {
+      document.getElementById('eventModal').classList.add('hidden');
+    }
 
+    function showAdminModal() {
+      document.getElementById('adminModal').classList.remove('hidden');
+    }
+
+    function closeAdminModal() {
+      document.getElementById('adminModal').classList.add('hidden');
+    }
+
+    document.getElementById('eventForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData();
+      const eventData = {
+        fields: {
+          ID: document.getElementById('eventId').value,
+          Title: document.getElementById('eventTitle').value,
+          Type: document.getElementById('eventType').value,
+          Date: document.getElementById('eventDate').value,
+          Location: document.getElementById('eventLocation').value,
+          Description: document.getElementById('eventDescription').value
+        }
+      };
+      const imageFile = document.getElementById('eventImage').files[0];
+      if (imageFile) {
+        try {
+          const uploadForm = new FormData();
+          uploadForm.append('image', imageFile);
+          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
+            method: 'POST',
+            body: uploadForm
+          });
+          const uploadData = await uploadResponse.json();
+          if (uploadData.url) {
+            eventData.fields.Image = [{ url: uploadData.url }];
+          } else {
+            throw new Error('Ошибка загрузки изображения');
+          }
+        } catch (err) {
+          tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
+          return;
+        }
+      }
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData)
+        });
+        if (!response.ok) throw new Error('Ошибка добавления события');
+        tg.showAlert('Событие добавлено!');
+        closeAdminModal();
+        renderEvents();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+      }
+    });
+
+    // Запуск
     renderEvents();
-    renderAdBanner();
   </script>
 </body>
 </html>
