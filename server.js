@@ -8,14 +8,10 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware для JSON и статических файлов (если нужно)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Настройка multer для загрузки файлов
 const upload = multer({ dest: 'uploads/' });
 
-// Env vars (из Render)
 const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
@@ -30,12 +26,10 @@ if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
 const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
 const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
 
-// Корневой маршрут (чтобы избежать "Cannot GET /")
 app.get('/', (req, res) => {
   res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/upload');
 });
 
-// API для событий (GET all)
 app.get('/api/events', async (req, res) => {
   try {
     const response = await axios.get(EVENTS_URL, {
@@ -48,14 +42,10 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
-// POST new event
 app.post('/api/events', async (req, res) => {
   try {
     const response = await axios.post(EVENTS_URL, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
@@ -64,7 +54,6 @@ app.post('/api/events', async (req, res) => {
   }
 });
 
-// GET single event
 app.get('/api/events/:id', async (req, res) => {
   try {
     const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
@@ -77,14 +66,10 @@ app.get('/api/events/:id', async (req, res) => {
   }
 });
 
-// PATCH update event
 app.patch('/api/events/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
@@ -93,7 +78,6 @@ app.patch('/api/events/:id', async (req, res) => {
   }
 });
 
-// DELETE event
 app.delete('/api/events/:id', async (req, res) => {
   try {
     const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
@@ -106,7 +90,6 @@ app.delete('/api/events/:id', async (req, res) => {
   }
 });
 
-// API для рекламы (аналогично событиям)
 app.get('/api/ads', async (req, res) => {
   try {
     const response = await axios.get(ADS_URL, {
@@ -122,10 +105,7 @@ app.get('/api/ads', async (req, res) => {
 app.post('/api/ads', async (req, res) => {
   try {
     const response = await axios.post(ADS_URL, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
@@ -137,10 +117,7 @@ app.post('/api/ads', async (req, res) => {
 app.patch('/api/ads/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
@@ -149,7 +126,6 @@ app.patch('/api/ads/:id', async (req, res) => {
   }
 });
 
-// Загрузка изображения через ImgBB
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -161,7 +137,6 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
       headers: formData.getHeaders()
     });
-    // Удалить временный файл
     fs.unlinkSync(filePath);
     if (response.data.success) {
       res.json({ url: response.data.data.url });
@@ -170,12 +145,11 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     }
   } catch (error) {
     console.error('Upload error:', error.message);
-    if (req.file) fs.unlinkSync(req.file.path); // Cleanup
+    if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Создать папку uploads при старте (если нужно)
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
