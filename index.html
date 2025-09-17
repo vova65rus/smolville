@@ -10,13 +10,21 @@
     body {
       background-image: url('bg.png');
       background-repeat: repeat;
-      background-size: 50px 50px; 
+      background-size: 50px 50px;
+      color: #FFFFFF; /* Белый текст для основного контента */
+      font-family: Arial, sans-serif;
     }
     .event-card {
-      background: rgba(114, 122, 86, 0.5);
+      background: rgba(30, 30, 30, 0.7); /* Темно-серый полупрозрачный фон */
       border-radius: 8px;
       backdrop-filter: blur(5px);
       margin-bottom: 10px;
+    }
+    .event-card h3 {
+      color: #E5E7EB; /* Светло-серый для заголовков */
+    }
+    .event-card p {
+      color: #FFFFFF; /* Белый для текста */
     }
     .hidden {
       display: none;
@@ -34,8 +42,8 @@
       z-index: 1000;
     }
     .modal-content {
-      background: #f0f0f0; /* Светлый фон */
-      color: #333; /* Темный текст */
+      background: #F9FAFB; /* Светло-серый фон модали */
+      color: #1F2937; /* Темно-серый текст */
       padding: 20px;
       border-radius: 8px;
       max-width: 90%;
@@ -50,19 +58,26 @@
       to { opacity: 1; }
     }
     input, textarea, select {
-      background: #fff;
-      color: #333;
-      border: 1px solid #ccc;
+      background: #FFFFFF;
+      color: #1F2937;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      padding: 8px;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: #2563EB; /* Синий при фокусе */
+      outline: none;
     }
     .tab {
-      background: #e0e0e0;
-      color: #333;
+      background: #D1D5DB; /* Светло-серый для неактивных вкладок */
+      color: #1F2937;
       padding: 8px 16px;
       border-radius: 4px 4px 0 0;
       cursor: pointer;
     }
     .tab.active {
-      background: #fff;
+      background: #FFFFFF; /* Белый для активной вкладки */
+      color: #1F2937;
       font-weight: bold;
     }
     .tab-content {
@@ -78,7 +93,7 @@
     <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
     <h1 class="text-2xl font-bold text-center mb-4">Автомобильные события Сахалина</h1>
     <div id="events" class="grid grid-cols-1 gap-4"></div>
-    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg" onclick="showAdminModal()">Админ</button>
+    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" onclick="showAdminModal()">Админ</button>
   </div>
 
   <div id="eventModal" class="modal hidden">
@@ -88,7 +103,7 @@
       <p id="modalLocation"></p>
       <p id="modalDescription"></p>
       <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
-      <button class="bg-blue-500 text-white px-4 py-2 mt-4 rounded-lg" onclick="closeEventModal()">Закрыть</button>
+      <button class="bg-blue-600 text-white px-4 py-2 mt-4 rounded-lg hover:bg-blue-700" onclick="closeEventModal()">Закрыть</button>
     </div>
   </div>
 
@@ -119,14 +134,14 @@
           <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
           <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
           <input type="file" id="eventImage" accept="image/*" class="mb-2">
-          <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded-lg">Сохранить</button>
+          <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Сохранить</button>
         </form>
       </div>
       <div id="tab-settings" class="tab-content">
         <h3 class="text-md font-bold mb-2">Настройки</h3>
         <p>Пока нет доступных настроек. В будущем здесь можно добавить управление админами или рекламой.</p>
       </div>
-      <button class="bg-red-500 text-white px-4 py-2 mt-4 rounded-lg" onclick="closeAdminModal()">Закрыть</button>
+      <button class="bg-gray-500 text-white px-4 py-2 mt-4 rounded-lg hover:bg-gray-600" onclick="closeAdminModal()">Закрыть</button>
     </div>
   </div>
 
@@ -227,11 +242,11 @@
           data.records.forEach(record => {
             const event = record.fields || {};
             const div = document.createElement('div');
-            div.className = 'p-2 border-b';
+            div.className = 'p-2 border-b border-gray-300';
             div.innerHTML = `
               <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
-              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.Image?.[0]?.url || ''}')" class="bg-yellow-500 text-white px-2 py-1 rounded mr-2">Редактировать</button>
-              <button onclick="deleteEvent('${record.id}')" class="bg-red-500 text-white px-2 py-1 rounded">Удалить</button>
+              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.Image?.[0]?.url || ''}')" class="bg-amber-600 text-white px-2 py-1 rounded mr-2 hover:bg-amber-700">Редактировать</button>
+              <button onclick="deleteEvent('${record.id}')" class="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">Удалить</button>
             `;
             eventList.appendChild(div);
           });
@@ -343,7 +358,7 @@
             method: 'POST',
             body: uploadForm
           });
-          const uploadData = await uploadResponse.json();
+          const uploadData = await response.json();
           if (uploadData.url) {
             eventData.fields.Image = [{ url: uploadData.url }];
           } else {
