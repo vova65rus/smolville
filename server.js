@@ -1,55 +1,30 @@
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
 const multer = require('multer');
-const fs = require('fs');
 const FormData = require('form-data');
-const path = require('path');
-
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware для CORS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
-
+app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-const upload = multer({ dest: 'uploads/' });
+const upload = multer();
 
-// Env vars
-const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
-const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
-const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
-const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
+const AIRTABLE_EVENTS_TABLE_NAME = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
+const AIRTABLE_ADS_TABLE_NAME = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
+const BASE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}`;
+const EVENTS_URL = `${BASE_URL}/${AIRTABLE_EVENTS_TABLE_NAME}`;
+const ADS_URL = `${BASE_URL}/${AIRTABLE_ADS_TABLE_NAME}`;
 
-// Хардкод админа (можно перенести в env var ADMIN_ID)
-const ADMIN_ID = 366825437; // Замените на ваш ID
-
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
-  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
-  process.exit(1);
-}
-
-const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
-const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
-
-app.get('/', (req, res) => {
-  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/upload');
-});
-
-// Новый эндпоинт для проверки админа
 app.get('/api/is-admin', (req, res) => {
-  const userId = parseInt(req.query.userId, 10);
-  const isAdmin = userId === ADMIN_ID;
-  res.json({ isAdmin });
+  const userId = req.query.userId;
+  const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',') : [];
+  res.json({ isAdmin: adminIds.includes(userId) });
 });
 
-// API для событий
 app.get('/api/events', async (req, res) => {
   try {
     const response = await axios.get(EVENTS_URL, {
@@ -65,7 +40,7 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     const response = await axios.post(EVENTS_URL, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
@@ -74,26 +49,14 @@ app.post('/api/events', async (req, res) => {
   }
 });
 
-app.get('/api/events/:id', async (req, res) => {
+app.patch('/api/events/:id', async (req, res) => {
   try {
-    const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
+    const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Event GET error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.patch('/api/events/:id', async (req, res) => {
-  try {
-    const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Event PATCH error:', error.message);
+    console.error('Events PATCH error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -105,12 +68,11 @@ app.delete('/api/events/:id', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Event DELETE error:', error.message);
+    console.error('Events DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// API для рекламы (если нужно)
 app.get('/api/ads', async (req, res) => {
   try {
     const response = await axios.get(ADS_URL, {
@@ -125,8 +87,15 @@ app.get('/api/ads', async (req, res) => {
 
 app.post('/api/ads', async (req, res) => {
   try {
-    const response = await axios.post(ADS_URL, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+    const adData = {
+      fields: {
+        ID: req.body.fields.ID,
+        IMG: req.body.fields.Image,
+        URL: req.body.fields.Link
+      }
+    };
+    const response = await axios.post(ADS_URL, adData, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
@@ -137,8 +106,15 @@ app.post('/api/ads', async (req, res) => {
 
 app.patch('/api/ads/:id', async (req, res) => {
   try {
-    const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+    const adData = {
+      fields: {
+        ID: req.body.fields.ID,
+        IMG: req.body.fields.Image,
+        URL: req.body.fields.Link
+      }
+    };
+    const response = await axios.patch(`${ADS_URL}/${req.params.id}`, adData, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
@@ -147,40 +123,32 @@ app.patch('/api/ads/:id', async (req, res) => {
   }
 });
 
-// API для загрузки изображений
-app.post('/api/upload', upload.single('image'), async (req, res) => {
+app.delete('/api/ads/:id', async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
-    }
-    const filePath = req.file.path;
-    const formData = new FormData();
-    formData.append('image', fs.createReadStream(filePath));
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
+    const response = await axios.delete(`${ADS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
-    fs.unlinkSync(filePath);
-    if (response.data.success) {
-      res.json({ url: response.data.data.url });
-    } else {
-      res.status(500).json({ error: 'ImgBB upload failed' });
-    }
+    res.json(response.data);
   } catch (error) {
-    console.error('Upload error:', error.message);
-    if (req.file) fs.unlinkSync(req.file.path);
+    console.error('Ads DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Создание папки uploads
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+  try {
+    const form = new FormData();
+    form.append('file', req.file.buffer, req.file.originalname);
+    const uploadResponse = await axios.post('https://api.imgur.com/3/image', form, {
+      headers: { Authorization: `Client-ID ${process.env.IMGUR_CLIENT_ID}` }
+    });
+    res.json({ url: uploadResponse.data.data.link });
+  } catch (error) {
+    console.error('Upload error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-// Запуск сервера
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`Events URL: ${EVENTS_URL}`);
-  console.log(`Ads URL: ${ADS_URL}`);
 });
