@@ -1,145 +1,84 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
-const multer = require('multer');
+// server.js
+import express from 'express';
+import cors from 'cors';
+import fetch from 'node-fetch';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3000;
-
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
-// Настройка загрузки изображений через multer
-const upload = multer({ storage: multer.memoryStorage() });
+// Airtable и ImgBB
+const AIRTABLE_EVENTS_API_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/tbl1wzVpDRpInIpMY`;
+const AIRTABLE_ADS_API_URL = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/tblILQr1xFKmkLTKB`;
+const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
 
-// Переменные из .env
-const {
-  AIRTABLE_EVENTS_API_KEY,
-  AIRTABLE_ADS_API_KEY,
-  AIRTABLE_BASE_ID,
-  IMGBB_API_KEY,
-  ADMIN_ID
-} = process.env;
-
-const EVENTS_TABLE = 'tbl1wzVpDRpInIpMY';
-const ADS_TABLE = 'tblILQr1xFKmkLTKB';
-const AIRTABLE_EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
-const AIRTABLE_ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
-
-// --- Получение событий ---
+// --- РАБОТА С СОБЫТИЯМИ ---
 app.get('/events', async (req, res) => {
   try {
-    const response = await axios.get(AIRTABLE_EVENTS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
+    const response = await fetch(AIRTABLE_EVENTS_API_URL, {
+      headers: { Authorization: `Bearer ${process.env.AIRTABLE_EVENTS_API_KEY}` }
     });
-    res.json(response.data);
+    const data = await response.json();
+    res.json(data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка получения событий' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// --- Добавление события (админ) ---
 app.post('/events', async (req, res) => {
-  const { userId, title, type, date, location, description, imageUrl } = req.body;
-  if (Number(userId) !== Number(ADMIN_ID)) return res.status(403).json({ error: 'Нет доступа' });
-
-  const eventData = {
-    fields: {
-      ID: String(Math.floor(Math.random() * 1000000)),
-      Title: title,
-      Type: type,
-      Date: date,
-      Location: location,
-      Description: description,
-      Image: imageUrl ? [{ url: imageUrl }] : []
-    }
-  };
-
   try {
-    const response = await axios.post(AIRTABLE_EVENTS_URL, eventData, {
-      headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}`, 'Content-Type': 'application/json' }
+    const eventData = req.body; // ожидаем { fields: {...} }
+    const response = await fetch(AIRTABLE_EVENTS_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.AIRTABLE_EVENTS_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(eventData)
     });
-    res.json(response.data);
+    const data = await response.json();
+    res.json(data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка добавления события' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// --- Редактирование события ---
-app.patch('/events/:id', async (req, res) => {
-  const { userId, title, type, date, location, description, imageUrl } = req.body;
-  if (Number(userId) !== Number(ADMIN_ID)) return res.status(403).json({ error: 'Нет доступа' });
-
-  const eventData = {
-    fields: {
-      Title: title,
-      Type: type,
-      Date: date,
-      Location: location,
-      Description: description,
-      Image: imageUrl ? [{ url: imageUrl }] : []
-    }
-  };
-
-  try {
-    const response = await axios.patch(`${AIRTABLE_EVENTS_URL}/${req.params.id}`, eventData, {
-      headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}`, 'Content-Type': 'application/json' }
-    });
-    res.json(response.data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка редактирования события' });
-  }
-});
-
-// --- Удаление события ---
-app.delete('/events/:id', async (req, res) => {
-  const userId = req.body.userId;
-  if (Number(userId) !== Number(ADMIN_ID)) return res.status(403).json({ error: 'Нет доступа' });
-
-  try {
-    const response = await axios.delete(`${AIRTABLE_EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка удаления события' });
-  }
-});
-
-// --- Получение рекламы ---
+// --- РАБОТА С РЕКЛАМОЙ ---
 app.get('/ads', async (req, res) => {
   try {
-    const response = await axios.get(AIRTABLE_ADS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` }
+    const response = await fetch(AIRTABLE_ADS_API_URL, {
+      headers: { Authorization: `Bearer ${process.env.AIRTABLE_ADS_API_KEY}` }
     });
-    res.json(response.data);
+    const data = await response.json();
+    res.json(data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка получения рекламы' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// --- Загрузка изображения на ImgBB ---
-app.post('/upload', upload.single('image'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
+// --- ЗАГРУЗКА ИЗОБРАЖЕНИЙ В IMGBB ---
+app.post('/upload-image', async (req, res) => {
   try {
-    const base64 = req.file.buffer.toString('base64');
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, null, {
-      params: { image: base64 }
+    const { imageBase64 } = req.body; // ожидаем base64 картинки
+    const formData = new URLSearchParams();
+    formData.append('image', imageBase64);
+
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+      method: 'POST',
+      body: formData
     });
-    res.json({ url: response.data.data.url });
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error?.message || 'Ошибка загрузки изображения');
+    res.json({ url: data.data.url });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка загрузки изображения' });
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+// --- ЗАПУСК СЕРВЕРА ---
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
