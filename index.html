@@ -37,8 +37,8 @@
       z-index: 1000;
     }
     .modal-content {
-      background: #f0f0f0; /* Светлый фон для лучшей читаемости */
-      color: #333; /* Темный текст для контраста */
+      background: #f0f0f0; /* Светлый фон */
+      color: #333; /* Темный текст */
       padding: 20px;
       border-radius: 8px;
       max-width: 90%;
@@ -53,9 +53,26 @@
       to { opacity: 1; }
     }
     input, textarea, select {
-      background: #fff; /* Белый фон для полей ввода */
-      color: #333; /* Темный текст */
-      border: 1px solid #ccc; /* Светлая граница */
+      background: #fff;
+      color: #333;
+      border: 1px solid #ccc;
+    }
+    .tab {
+      background: #e0e0e0;
+      color: #333;
+      padding: 8px 16px;
+      border-radius: 4px 4px 0 0;
+      cursor: pointer;
+    }
+    .tab.active {
+      background: #fff;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
     }
   </style>
 </head>
@@ -80,30 +97,44 @@
 
   <div id="adminModal" class="modal hidden">
     <div class="modal-content">
-      <h2 class="text-lg font-bold">Админ-панель</h2>
-      <div id="eventList" class="mb-4"></div>
-      <h3 class="text-md font-bold mt-4">Добавить/Редактировать событие</h3>
-      <form id="eventForm">
-        <input type="hidden" id="eventRecordId">
-        <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
-        <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
-        <select id="eventType" class="border p-2 w-full mb-2">
-          <option value="">Выберите тип</option>
-          <option value="Спорт">Спорт</option>
-          <option value="Выставки">Выставки</option>
-        </select>
-        <input type="date" id="eventDate" class="border p-2 w-full mb-2">
-        <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
-        <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
-        <input type="file" id="eventImage" accept="image/*" class="mb-2">
-        <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded-lg">Сохранить</button>
-      </form>
-      <button class="bg-red-500 text-white px-4 py-2 mt-2 rounded-lg" onclick="closeAdminModal()">Закрыть</button>
+      <h2 class="text-lg font-bold mb-4">Админ-панель</h2>
+      <div class="flex mb-4">
+        <div class="tab active" onclick="showTab('tab-list')">Список событий</div>
+        <div class="tab" onclick="showTab('tab-form')">Добавить/Редактировать</div>
+        <div class="tab" onclick="showTab('tab-settings')">Настройки</div>
+      </div>
+      <div id="tab-list" class="tab-content active">
+        <h3 class="text-md font-bold mb-2">Список событий</h3>
+        <div id="eventList" class="mb-4"></div>
+      </div>
+      <div id="tab-form" class="tab-content">
+        <h3 class="text-md font-bold mb-2">Добавить/Редактировать событие</h3>
+        <form id="eventForm">
+          <input type="hidden" id="eventRecordId">
+          <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
+          <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
+          <select id="eventType" class="border p-2 w-full mb-2">
+            <option value="">Выберите тип</option>
+            <option value="Спорт">Спорт</option>
+            <option value="Выставки">Выставки</option>
+          </select>
+          <input type="date" id="eventDate" class="border p-2 w-full mb-2">
+          <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
+          <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
+          <input type="file" id="eventImage" accept="image/*" class="mb-2">
+          <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded-lg">Сохранить</button>
+        </form>
+      </div>
+      <div id="tab-settings" class="tab-content">
+        <h3 class="text-md font-bold mb-2">Настройки</h3>
+        <p>Пока нет доступных настроек. В будущем здесь можно добавить управление админами или рекламой.</p>
+      </div>
+      <button class="bg-red-500 text-white px-4 py-2 mt-4 rounded-lg" onclick="closeAdminModal()">Закрыть</button>
     </div>
   </div>
 
   <script>
-    const BACKEND_URL = 'https://smolville.onrender.com'; // Ваш бэкенд URL
+    const BACKEND_URL = 'https://smolville.onrender.com';
     const tg = window.Telegram?.WebApp;
     if (!tg) {
       document.body.innerHTML = '<p class="text-center text-white">Ошибка: Запустите в Telegram WebApp</p>';
@@ -113,7 +144,7 @@
     tg.expand();
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    console.log('User ID:', user.id); // Для отладки
+    console.log('User ID:', user.id);
 
     async function checkIsAdmin(userId) {
       try {
@@ -148,9 +179,7 @@
       const eventsContainer = document.getElementById('events');
       eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, {
-          mode: 'cors'
-        });
+        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Backend error:', errorText);
@@ -160,7 +189,6 @@
         console.log('Events data:', data);
         eventsContainer.innerHTML = '';
         if (data.records && Array.isArray(data.records) && data.records.length > 0) {
-          // Сортировка по дате (от ближайших к дальним)
           data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
             console.log('Processing record:', record);
@@ -191,16 +219,13 @@
       const eventList = document.getElementById('eventList');
       eventList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, {
-          mode: 'cors'
-        });
+        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (!response.ok) {
           throw new Error('Ошибка загрузки ивентов');
         }
         const data = await response.json();
         eventList.innerHTML = '';
         if (data.records && data.records.length > 0) {
-          // Сортировка по дате (от ближайших к дальним)
           data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
             const event = record.fields || {};
@@ -221,6 +246,16 @@
       }
     }
 
+    function showTab(tabId) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      if (tabId === 'tab-list') {
+        renderAdminEvents();
+      }
+    }
+
     function showEventModal(record) {
       const modal = document.getElementById('eventModal');
       const event = record.fields || {};
@@ -237,7 +272,7 @@
     }
 
     function showAdminModal() {
-      renderAdminEvents();
+      showTab('tab-list');
       clearForm();
       document.getElementById('adminModal').classList.remove('hidden');
     }
@@ -265,8 +300,8 @@
       document.getElementById('eventDate').value = date;
       document.getElementById('eventLocation').value = location;
       document.getElementById('eventDescription').value = description;
-      // Для изображения нельзя заполнить файл, но можно показать текущее
       alert('Текущее изображение: ' + imageUrl);
+      showTab('tab-form');
     }
 
     async function deleteEvent(recordId) {
@@ -288,7 +323,7 @@
       e.preventDefault();
       let eventId = document.getElementById('eventId').value;
       if (!eventId) {
-        eventId = String(Math.floor(Math.random() * 1000000)); // Автоматическая генерация ID
+        eventId = String(Math.floor(Math.random() * 1000000));
         document.getElementById('eventId').value = eventId;
       }
       const recordId = document.getElementById('eventRecordId').value;
@@ -335,6 +370,7 @@
         clearForm();
         renderAdminEvents();
         renderEvents();
+        showTab('tab-list');
       } catch (err) {
         alert(`Ошибка: ${err.message}`);
       }
