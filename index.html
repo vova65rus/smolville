@@ -9,17 +9,22 @@
   <style>
     body {
       background-image: url('bg.png');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      color: white;
+      background-repeat: repeat;
+      background-size: 50px 50px;
+      color: #FFFFFF; /* Белый текст для основного контента */
       font-family: Arial, sans-serif;
     }
     .event-card {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(30, 30, 30, 0.7); /* Темно-серый полупрозрачный фон */
       border-radius: 8px;
       backdrop-filter: blur(5px);
       margin-bottom: 10px;
+    }
+    .event-card h3 {
+      color: #E5E7EB; /* Светло-серый для заголовков */
+    }
+    .event-card p {
+      color: #FFFFFF; /* Белый для текста */
     }
     .hidden {
       display: none;
@@ -37,8 +42,8 @@
       z-index: 1000;
     }
     .modal-content {
-      background: white;
-      color: black;
+      background: #F9FAFB; /* Светло-серый фон модали */
+      color: #1F2937; /* Темно-серый текст */
       padding: 20px;
       border-radius: 8px;
       max-width: 90%;
@@ -52,14 +57,43 @@
       from { opacity: 0; }
       to { opacity: 1; }
     }
+    input, textarea, select {
+      background: #FFFFFF;
+      color: #1F2937;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      padding: 8px;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: #2563EB; /* Синий при фокусе */
+      outline: none;
+    }
+    .tab {
+      background: #D1D5DB; /* Светло-серый для неактивных вкладок */
+      color: #1F2937;
+      padding: 8px 16px;
+      border-radius: 4px 4px 0 0;
+      cursor: pointer;
+    }
+    .tab.active {
+      background: #FFFFFF; /* Белый для активной вкладки */
+      color: #1F2937;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
   <div class="container mx-auto p-4 flex-grow">
     <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
-    <h1 class="text-2xl font-bold text-center mb-4">Smolville Events</h1>
+    <h1 class="text-2xl font-bold text-center mb-4">Автомобильные события Сахалина</h1>
     <div id="events" class="grid grid-cols-1 gap-4"></div>
-    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg" onclick="showAdminModal()">Админ</button>
+    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" onclick="showAdminModal()">Админ</button>
   </div>
 
   <div id="eventModal" class="modal hidden">
@@ -69,32 +103,50 @@
       <p id="modalLocation"></p>
       <p id="modalDescription"></p>
       <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
-      <button class="bg-blue-500 text-white px-4 py-2 mt-4 rounded-lg" onclick="closeEventModal()">Закрыть</button>
+      <button class="bg-blue-600 text-white px-4 py-2 mt-4 rounded-lg hover:bg-blue-700" onclick="closeEventModal()">Закрыть</button>
     </div>
   </div>
 
   <div id="adminModal" class="modal hidden">
     <div class="modal-content">
-      <h2 class="text-lg font-bold">Админ-панель</h2>
-      <div id="eventList" class="mb-4"></div>
-      <h3 class="text-md font-bold mt-4">Добавить/Редактировать событие</h3>
-      <form id="eventForm">
-        <input type="text" id="eventRecordId" class="hidden">
-        <input type="text" id="eventId" placeholder="ID (например, event1)" class="border p-2 w-full mb-2">
-        <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
-        <input type="text" id="eventType" placeholder="Тип (Спорт, Выставки)" class="border p-2 w-full mb-2">
-        <input type="text" id="eventDate" placeholder="Дата (например, 2025-06-22)" class="border p-2 w-full mb-2">
-        <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
-        <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
-        <input type="file" id="eventImage" accept="image/*" class="mb-2">
-        <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded-lg">Сохранить</button>
-      </form>
-      <button class="bg-red-500 text-white px-4 py-2 mt-2 rounded-lg" onclick="closeAdminModal()">Закрыть</button>
+      <h2 class="text-lg font-bold mb-4">Админ-панель</h2>
+      <div class="flex mb-4">
+        <div class="tab active" onclick="showTab('tab-list')">Редактор событий</div>
+        <div class="tab" onclick="showTab('tab-form')">Добавить</div>
+        <div class="tab" onclick="showTab('tab-settings')">Настройки</div>
+      </div>
+      <div id="tab-list" class="tab-content active">
+        <h3 class="text-md font-bold mb-2">Список событий</h3>
+        <div id="eventList" class="mb-4"></div>
+      </div>
+      <div id="tab-form" class="tab-content">
+        <h3 class="text-md font-bold mb-2">Добавить событие</h3>
+        <form id="eventForm">
+          <input type="hidden" id="eventRecordId">
+          <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
+          <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
+          <select id="eventType" class="border p-2 w-full mb-2">
+            <option value="">Выберите тип</option>
+            <option value="Спорт">Спорт</option>
+            <option value="Выставки">Выставки</option>
+          </select>
+          <input type="date" id="eventDate" class="border p-2 w-full mb-2">
+          <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
+          <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
+          <input type="file" id="eventImage" accept="image/*" class="mb-2">
+          <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Сохранить</button>
+        </form>
+      </div>
+      <div id="tab-settings" class="tab-content">
+        <h3 class="text-md font-bold mb-2">Настройки</h3>
+        <p>Пока нет доступных настроек. В будущем здесь можно добавить управление админами или рекламой.</p>
+      </div>
+      <button class="bg-gray-500 text-white px-4 py-2 mt-4 rounded-lg hover:bg-gray-600" onclick="closeAdminModal()">Закрыть</button>
     </div>
   </div>
 
   <script>
-    const BACKEND_URL = 'https://smolville.onrender.com'; // Ваш бэкенд URL
+    const BACKEND_URL = 'https://smolville.onrender.com';
     const tg = window.Telegram?.WebApp;
     if (!tg) {
       document.body.innerHTML = '<p class="text-center text-white">Ошибка: Запустите в Telegram WebApp</p>';
@@ -104,7 +156,7 @@
     tg.expand();
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    console.log('User ID:', user.id); // Для отладки
+    console.log('User ID:', user.id);
 
     async function checkIsAdmin(userId) {
       try {
@@ -139,9 +191,7 @@
       const eventsContainer = document.getElementById('events');
       eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, {
-          mode: 'cors'
-        });
+        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Backend error:', errorText);
@@ -151,6 +201,7 @@
         console.log('Events data:', data);
         eventsContainer.innerHTML = '';
         if (data.records && Array.isArray(data.records) && data.records.length > 0) {
+          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
             console.log('Processing record:', record);
             const event = record.fields || {};
@@ -180,23 +231,22 @@
       const eventList = document.getElementById('eventList');
       eventList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, {
-          mode: 'cors'
-        });
+        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (!response.ok) {
           throw new Error('Ошибка загрузки ивентов');
         }
         const data = await response.json();
         eventList.innerHTML = '';
         if (data.records && data.records.length > 0) {
+          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
             const event = record.fields || {};
             const div = document.createElement('div');
-            div.className = 'p-2 border-b';
+            div.className = 'p-2 border-b border-gray-300';
             div.innerHTML = `
               <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
-              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.Image?.[0]?.url || ''}')" class="bg-yellow-500 text-white px-2 py-1 rounded mr-2">Редактировать</button>
-              <button onclick="deleteEvent('${record.id}')" class="bg-red-500 text-white px-2 py-1 rounded">Удалить</button>
+              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.Image?.[0]?.url || ''}')" class="bg-amber-600 text-white px-2 py-1 rounded mr-2 hover:bg-amber-700">Редактировать</button>
+              <button onclick="deleteEvent('${record.id}')" class="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">Удалить</button>
             `;
             eventList.appendChild(div);
           });
@@ -205,6 +255,16 @@
         }
       } catch (err) {
         alert(`Ошибка: ${err.message}`);
+      }
+    }
+
+    function showTab(tabId) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      if (tabId === 'tab-list') {
+        renderAdminEvents();
       }
     }
 
@@ -224,7 +284,7 @@
     }
 
     function showAdminModal() {
-      renderAdminEvents();
+      showTab('tab-list');
       clearForm();
       document.getElementById('adminModal').classList.remove('hidden');
     }
@@ -252,8 +312,8 @@
       document.getElementById('eventDate').value = date;
       document.getElementById('eventLocation').value = location;
       document.getElementById('eventDescription').value = description;
-      // Для изображения нельзя заполнить файл, но можно показать текущее
       alert('Текущее изображение: ' + imageUrl);
+      showTab('tab-form');
     }
 
     async function deleteEvent(recordId) {
@@ -273,10 +333,15 @@
 
     document.getElementById('eventForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      let eventId = document.getElementById('eventId').value;
+      if (!eventId) {
+        eventId = String(Math.floor(Math.random() * 1000000));
+        document.getElementById('eventId').value = eventId;
+      }
       const recordId = document.getElementById('eventRecordId').value;
       const eventData = {
         fields: {
-          ID: document.getElementById('eventId').value,
+          ID: eventId,
           Title: document.getElementById('eventTitle').value,
           Type: document.getElementById('eventType').value,
           Date: document.getElementById('eventDate').value,
@@ -293,7 +358,7 @@
             method: 'POST',
             body: uploadForm
           });
-          const uploadData = await uploadResponse.json();
+          const uploadData = await response.json();
           if (uploadData.url) {
             eventData.fields.Image = [{ url: uploadData.url }];
           } else {
@@ -317,6 +382,7 @@
         clearForm();
         renderAdminEvents();
         renderEvents();
+        showTab('tab-list');
       } catch (err) {
         alert(`Ошибка: ${err.message}`);
       }
