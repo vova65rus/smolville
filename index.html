@@ -99,7 +99,6 @@
     }
     tg.ready();
     tg.expand();
-    tg.enableClosingConfirmation();
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     console.log('User ID:', user.id); // Для отладки
@@ -116,7 +115,9 @@
       const eventsContainer = document.getElementById('events');
       eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events`);
+        const response = await fetch(`${BACKEND_URL}/api/events`, {
+          mode: 'cors' // Явно указываем режим CORS
+        });
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Backend error:', errorText);
@@ -145,7 +146,8 @@
       } catch (err) {
         console.error('Render events error:', err);
         eventsContainer.innerHTML = `<p class="text-center text-gray-400">Ошибка: ${err.message}</p>`;
-        tg.showAlert(`Ошибка загрузки мероприятий: ${err.message}`);
+        // Заменяем tg.showAlert на alert
+        alert(`Ошибка загрузки мероприятий: ${err.message}`);
       }
     }
 
@@ -200,7 +202,7 @@
             throw new Error('Ошибка загрузки изображения');
           }
         } catch (err) {
-          tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
+          alert(`Ошибка загрузки изображения: ${err.message}`);
           return;
         }
       }
@@ -211,11 +213,11 @@
           body: JSON.stringify(eventData)
         });
         if (!response.ok) throw new Error('Ошибка добавления события');
-        tg.showAlert('Событие добавлено!');
+        alert('Событие добавлено!');
         closeAdminModal();
         renderEvents();
       } catch (err) {
-        tg.showAlert(`Ошибка: ${err.message}`);
+        alert(`Ошибка: ${err.message}`);
       }
     });
 
