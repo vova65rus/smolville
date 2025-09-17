@@ -10,7 +10,7 @@ const port = process.env.PORT || 3000;
 
 // Middleware для CORS
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*'); // Разрешить все источники или укажите 'https://smolville-psi.vercel.app'
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   next();
@@ -20,11 +20,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const upload = multer({ dest: 'uploads/' });
 
+// Env vars
 const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
+
+// Хардкод админа (можно перенести в env var ADMIN_ID)
+const ADMIN_ID = 366825437; // Замените на ваш ID
 
 if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
   console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
@@ -38,6 +42,14 @@ app.get('/', (req, res) => {
   res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/upload');
 });
 
+// Новый эндпоинт для проверки админа
+app.get('/api/is-admin', (req, res) => {
+  const userId = parseInt(req.query.userId, 10);
+  const isAdmin = userId === ADMIN_ID;
+  res.json({ isAdmin });
+});
+
+// API для событий
 app.get('/api/events', async (req, res) => {
   try {
     const response = await axios.get(EVENTS_URL, {
@@ -53,10 +65,7 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     const response = await axios.post(EVENTS_URL, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
@@ -80,10 +89,7 @@ app.get('/api/events/:id', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
@@ -104,6 +110,7 @@ app.delete('/api/events/:id', async (req, res) => {
   }
 });
 
+// API для рекламы (если нужно)
 app.get('/api/ads', async (req, res) => {
   try {
     const response = await axios.get(ADS_URL, {
@@ -119,10 +126,7 @@ app.get('/api/ads', async (req, res) => {
 app.post('/api/ads', async (req, res) => {
   try {
     const response = await axios.post(ADS_URL, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
@@ -134,10 +138,7 @@ app.post('/api/ads', async (req, res) => {
 app.patch('/api/ads/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
@@ -146,6 +147,7 @@ app.patch('/api/ads/:id', async (req, res) => {
   }
 });
 
+// API для загрузки изображений
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -170,11 +172,13 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
+// Создание папки uploads
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(UploadsDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Запуск сервера
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   console.log(`Events URL: ${EVENTS_URL}`);
