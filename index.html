@@ -10,7 +10,7 @@
     body {
       background-image: url('bg.png');
       background-repeat: repeat;
-      background-size: 200px 200px;
+      background-size: 50px 50px;
       color: #FFFFFF;
       font-family: Arial, sans-serif;
     }
@@ -21,8 +21,8 @@
       margin-bottom: 10px;
     }
     .ad-card {
-      background: rgba(50, 50, 50, 0.7); /* Чуть светлее для отличия от событий */
-      border: 2px solid #2563EB; /* Синяя рамка для выделения рекламы */
+      background: rgba(50, 50, 50, 0.7);
+      border: 2px solid #2563EB;
       border-radius: 8px;
       margin-bottom: 10px;
     }
@@ -153,10 +153,9 @@
         <form id="adForm">
           <input type="hidden" id="adRecordId">
           <input type="text" id="adId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
-          <input type="text" id="adTitle" placeholder="Заголовок" class="border p-2 w-full mb-2">
-          <textarea id="adDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
           <input type="file" id="adImage" accept="image/*" class="mb-2">
-          <input type="text" id="adLink" placeholder="Ссылка (например, https://t.me/...)" class="border p-2 w-full mb-2">
+          <input type="text" id="adImageUrl" placeholder="Текущий URL изображения (если есть)" class="border p-2 w-full mb-2" readonly>
+          <input type="url" id="adLink" placeholder="Ссылка (например, https://t.me/...)" class="border p-2 w-full mb-2" required>
           <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Сохранить рекламу</button>
         </form>
       </div>
@@ -213,8 +212,8 @@
         const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('Backend error:', errorText);
-          throw new Error(`Backend error: ${response.status} - ${errorText}`);
+          console.error('Events GET error:', errorText);
+          throw new Error(`Events error: ${response.status} - ${errorText}`);
         }
         const data = await response.json();
         console.log('Events data:', data);
@@ -222,7 +221,7 @@
         if (data.records && Array.isArray(data.records) && data.records.length > 0) {
           data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
-            console.log('Processing record:', record);
+            console.log('Processing event:', record);
             const event = record.fields || {};
             const div = document.createElement('div');
             div.className = 'event-card p-2 fade-in';
@@ -236,7 +235,7 @@
             eventsContainer.appendChild(div);
           });
         } else {
-          console.log('No records found');
+          console.log('No events found');
           eventsContainer.innerHTML = '<p class="text-center text-gray-400">Мероприятия не найдены</p>';
         }
       } catch (err) {
@@ -253,25 +252,32 @@
         const response = await fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' });
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('Ads error:', errorText);
+          console.error('Ads GET error:', errorText);
           throw new Error(`Ads error: ${response.status} - ${errorText}`);
         }
         const data = await response.json();
         console.log('Ads data:', data);
         adsContainer.innerHTML = '';
         if (data.records && Array.isArray(data.records) && data.records.length > 0) {
-          data.records.forEach(record => {
+          const validAds = data.records.filter(record => {
             const ad = record.fields || {};
-            const div = document.createElement('div');
-            div.className = 'ad-card p-2 fade-in';
-            div.innerHTML = `
-              <h3 class="text-sm font-bold">${ad.Title || 'Без названия'}</h3>
-              <p class="text-xs text-gray-400">${ad.Description || 'Без описания'}</p>
-              <img src="${ad.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
-              ${ad.Link ? `<a href="${ad.Link}" target="_blank" class="bg-blue-600 text-white px-2 py-1 rounded mt-2 inline-block hover:bg-blue-700">Подробнее</a>` : ''}
-            `;
-            adsContainer.appendChild(div);
+            return ad.IMG?.[0]?.url || ad.URL; // Показываем только записи с изображением или ссылкой
           });
+          if (validAds.length > 0) {
+            validAds.forEach(record => {
+              const ad = record.fields || {};
+              const div = document.createElement('div');
+              div.className = 'ad-card p-2 fade-in';
+              div.innerHTML = `
+                <img src="${ad.IMG?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+                ${ad.URL ? `<a href="${ad.URL}" target="_blank" class="bg-blue-600 text-white px-2 py-1 rounded mt-2 inline-block hover:bg-blue-700">Подробнее</a>` : ''}
+              `;
+              adsContainer.appendChild(div);
+            });
+          } else {
+            console.log('No valid ads found');
+            adsContainer.innerHTML = '<p class="text-center text-gray-400">Реклама не найдена</p>';
+          }
         } else {
           console.log('No ads found');
           adsContainer.innerHTML = '<p class="text-center text-gray-400">Реклама не найдена</p>';
@@ -309,6 +315,7 @@
           eventList.innerHTML = '<p class="text-center text-gray-400">Ивенты не найдены</p>';
         }
       } catch (err) {
+        console.error('Render admin events error:', err);
         alert(`Ошибка: ${err.message}`);
       }
     }
@@ -322,23 +329,33 @@
           throw new Error('Ошибка загрузки рекламы');
         }
         const data = await response.json();
+        console.log('Admin ads data:', data);
         adList.innerHTML = '';
         if (data.records && data.records.length > 0) {
-          data.records.forEach(record => {
+          const validAds = data.records.filter(record => {
             const ad = record.fields || {};
-            const div = document.createElement('div');
-            div.className = 'p-2 border-b border-gray-300';
-            div.innerHTML = `
-              <p class="text-sm">${ad.Title || 'Без названия'}</p>
-              <button onclick="editAd('${record.id}', '${ad.ID}', '${ad.Title}', '${ad.Description}', '${ad.Image?.[0]?.url || ''}', '${ad.Link || ''}')" class="bg-amber-600 text-white px-2 py-1 rounded mr-2 hover:bg-amber-700">Редактировать</button>
-              <button onclick="deleteAd('${record.id}')" class="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">Удалить</button>
-            `;
-            adList.appendChild(div);
+            return ad.IMG?.[0]?.url || ad.URL;
           });
+          if (validAds.length > 0) {
+            validAds.forEach(record => {
+              const ad = record.fields || {};
+              const div = document.createElement('div');
+              div.className = 'p-2 border-b border-gray-300';
+              div.innerHTML = `
+                <p class="text-sm">${ad.URL || 'Без ссылки'}</p>
+                <button onclick="editAd('${record.id}', '${ad.ID}', '${ad.IMG?.[0]?.url || ''}', '${ad.URL || ''}')" class="bg-amber-600 text-white px-2 py-1 rounded mr-2 hover:bg-amber-700">Редактировать</button>
+                <button onclick="deleteAd('${record.id}')" class="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">Удалить</button>
+              `;
+              adList.appendChild(div);
+            });
+          } else {
+            adList.innerHTML = '<p class="text-center text-gray-400">Реклама не найдена</p>';
+          }
         } else {
           adList.innerHTML = '<p class="text-center text-gray-400">Реклама не найдена</p>';
         }
       } catch (err) {
+        console.error('Render admin ads error:', err);
         alert(`Ошибка: ${err.message}`);
       }
     }
@@ -395,9 +412,8 @@
     function clearAdForm() {
       document.getElementById('adRecordId').value = '';
       document.getElementById('adId').value = '';
-      document.getElementById('adTitle').value = '';
-      document.getElementById('adDescription').value = '';
       document.getElementById('adImage').value = '';
+      document.getElementById('adImageUrl').value = '';
       document.getElementById('adLink').value = '';
     }
 
@@ -413,13 +429,12 @@
       showTab('tab-form');
     }
 
-    function editAd(recordId, id, title, description, imageUrl, link) {
+    function editAd(recordId, id, imageUrl, link) {
+      console.log('Editing ad:', { recordId, id, imageUrl, link });
       document.getElementById('adRecordId').value = recordId;
       document.getElementById('adId').value = id;
-      document.getElementById('adTitle').value = title;
-      document.getElementById('adDescription').value = description;
-      document.getElementById('adLink').value = link;
-      alert('Текущее изображение: ' + imageUrl);
+      document.getElementById('adImageUrl').value = imageUrl || '';
+      document.getElementById('adLink').value = link || '';
       showTab('tab-settings');
     }
 
@@ -434,6 +449,7 @@
         renderAdminEvents();
         renderEvents();
       } catch (err) {
+        console.error('Delete event error:', err);
         alert(`Ошибка: ${err.message}`);
       }
     }
@@ -449,6 +465,7 @@
         renderAdminAds();
         renderAds();
       } catch (err) {
+        console.error('Delete ad error:', err);
         alert(`Ошибка: ${err.message}`);
       }
     }
@@ -487,6 +504,7 @@
             throw new Error('Ошибка загрузки изображения');
           }
         } catch (err) {
+          console.error('Event image upload error:', err);
           alert(`Ошибка загрузки изображения: ${err.message}`);
           return;
         }
@@ -505,7 +523,8 @@
         renderAdminEvents();
         renderEvents();
         showTab('tab-list');
-      } catch (err) {
+      } @catch (err) {
+        console.error('Event save error:', err);
         alert(`Ошибка: ${err.message}`);
       }
     });
@@ -521,9 +540,7 @@
       const adData = {
         fields: {
           ID: adId,
-          Title: document.getElementById('adTitle').value,
-          Description: document.getElementById('adDescription').value,
-          Link: document.getElementById('adLink').value
+          URL: document.getElementById('adLink').value
         }
       };
       const imageFile = document.getElementById('adImage').files[0];
@@ -537,18 +554,22 @@
           });
           const uploadData = await uploadResponse.json();
           if (uploadData.url) {
-            adData.fields.Image = [{ url: uploadData.url }];
+            adData.fields.IMG = [{ url: uploadData.url }];
           } else {
             throw new Error('Ошибка загрузки изображения');
           }
         } catch (err) {
+          console.error('Ad image upload error:', err);
           alert(`Ошибка загрузки изображения: ${err.message}`);
           return;
         }
+      } else if (document.getElementById('adImageUrl').value) {
+        adData.fields.IMG = [{ url: document.getElementById('adImageUrl').value }];
       }
       try {
         const method = recordId ? 'PATCH' : 'POST';
         const url = recordId ? `${BACKEND_URL}/api/ads/${recordId}` : `${BACKEND_URL}/api/ads`;
+        console.log('Saving ad:', adData);
         const response = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
@@ -561,6 +582,7 @@
         renderAds();
         showTab('tab-settings');
       } catch (err) {
+        console.error('Ad save error:', err);
         alert(`Ошибка: ${err.message}`);
       }
     });
