@@ -9,10 +9,9 @@
   <style>
     body {
       background-image: url('bg.png');
-      background-repeat: repeat;         /* включаем повтор */
-      background-size: auto;             /* убираем cover */
-      background-position: top left;     /* точка начала паттерна */
-      background-attachment: scroll;     /* fixed не нужен, если фон — паттерн */
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
       color: white;
       font-family: Arial, sans-serif;
     }
@@ -38,8 +37,8 @@
       z-index: 1000;
     }
     .modal-content {
-      background: white;
-      color: black;
+      background: #f0f0f0; /* Светлый фон для лучшей читаемости */
+      color: #333; /* Темный текст для контраста */
       padding: 20px;
       border-radius: 8px;
       max-width: 90%;
@@ -52,6 +51,11 @@
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
+    }
+    input, textarea, select {
+      background: #fff; /* Белый фон для полей ввода */
+      color: #333; /* Темный текст */
+      border: 1px solid #ccc; /* Светлая граница */
     }
   </style>
 </head>
@@ -80,11 +84,15 @@
       <div id="eventList" class="mb-4"></div>
       <h3 class="text-md font-bold mt-4">Добавить/Редактировать событие</h3>
       <form id="eventForm">
-        <input type="text" id="eventRecordId" class="hidden">
-        <input type="text" id="eventId" placeholder="ID (например, event1)" class="border p-2 w-full mb-2">
+        <input type="hidden" id="eventRecordId">
+        <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
         <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
-        <input type="text" id="eventType" placeholder="Тип (Спорт, Выставки)" class="border p-2 w-full mb-2">
-        <input type="text" id="eventDate" placeholder="Дата (например, 2025-06-22)" class="border p-2 w-full mb-2">
+        <select id="eventType" class="border p-2 w-full mb-2">
+          <option value="">Выберите тип</option>
+          <option value="Спорт">Спорт</option>
+          <option value="Выставки">Выставки</option>
+        </select>
+        <input type="date" id="eventDate" class="border p-2 w-full mb-2">
         <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
         <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
         <input type="file" id="eventImage" accept="image/*" class="mb-2">
@@ -152,6 +160,8 @@
         console.log('Events data:', data);
         eventsContainer.innerHTML = '';
         if (data.records && Array.isArray(data.records) && data.records.length > 0) {
+          // Сортировка по дате (от ближайших к дальним)
+          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
             console.log('Processing record:', record);
             const event = record.fields || {};
@@ -190,6 +200,8 @@
         const data = await response.json();
         eventList.innerHTML = '';
         if (data.records && data.records.length > 0) {
+          // Сортировка по дате (от ближайших к дальним)
+          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
             const event = record.fields || {};
             const div = document.createElement('div');
@@ -274,10 +286,15 @@
 
     document.getElementById('eventForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      let eventId = document.getElementById('eventId').value;
+      if (!eventId) {
+        eventId = String(Math.floor(Math.random() * 1000000)); // Автоматическая генерация ID
+        document.getElementById('eventId').value = eventId;
+      }
       const recordId = document.getElementById('eventRecordId').value;
       const eventData = {
         fields: {
-          ID: document.getElementById('eventId').value,
+          ID: eventId,
           Title: document.getElementById('eventTitle').value,
           Type: document.getElementById('eventType').value,
           Date: document.getElementById('eventDate').value,
