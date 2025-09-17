@@ -1,185 +1,204 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Автомобильные события</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <style>
-    body {
-      background-image: url('https://raw.githubusercontent.com/vova65rus/smolville/main/bg.png');
-      background-repeat: repeat;
-      background-size: 50px auto;
-      background-color: #1c1c1e;
-      color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      touch-action: pan-y;
-      -webkit-font-smoothing: antialiased;
-      -webkit-tap-highlight-color: transparent;
-      overscroll-behavior: none;
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+tg.enableClosingConfirmation();
+
+const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
+const adminId = 366825437;
+const isAdmin = user.id === adminId;
+if (isAdmin) document.getElementById('adminBtn').classList.remove('hidden');
+
+// ====== Настройка API ======
+const AIRTABLE_EVENTS_API_KEY = 'YOUR_EVENTS_KEY';
+const AIRTABLE_ADS_API_KEY = 'YOUR_ADS_KEY';
+const AIRTABLE_BASE_ID = 'YOUR_BASE_ID';
+const AIRTABLE_EVENTS_TABLE_NAME = 'tbl1wzVpDRpInIpMY';
+const AIRTABLE_ADS_TABLE_NAME = 'tblILQr1xFKmkLTKB';
+const IMGBB_API_KEY = 'YOUR_IMGBB_KEY';
+
+const AIRTABLE_EVENTS_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_EVENTS_TABLE_NAME)}`;
+const AIRTABLE_ADS_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_ADS_TABLE_NAME)}`;
+
+const eventsContainer = document.getElementById('events');
+const adBanner = document.getElementById('adBanner');
+const adStatus = document.getElementById('adStatus');
+const eventModal = document.getElementById('eventModal');
+const closeModalBtn = document.getElementById('closeModal');
+const adminPanel = document.getElementById('adminPanel');
+const adminCloseBtn = document.getElementById('adminCloseBtn');
+const adminForm = document.getElementById('adminForm');
+const uploadImageBtn = document.getElementById('uploadImageBtn');
+const previewImage = document.getElementById('previewImage');
+const imageInput = document.getElementById('imageInput');
+const adForm = document.getElementById('adForm');
+const uploadAdImageBtn = document.getElementById('uploadAdImageBtn');
+const adPreviewImage = document.getElementById('adPreviewImage');
+const adImageInput = document.getElementById('adImageInput');
+const editModal = document.getElementById('editModal');
+const editForm = document.getElementById('editForm');
+const editImageBtn = document.getElementById('editImageBtn');
+const editPreviewImage = document.getElementById('editPreviewImage');
+const editImageInput = document.getElementById('editImageInput');
+const cancelEdit = document.getElementById('cancelEdit');
+const navButtons = document.querySelectorAll('.nav-btn');
+const adminTabs = document.querySelectorAll('.admin-tab');
+const manageList = document.getElementById('manageList');
+
+// ====== Вспомогательные функции ======
+function debounce(func, wait) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
+
+async function compressImage(file) {
+  if (file.size < 4 * 1024 * 1024) return file;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      let width = img.width;
+      let height = img.height;
+      const maxSize = 600;
+      if (width > maxSize || height > maxSize) {
+        const ratio = Math.min(maxSize / width, maxSize / height);
+        width *= ratio;
+        height *= ratio;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        blob => {
+          if (blob) resolve(new File([blob], file.name, { type: file.type, lastModified: Date.now() }));
+          else reject(new Error('Не удалось сжать изображение'));
+        },
+        file.type,
+        0.6
+      );
+    };
+    img.onerror = () => reject(new Error('Ошибка загрузки изображения'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function uploadToImgBB(file, button) {
+  const originalText = button.textContent;
+  button.textContent = 'Загрузка...';
+  button.classList.add('loading');
+  try {
+    if (!file.type.startsWith('image/')) throw new Error('Файл должен быть изображением');
+    if (file.size > 10 * 1024 * 1024) throw new Error('Файл превышает лимит в 10 МБ');
+    let uploadFile = file.size > 4 * 1024 * 1024 ? await compressImage(file) : file;
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, true);
+      const formData = new FormData();
+      formData.append('image', uploadFile);
+      xhr.timeout = 60000;
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          const data = JSON.parse(xhr.responseText);
+          if (data.success) resolve(data.data.url);
+          else reject(new Error(data.error?.message || 'Ошибка загрузки'));
+        } else reject(new Error(`Ошибка загрузки (HTTP ${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error('Ошибка сети'));
+      xhr.ontimeout = () => reject(new Error('Превышено время ожидания'));
+      xhr.send(formData);
+    });
+  } catch (err) {
+    tg.showAlert(`Ошибка загрузки изображения: ${err.message}`);
+    return null;
+  } finally {
+    button.textContent = originalText;
+    button.classList.remove('loading');
+  }
+}
+
+async function getCachedData(key, fetchFn, ttl = 300000) {
+  const cached = localStorage.getItem(key);
+  if (cached) {
+    const { data, timestamp } = JSON.parse(cached);
+    if (Date.now() - timestamp < ttl) return data;
+  }
+  const data = await fetchFn();
+  localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  return data;
+}
+
+// ====== События ======
+async function renderEvents() {
+  eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+  try {
+    const data = await getCachedData('events', async () => {
+      const res = await fetch(AIRTABLE_EVENTS_API_URL, { headers: { Authorization: `Bearer ${AIRTABLE_EVENTS_API_KEY}` } });
+      if (!res.ok) throw new Error(await res.text());
+      return await res.json();
+    });
+    const events = data.records.map(r => ({
+      id: r.id,
+      eventId: r.fields.ID,
+      title: r.fields.Title,
+      type: r.fields.Type,
+      date: r.fields.Date,
+      location: r.fields.Location,
+      description: r.fields.Description,
+      image: r.fields.Image?.[0]?.url || 'https://via.placeholder.com/120'
+    }));
+    eventsContainer.innerHTML = '';
+    if (events.length === 0) return eventsContainer.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
+    events.forEach((event, i) => {
+      const card = document.createElement('div');
+      card.className = 'event-card fade-in';
+      card.style.animationDelay = `${i*0.1}s`;
+      card.innerHTML = `
+        <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg" loading="lazy">
+        <div class="p-1 text-center">
+          <p class="text-xs font-semibold text-white">${event.date}</p>
+          <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
+        </div>
+      `;
+      card.addEventListener('click', () => showEventDetails(event));
+      eventsContainer.appendChild(card);
+    });
+  } catch(err) {
+    eventsContainer.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
+    console.error(err);
+  }
+}
+
+// ====== Реклама ======
+async function renderAdBanner() {
+  try {
+    const data = await getCachedData('ads', async () => {
+      const res = await fetch(AIRTABLE_ADS_API_URL, { headers: { Authorization: `Bearer ${AIRTABLE_ADS_API_KEY}` } });
+      if (!res.ok) throw new Error(await res.text());
+      return await res.json();
+    });
+    const ad = data.records.find(r => r.fields.ID === 'ad1');
+    if (ad && ad.fields.IMG?.[0] && ad.fields.URL) {
+      adBanner.innerHTML = `<a href="${ad.fields.URL}" target="_blank"><img src="${ad.fields.IMG[0].url}" class="object-cover h-full w-full" loading="lazy"></a>`;
+      adBanner.classList.remove('hidden');
+      adStatus.classList.add('hidden');
+    } else {
+      adBanner.classList.add('hidden');
+      adStatus.classList.remove('hidden');
+      adStatus.textContent = 'Реклама не настроена';
     }
-    body::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: -1;
-    }
-    @media (min-width: 768px) {
-      body { background-size: 70px auto; }
-    }
-    .event-card { background: #2c2c2e; border-radius: 10px; min-height: 120px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; cursor:pointer;}
-    .fade-in { animation: fadeIn 0.3s ease-in; }
-    @keyframes fadeIn { from {opacity:0; transform: translateY(8px);} to {opacity:1; transform: translateY(0);} }
-    ::-webkit-scrollbar { display: none; }
-    html { -ms-overflow-style: none; scrollbar-width: none; overscroll-behavior: none; }
-    .bottom-nav { position: fixed; bottom: env(safe-area-inset-bottom); width: 100%; background: #2c2c2e; border-top: 1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-around; padding:6px 0; z-index:5000; min-height:48px; box-sizing:border-box;}
-    .nav-btn { background:none; border:none; padding:6px; font-size:12px; color:#0a84ff; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; min-height:36px;}
-    .nav-btn.active { background:#0a84ff; color:#ffffff; }
-    .events-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; width:100%; padding:10px; box-sizing:border-box; }
-    .modal-content, .admin-content { background:#2c2c2e; border-radius:10px; box-sizing:border-box; }
-    .admin-content { position:fixed; top:10px; left:50%; transform:translateX(-50%); width:90%; max-width:360px; max-height:calc(100vh - 60px - env(safe-area-inset-bottom)); overflow-y:auto; padding:10px; z-index:4000; box-shadow:0 4px 12px rgba(0,0,0,0.5); overscroll-behavior:contain; }
-    .admin-close-btn { background:#ff3b30; color:#fff; padding:6px; border-radius:6px; text-align:center; cursor:pointer; font-size:12px; margin-top:10px; }
-    .admin-form input, .admin-form textarea, .admin-form select { background:#3a3a3c; color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:6px; width:100%; margin-bottom:8px; box-sizing:border-box; font-size:13px; }
-    .admin-form button, .admin-tab, .delete-btn, .edit-btn { background:#0a84ff; color:#fff; padding:6px; border-radius:6px; width:100%; text-align:center; cursor:pointer; font-size:13px; }
-    .admin-tab.active { background:#1a63d8; }
-    .delete-btn { background:#ff3b30; }
-    .edit-btn { background:#34c759; }
-    .admin-section { display:none; }
-    .admin-section.active { display:block; }
-    .hidden { display:none; }
-    .loading { position:relative; opacity:0.8; pointer-events:none; }
-    .loading::after { content:''; position:absolute; width:12px; height:12px; border:2px solid #fff; border-top:2px solid transparent; border-radius:50%; animation:spin 1s linear infinite; right:6px; top:50%; transform:translateY(-50%); }
-    @keyframes spin { 0%{transform:translateY(-50%) rotate(0deg);} 100%{transform:translateY(-50%) rotate(360deg);} }
-    img { border-radius:6px; }
-  </style>
-</head>
-<body>
-  <header class="flex justify-between items-center w-full px-2 pt-2 relative">
-    <div id="adBanner" class="max-w-[50px] h-[20px] overflow-hidden flex items-center z-20"></div>
-    <div onclick="window.location.href='https://t.me/smolville_drift'" class="cursor-pointer z-20">
-      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" class="h-[20px] w-auto object-contain" alt="Логотип Smolville Drift" loading="lazy">
-    </div>
-  </header>
+  } catch(err) {
+    adBanner.classList.add('hidden');
+    adStatus.classList.remove('hidden');
+    adStatus.textContent = 'Ошибка загрузки рекламы';
+    console.error(err);
+  }
+}
 
-  <h1 class="text-base font-bold text-white mt-2 mb-2 text-center">Автомобильные события</h1>
-  <div id="events" class="events-grid"></div>
-
-  <!-- Админка -->
-  <div id="adminPanel" class="admin-content hidden">
-    <h2 class="text-sm font-bold text-white mb-2">Админ-панель</h2>
-    <div class="flex space-x-2 mb-2 overflow-x-auto">
-      <button class="admin-tab active" data-tab="add">Добавить</button>
-      <button class="admin-tab" data-tab="manage">Управление</button>
-      <button class="admin-tab" data-tab="ads">Реклама</button>
-    </div>
-    <div id="addSection" class="admin-section active">
-      <form id="adminForm" class="admin-form">
-        <input type="text" id="eventTitle" placeholder="Название мероприятия" required>
-        <select id="eventType" required>
-          <option value="" disabled selected>Выбери категорию</option>
-          <option value="Спорт">Спорт</option>
-          <option value="Выставки">Выставки</option>
-        </select>
-        <input type="text" id="eventDate" placeholder="Дата" required>
-        <input type="text" id="eventLocation" placeholder="Место" required>
-        <textarea id="eventDescription" placeholder="Описание" rows="3" required></textarea>
-        <button type="button" id="uploadImageBtn" class="bg-gray-600 text-white py-1 rounded-lg mb-2">Загрузить изображение</button>
-        <img id="previewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью" loading="lazy">
-        <input type="file" id="imageInput" accept="image/*" class="hidden">
-        <button type="submit">Добавить</button>
-      </form>
-    </div>
-    <div id="manageSection" class="admin-section"><div id="manageList"></div></div>
-    <div id="adsSection" class="admin-section">
-      <p id="adStatus" class="text-xs text-gray-400 mb-2 hidden">Реклама не настроена</p>
-      <form id="adForm" class="admin-form">
-        <button type="button" id="uploadAdImageBtn">Загрузить изображение рекламы</button>
-        <img id="adPreviewImage" class="w-full rounded-lg mb-2 hidden" alt="Превью рекламы" loading="lazy">
-        <input type="file" id="adImageInput" accept="image/*" class="hidden">
-        <input type="text" id="adLinkUrl" placeholder="URL ссылки" required>
-        <button type="submit">Сохранить рекламу</button>
-      </form>
-    </div>
-    <button id="adminCloseBtn" class="admin-close-btn">Закрыть</button>
-  </div>
-  <button id="adminBtn" class="hidden fixed bottom-20 right-3 bg-blue-500 p-2 rounded-full z-50 text-white text-xs">Админка</button>
-
-  <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
-    tg.enableClosingConfirmation();
-
-    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    const adminId = 366825437; // твой id
-    const isAdmin = user.id === adminId;
-    if (isAdmin) document.getElementById('adminBtn').classList.remove('hidden');
-
-    const eventsContainer = document.getElementById('events');
-    const adminPanel = document.getElementById('adminPanel');
-    const adminBtn = document.getElementById('adminBtn');
-    const adminCloseBtn = document.getElementById('adminCloseBtn');
-    const adminTabs = document.querySelectorAll('.admin-tab');
-    const adminSections = document.querySelectorAll('.admin-section');
-
-    adminBtn.addEventListener('click', () => adminPanel.classList.toggle('hidden'));
-    adminCloseBtn.addEventListener('click', () => adminPanel.classList.add('hidden'));
-
-    adminTabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        adminTabs.forEach(t=>t.classList.remove('active'));
-        adminSections.forEach(s=>s.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.tab+'Section').classList.add('active');
-      });
-    });
-
-    const imageInput = document.getElementById('imageInput');
-    const uploadImageBtn = document.getElementById('uploadImageBtn');
-    const previewImage = document.getElementById('previewImage');
-    uploadImageBtn.addEventListener('click', () => imageInput.click());
-    imageInput.addEventListener('change', () => {
-      const file = imageInput.files[0];
-      if(!file) return;
-      if(!file.type.startsWith('image/')) return tg.showAlert('Выберите изображение');
-      const reader = new FileReader();
-      reader.onload = e => { previewImage.src = e.target.result; previewImage.classList.remove('hidden'); };
-      reader.readAsDataURL(file);
-    });
-
-    const adImageInput = document.getElementById('adImageInput');
-    const uploadAdImageBtn = document.getElementById('uploadAdImageBtn');
-    const adPreviewImage = document.getElementById('adPreviewImage');
-    uploadAdImageBtn.addEventListener('click', () => adImageInput.click());
-    adImageInput.addEventListener('change', () => {
-      const file = adImageInput.files[0];
-      if(!file) return;
-      if(!file.type.startsWith('image/')) return tg.showAlert('Выберите изображение рекламы');
-      const reader = new FileReader();
-      reader.onload = e => { adPreviewImage.src = e.target.result; adPreviewImage.classList.remove('hidden'); };
-      reader.readAsDataURL(file);
-    });
-
-    // Пример динамического рендера событий
-    const sampleEvents = [
-      {title:'Дрифт-событие', date:'21 сентября', location:'Аэродром Пушистый', type:'Спорт', description:'Соревнование по дрифту'},
-      {title:'Выставка авто', date:'5 октября', location:'Парковка ТЦ', type:'Выставки', description:'Лучшие машины региона'}
-    ];
-    sampleEvents.forEach(ev => {
-      const div = document.createElement('div');
-      div.className='event-card p-2 fade-in';
-      div.innerHTML = `<b>${ev.title}</b><p class="text-xs">${ev.date}, ${ev.location}</p>`;
-      div.addEventListener('click', () => tg.showAlert(ev.description));
-      eventsContainer.appendChild(div);
-    });
-  </script>
-</body>
-</html>
+// ====== Запуск ======
+renderEvents();
+renderAdBanner();
+</script>
