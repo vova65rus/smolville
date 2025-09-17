@@ -1,152 +1,521 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Афиша Авто-Ивентов</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f0f0f0; }
-        .event { background: white; margin: 10px 0; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .event h3 { margin: 0 0 10px; color: #333; }
-        .event p { margin: 5px 0; }
-        button { background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
-        button:hover { background: #006699; }
-        #voting { display: none; }
-        .nomination { display: block; margin: 10px 0; }
-        .tab { display: none; }
-        .tab.active { display: block; }
-        nav { text-align: center; margin-bottom: 20px; }
-        nav button { background: #ccc; margin: 0 5px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Афиши автоэнтузиастов</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .event-card {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      background: rgba(28, 28, 30, 0.9);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      touch-action: manipulation;
+    }
+    .event-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    html {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .logo {
+      max-width: 75px;
+      height: auto;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 16px;
+    }
+    .username {
+      font-size: 18px;
+      font-weight: 700;
+      color: #ffffff;
+      background: #2c2c2e;
+      padding: 4px 12px;
+      border-radius: 16px;
+    }
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      background: rgba(28, 28, 30, 0.9);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      padding-bottom: 10px;
+      z-index: 1000;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      padding: 10px;
+      font-size: 14px;
+      color: #0a84ff;
+      transition: background 0.2s ease;
+      border-radius: 8px;
+      cursor: pointer;
+      touch-action: manipulation;
+      min-height: 40px;
+    }
+    .nav-btn.active {
+      background: #0a84ff;
+      color: #ffffff;
+    }
+    .events-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      width: 100%;
+      padding: 0 16px 60px 16px;
+    }
+    .event-card {
+      aspect-ratio: 1/1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 10px;
+    }
+    .modal-content, .admin-content {
+      background: rgba(28, 28, 30, 0.95);
+      backdrop-filter: blur(10px);
+    }
+    .admin-content {
+      padding-bottom: 80px;
+      overflow-y: auto;
+      max-height: 80vh;
+      margin-top: 20px;
+    }
+    .admin-form input, .admin-form textarea, .admin-form select {
+      background: #2c2c2e;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    .admin-form button, .admin-tab, .delete-btn, .edit-btn {
+      background: #0a84ff;
+      color: #ffffff;
+      padding: 10px;
+      border-radius: 8px;
+      width: 100%;
+      text-align: center;
+      cursor: pointer;
+    }
+    .admin-tab.active {
+      background: #1a63d8;
+    }
+    .delete-btn {
+      background: #ff3b30;
+    }
+    .edit-btn {
+      background: #34c759;
+    }
+    .admin-section {
+      display: none;
+    }
+    .admin-section.active {
+      display: block;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
 </head>
 <body>
-    <nav>
-        <button onclick="showTab('events')">Афиша</button>
-        <button onclick="showTab('photos')">Фотоотчеты</button> <!-- Будущая вкладка -->
-    </nav>
-
-    <div id="events" class="tab active">
-        <h2>Локальные авто-ивенты</h2>
-        <div id="eventsList"></div>
-        <button id="getLocation" onclick="requestLocation()">Поделиться локацией для голосования</button>
+  <header class="header">
+    <span id="username" class="username">Гость</span>
+    <div onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/smolville_drift')" class="cursor-pointer">
+      <img src="https://raw.githubusercontent.com/vova65rus/smolville/main/logo.PNG" alt="Логотип Smolville Drift" class="logo">
     </div>
+  </header>
 
-    <div id="photos" class="tab">
-        <h2>Фотоотчеты (в разработке)</h2>
-        <p>Здесь будут фото с прошлых событий. Загрузка через Telegram-канал.</p>
+  <h1 class="text-xl font-bold text-white mt-4 mb-4 text-center">Афиши автоэнтузиастов</h1>
+
+  <div id="events" class="events-grid"></div>
+
+  <div id="adminPanel" class="admin-content rounded-lg p-6 w-11/12 max-w-md mx-auto hidden">
+    <h2 class="text-lg font-bold text-white mb-3">Админ-панель</h2>
+    <div class="flex space-x-2 mb-4">
+      <button class="admin-tab active" data-tab="add">Добавить</button>
+      <button class="admin-tab" data-tab="manage">Управление</button>
     </div>
-
-    <div id="voting" class="event">
-        <h3 id="voteTitle"></h3>
-        <div id="nominations"></div>
-        <button onclick="submitVote()">Голосовать</button>
+    <div id="addSection" class="admin-section active">
+      <form id="adminForm" class="admin-form">
+        <input type="text" id="eventTitle" placeholder="Название мероприятия" required>
+        <select id="eventType" required>
+          <option value="" disabled selected>Выбери категорию</option>
+          <option value="Спорт">Спорт</option>
+          <option value="Выставки">Выставка</option>
+        </select>
+        <input type="text" id="eventDate" placeholder="Дата (например, 10 июля 2025)" required>
+        <input type="text" id="eventLocation" placeholder="Место" required>
+        <textarea id="eventDescription" placeholder="Описание" rows="4" required></textarea>
+        <input type="text" id="eventImage" placeholder="URL изображения (добавьте в Airtable вручную)" disabled>
+        <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Добавить</button>
+      </form>
     </div>
+    <div id="manageSection" class="admin-section">
+      <div id="manageList" class="space-y-2"></div>
+    </div>
+  </div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand(); // Полноэкранный режим
+  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="modal-content rounded-lg p-6 w-11/12 max-w-md">
+      <h2 class="text-lg font-bold text-white mb-3">Редактировать</h2>
+      <form id="editForm" class="admin-form">
+        <input type="hidden" id="editId">
+        <input type="text" id="editTitle" placeholder="Название" required>
+        <select id="editType" required>
+          <option value="" disabled>Категория</option>
+          <option value="Спорт">Спорт</option>
+          <option value="Выставки">Выставка</option>
+        </select>
+        <input type="text" id="editDate" placeholder="Дата (например, 10 июля 2025)" required>
+        <input type="text" id="editLocation" placeholder="Место" required>
+        <textarea id="editDescription" placeholder="Описание" rows="4" required></textarea>
+        <input type="text" id="editImage" placeholder="URL изображения (добавьте в Airtable вручную)" disabled>
+        <button type="submit" class="bg-blue-500 text-white py-2 rounded-lg">Сохранить</button>
+        <button type="button" id="cancelEdit" class="bg-gray-700 text-white py-2 rounded-lg mt-2">Отмена</button>
+      </form>
+    </div>
+  </div>
 
-        let userLocation = null;
-        let currentEventId = null;
+  <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="modal-content rounded-lg p-6 w-11/12 max-w-md">
+      <h2 id="modalTitle" class="text-lg font-bold text-white mb-3"></h2>
+      <p id="modalDate" class="text-sm text-gray-400 mb-2"></p>
+      <p id="modalLocation" class="text-sm text-gray-400 mb-2"></p>
+      <p id="modalDescription" class="text-sm text-gray-400 mb-4"></p>
+      <div class="flex flex-col space-y-2">
+        <button id="joinBtn" class="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600">Записаться</button>
+        <button id="shareBtn" class="bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700">Поделиться</button>
+        <button id="closeModal" class="bg-gray-700 text-white py-2 rounded-lg hover:bg-gray-800">Закрыть</button>
+      </div>
+    </div>
+  </div>
 
-        // Функция показа вкладок
-        function showTab(tabName) {
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            if (tabName === 'photos') loadPhotos(); // В будущем
+  <div class="bottom-nav">
+    <button class="nav-btn active" data-tab="events">Мероприятия</button>
+    <button class="nav-btn" data-tab="favorites">Избранное</button>
+    <button class="nav-btn" data-tab="map">Карта</button>
+    <button class="nav-btn" data-tab="profile">Профиль</button>
+    <button id="adminBtn" class="nav-btn hidden" data-tab="admin">Админ</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+    tg.enableClosingConfirmation();
+
+    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
+    document.getElementById('username').textContent = user.first_name || 'Гость';
+    const adminId = 366825437; // Твой Telegram ID
+    const isAdmin = user.id === adminId;
+    if (isAdmin) {
+      document.getElementById('adminBtn').classList.remove('hidden');
+    }
+
+    
+    const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_TABLE_NAME)}`;
+
+    const eventsContainer = document.getElementById('events');
+    const eventModal = document.getElementById('eventModal');
+    const closeModalBtn = document.getElementById('closeModal');
+    const adminPanel = document.getElementById('adminPanel');
+    const adminForm = document.getElementById('adminForm');
+    const editModal = document.getElementById('editModal');
+    const editForm = document.getElementById('editForm');
+    const cancelEdit = document.getElementById('cancelEdit');
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const adminTabs = document.querySelectorAll('.admin-tab');
+    const manageList = document.getElementById('manageList');
+
+    navButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        navButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        eventsContainer.classList.add('hidden');
+        adminPanel.classList.add('hidden');
+        if (button.dataset.tab === 'events') {
+          eventsContainer.classList.remove('hidden');
+        } else if (button.dataset.tab === 'admin' && isAdmin) {
+          adminPanel.classList.remove('hidden');
+          renderManageList();
+        } else {
+          tg.showAlert(`Раздел "${button.dataset.tab}" в разработке!`);
         }
+      });
+    });
 
-        // Запрос локации
-        function requestLocation() {
-            tg.requestLocation().then(location => {
-                userLocation = { lat: location.latitude, long: location.longitude };
-                alert('Локация получена! Теперь можно голосовать.');
-            }).catch(err => alert('Локация не получена: ' + err));
+    adminTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        adminTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.admin-section').forEach(section => section.classList.remove('active'));
+        document.getElementById(`${tab.dataset.tab}Section`).classList.add('active');
+        if (tab.dataset.tab === 'manage') {
+          renderManageList();
         }
+      });
+    });
 
-        // Загрузка афиши
-        async function loadEvents() {
-            const response = await fetch('/api/events');
-            const events = await response.json();
-            const list = document.getElementById('eventsList');
-            list.innerHTML = '';
-            events.forEach(event => {
-                const div = document.createElement('div');
-                div.className = 'event';
-                div.innerHTML = `
-                    <h3>${event.title}</h3>
-                    <p>Дата: ${event.date}</p>
-                    <p>Место: ${event.location}</p>
-                    <p>${event.description}</p>
-                    ${event.hasVoting ? `<button onclick="showVoting(${event.id}, '${event.title}', ${event.lat}, ${event.long})">Голосовать</button>` : ''}
-                `;
-                list.appendChild(div);
+    adminForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const eventData = {
+          fields: {
+            ID: String(Math.floor(Math.random() * 1000000)),
+            Title: document.getElementById('eventTitle').value,
+            Type: document.getElementById('eventType').value,
+            Date: document.getElementById('eventDate').value,
+            Location: document.getElementById('eventLocation').value,
+            Description: document.getElementById('eventDescription').value,
+            Image: []
+          }
+        };
+        const response = await fetch(AIRTABLE_API_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(eventData)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        adminForm.reset();
+        tg.showAlert('Мероприятие добавлено! Добавьте изображение в Airtable вручную.');
+        navButtons.forEach(btn => btn.classList.remove('active'));
+        document.querySelector('[data-tab="events"]').classList.add('active');
+        eventsContainer.classList.remove('hidden');
+        adminPanel.classList.add('hidden');
+        renderEvents();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+        console.error('Ошибка:', err);
+      }
+    });
+
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const eventData = {
+          fields: {
+            ID: document.getElementById('editId').value,
+            Title: document.getElementById('editTitle').value,
+            Type: document.getElementById('editType').value,
+            Date: document.getElementById('editDate').value,
+            Location: document.getElementById('editLocation').value,
+            Description: document.getElementById('editDescription').value
+          }
+        };
+        const response = await fetch(`${AIRTABLE_API_URL}/${document.getElementById('editId').value}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(eventData)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        editModal.classList.add('hidden');
+        tg.showAlert('Мероприятие обновлено! Измените изображение в Airtable вручную.');
+        renderEvents();
+        renderManageList();
+      } catch (err) {
+        tg.showAlert(`Ошибка: ${err.message}`);
+        console.error('Ошибка:', err);
+      }
+    });
+
+    cancelEdit.addEventListener('click', () => {
+      editModal.classList.add('hidden');
+    });
+
+    async function renderEvents() {
+      eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      try {
+        const response = await fetch(AIRTABLE_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        const events = data.records.map(record => ({
+          id: record.id,
+          eventId: record.fields.ID,
+          title: record.fields.Title,
+          type: record.fields.Type,
+          date: record.fields.Date,
+          location: record.fields.Location,
+          description: record.fields.Description,
+          image: record.fields.Image && record.fields.Image[0] ? record.fields.Image[0].url : 'https://via.placeholder.com/150'
+        }));
+        console.log('События:', events);
+        eventsContainer.innerHTML = '';
+        if (events.length === 0) {
+          eventsContainer.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
+          return;
+        }
+        events.forEach((event, index) => {
+          const eventCard = document.createElement('div');
+          eventCard.className = 'event-card fade-in';
+          eventCard.style.animationDelay = `${index * 0.1}s`;
+          eventCard.innerHTML = `
+            <img src="${event.image}" alt="${event.title}" class="w-full h-3/4 object-cover rounded-t-lg">
+            <div class="p-2 text-center">
+              <p class="text-sm font-semibold text-white">${event.date}</p>
+              <p class="text-xs text-gray-400 line-clamp-1">${event.title}</p>
+            </div>
+          `;
+          eventCard.addEventListener('click', () => showEventDetails(event));
+          eventsContainer.appendChild(eventCard);
+        });
+      } catch (err) {
+        eventsContainer.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
+        console.error('Ошибка:', err);
+      }
+    }
+
+    async function renderManageList() {
+      manageList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      try {
+        const response = await fetch(AIRTABLE_API_URL, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        const events = data.records.map(record => ({
+          id: record.id,
+          eventId: record.fields.ID,
+          title: record.fields.Title,
+          date: record.fields.Date
+        }));
+        manageList.innerHTML = '';
+        if (events.length === 0) {
+          manageList.innerHTML = '<p class="text-center text-gray-400">Нет мероприятий</p>';
+          return;
+        }
+        events.forEach(event => {
+          const item = document.createElement('div');
+          item.className = 'flex justify-between items-center bg-gray-800 p-2 rounded-lg';
+          item.innerHTML = `
+            <span class="text-sm text-white line-clamp-1">${event.title} (${event.date})</span>
+            <div class="flex space-x-2">
+              <button class="edit-btn text-sm py-1 px-2" data-id="${event.id}">Редактировать</button>
+              <button class="delete-btn text-sm py-1 px-2" data-id="${event.id}">Удалить</button>
+            </div>
+          `;
+          manageList.appendChild(item);
+        });
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            const response = await fetch(`${AIRTABLE_API_URL}/${id}`, {
+              headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
             });
-        }
-
-        // Показать голосование
-        function showVoting(id, title, eventLat, eventLong) {
-            currentEventId = id;
-            document.getElementById('voteTitle').textContent = `Голосование: ${title}`;
-            // Загрузить номинации с backend
-            fetch(`/api/events/${id}/nominations`).then(res => res.json()).then(noms => {
-                const nomsDiv = document.getElementById('nominations');
-                nomsDiv.innerHTML = '';
-                noms.forEach(nom => {
-                    const btn = document.createElement('button');
-                    btn.className = 'nomination';
-                    btn.textContent = nom;
-                    btn.onclick = () => selectNomination(nom);
-                    nomsDiv.appendChild(btn);
-                });
+            if (!response.ok) throw new Error(await response.text());
+            const event = await response.json();
+            document.getElementById('editId').value = id;
+            document.getElementById('editTitle').value = event.fields.Title || '';
+            document.getElementById('editType').value = event.fields.Type || '';
+            document.getElementById('editDate').value = event.fields.Date || '';
+            document.getElementById('editLocation').value = event.fields.Location || '';
+            document.getElementById('editDescription').value = event.fields.Description || '';
+            document.getElementById('editImage').value = event.fields.Image && event.fields.Image[0] ? event.fields.Image[0].url : '';
+            editModal.classList.remove('hidden');
+          });
+        });
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            tg.showConfirm('Удалить мероприятие?', async (confirmed) => {
+              if (confirmed) {
+                try {
+                  const response = await fetch(`${AIRTABLE_API_URL}/${id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+                  });
+                  if (!response.ok) throw new Error(await response.text());
+                  tg.showAlert('Мероприятие удалено!');
+                  renderEvents();
+                  renderManageList();
+                } catch (err) {
+                  tg.showAlert(`Ошибка: ${err.message}`);
+                }
+              }
             });
-            // Проверка гео (отправляем на backend)
-            if (userLocation) {
-                fetch('/api/check-location', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userLat: userLocation.lat, userLong: userLocation.long, eventLat, eventLong })
-                }).then(res => res.json()).then(data => {
-                    if (!data.valid) alert('Вы не на мероприятии! Голосование недоступно.');
-                    else document.getElementById('voting').style.display = 'block';
-                });
-            } else {
-                alert('Поделитесь локацией для голосования.');
-            }
-        }
+          });
+        });
+      } catch (err) {
+        manageList.innerHTML = '<p class="text-center text-gray-400">Ошибка загрузки</p>';
+        console.error('Ошибка:', err);
+      }
+    }
 
-        // Выбор номинации (одна или несколько — доработайте логику)
-        let selectedNoms = [];
-        function selectNomination(nom) {
-            // Логика: добавить/убрать из массива
-            const idx = selectedNoms.indexOf(nom);
-            if (idx > -1) selectedNoms.splice(idx, 1); else selectedNoms.push(nom);
-        }
+    function showEventDetails(event) {
+      document.getElementById('modalTitle').textContent = event.title;
+      document.getElementById('modalDate').textContent = `Дата: ${event.date}`;
+      document.getElementById('modalLocation').textContent = `Место: ${event.location}`;
+      document.getElementById('modalDescription').textContent = event.description;
+      eventModal.classList.remove('hidden');
+      document.getElementById('joinBtn').onclick = () => joinEvent(event.eventId);
+      document.getElementById('shareBtn').onclick = () => shareEvent(event);
+    }
 
-        // Отправка голоса
-        async function submitVote() {
-            if (selectedNoms.length === 0) return alert('Выберите номинацию!');
-            const response = await fetch('/api/vote', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ eventId: currentEventId, nominations: selectedNoms, initData: tg.initData })
-            });
-            if (response.ok) {
-                alert('Голос учтен!');
-                document.getElementById('voting').style.display = 'none';
-            } else alert('Ошибка голосования.');
-        }
+    closeModalBtn.addEventListener('click', () => {
+      eventModal.classList.add('hidden');
+    });
 
-        // Загрузка фото (заглушка)
-        function loadPhotos() {
-            // В будущем: fetch('/api/photos') и отображение галереи
-            // Фото хранить как ссылки на Telegram файлы
+    function joinEvent(eventId) {
+      tg.showPopup({
+        title: 'Запись на мероприятие',
+        message: 'Хотите записаться?',
+        buttons: [{ id: 'join', type: 'ok', text: 'Да' }, { type: 'cancel' }]
+      }, (buttonId) => {
+        if (buttonId === 'join') {
+          tg.sendData(JSON.stringify({ action: 'join', eventId }));
+          tg.showAlert('Вы записались!');
         }
+      });
+    }
 
-        // Инициализация
-        loadEvents();
-    </script>
+    function shareEvent(event) {
+      const text = `Присоединяйтесь: ${event.title} (${event.date}, ${event.location})`;
+      const url = `https://t.me/smolville_drift?start=event_${event.eventId}`;
+      tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
+    }
+
+    renderEvents();
+  </script>
 </body>
 </html>
