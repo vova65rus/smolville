@@ -20,7 +20,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const upload = multer({ dest: 'uploads/' });
 
-// Env vars (Render использует process.env напрямую)
+// Env vars
 const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
@@ -28,7 +28,7 @@ const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
 
 // Хардкод админа (можно перенести в env var ADMIN_ID)
-const ADMIN_ID = 366825437; // Замените на ваш ID или используйте process.env.ADMIN_ID
+const ADMIN_ID = 366825437; // Замените на ваш ID
 
 if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
   console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
@@ -42,7 +42,7 @@ app.get('/', (req, res) => {
   res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/upload');
 });
 
-// Эндпоинт для проверки админа
+// Новый эндпоинт для проверки админа
 app.get('/api/is-admin', (req, res) => {
   const userId = parseInt(req.query.userId, 10);
   const isAdmin = userId === ADMIN_ID;
@@ -110,14 +110,12 @@ app.delete('/api/events/:id', async (req, res) => {
   }
 });
 
-// API для рекламы (поля ID, IMG, URL)
+// API для рекламы (если нужно)
 app.get('/api/ads', async (req, res) => {
   try {
-    console.log('Getting ads from Airtable...');
     const response = await axios.get(ADS_URL, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
-    console.log('Ads response:', response.data.records.length, 'records');
     res.json(response.data);
   } catch (error) {
     console.error('Ads GET error:', error.message);
@@ -127,15 +125,7 @@ app.get('/api/ads', async (req, res) => {
 
 app.post('/api/ads', async (req, res) => {
   try {
-    console.log('Posting ad to Airtable:', req.body.fields);
-    const adData = {
-      fields: {
-        ID: req.body.fields.ID,
-        IMG: req.body.fields.IMG,
-        URL: req.body.fields.URL
-      }
-    };
-    const response = await axios.post(ADS_URL, adData, {
+    const response = await axios.post(ADS_URL, req.body, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
@@ -147,33 +137,12 @@ app.post('/api/ads', async (req, res) => {
 
 app.patch('/api/ads/:id', async (req, res) => {
   try {
-    console.log('Patching ad:', req.params.id, req.body.fields);
-    const adData = {
-      fields: {
-        ID: req.body.fields.ID,
-        IMG: req.body.fields.IMG,
-        URL: req.body.fields.URL
-      }
-    };
-    const response = await axios.patch(`${ADS_URL}/${req.params.id}`, adData, {
+    const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
     res.json(response.data);
   } catch (error) {
     console.error('Ads PATCH error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/ads/:id', async (req, res) => {
-  try {
-    console.log('Deleting ad:', req.params.id);
-    const response = await axios.delete(`${ADS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Ads DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -192,7 +161,6 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     });
     fs.unlinkSync(filePath);
     if (response.data.success) {
-      console.log('Image uploaded successfully:', response.data.data.url);
       res.json({ url: response.data.data.url });
     } else {
       res.status(500).json({ error: 'ImgBB upload failed' });
