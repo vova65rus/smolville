@@ -8,12 +8,14 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      background-image: url('bg.png');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      color: white;
-      font-family: Arial, sans-serif;
+     background-image: url('bg.png');
+background-repeat: repeat;         /* включаем повтор */
+background-size: auto;             /* убираем cover */
+background-position: top left;     /* точка начала паттерна */
+background-attachment: scroll;     /* fixed не нужен, если фон — паттерн */
+color: white;
+font-family: Arial, sans-serif;
+
     }
     .event-card {
       background: rgba(255, 255, 255, 0.1);
