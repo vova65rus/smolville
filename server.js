@@ -1,42 +1,188 @@
-import express from 'express';
-import cors from 'cors';
-import multer from 'multer';
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
-
-dotenv.config();
+const express = require('express');
+const axios = require('axios');
+const multer = require('multer');
+const fs = require('fs');
+const FormData = require('form-data');
+const path = require('path');
 
 const app = express();
-app.use(cors());
+const port = process.env.PORT || 3000;
+
+// Middleware для JSON и статических файлов (если нужно)
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Настройка multer для загрузки изображений
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
+// Настройка multer для загрузки файлов
+const upload = multer({ dest: 'uploads/' });
 
-// Пример эндпоинта для добавления события
-app.post('/events', upload.single('image'), async (req, res) => {
+// Env vars (из Render)
+const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
+const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
+const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
+
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
+  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
+  process.exit(1);
+}
+
+const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
+const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
+
+// Корневой маршрут (чтобы избежать "Cannot GET /")
+app.get('/', (req, res) => {
+  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/upload');
+});
+
+// API для событий (GET all)
+app.get('/api/events', async (req, res) => {
   try {
-    const { title, type, date, location, description } = req.body;
-    // Если есть файл изображения, можно загрузить в ImgBB
-    let imageUrl = null;
-    if (req.file) {
-      const formData = new FormData();
-      formData.append('image', req.file.buffer.toString('base64'));
-      const response = await fetch(`https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, {
-        method: 'POST',
-        body: formData
-      });
-      const data = await response.json();
-      if (data.success) imageUrl = data.data.url;
-    }
-    // Здесь вместо реальной базы можно вернуть объект события
-    res.json({ success: true, event: { title, type, date, location, description, image: imageUrl } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    const response = await axios.get(EVENTS_URL, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Events GET error:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// POST new event
+app.post('/api/events', async (req, res) => {
+  try {
+    const response = await axios.post(EVENTS_URL, req.body, {
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Events POST error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET single event
+app.get('/api/events/:id', async (req, res) => {
+  try {
+    const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Event GET error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH update event
+app.patch('/api/events/:id', async (req, res) => {
+  try {
+    const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Event PATCH error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE event
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Event DELETE error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API для рекламы (аналогично событиям)
+app.get('/api/ads', async (req, res) => {
+  try {
+    const response = await axios.get(ADS_URL, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Ads GET error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ads', async (req, res) => {
+  try {
+    const response = await axios.post(ADS_URL, req.body, {
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Ads POST error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/ads/:id', async (req, res) => {
+  try {
+    const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Ads PATCH error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Загрузка изображения через ImgBB
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded' });
+    }
+    const filePath = req.file.path;
+    const formData = new FormData();
+    formData.append('image', fs.createReadStream(filePath));
+    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
+      headers: formData.getHeaders()
+    });
+    // Удалить временный файл
+    fs.unlinkSync(filePath);
+    if (response.data.success) {
+      res.json({ url: response.data.data.url });
+    } else {
+      res.status(500).json({ error: 'ImgBB upload failed' });
+    }
+  } catch (error) {
+    console.error('Upload error:', error.message);
+    if (req.file) fs.unlinkSync(req.file.path); // Cleanup
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Создать папку uploads при старте (если нужно)
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+  console.log(`Events URL: ${EVENTS_URL}`);
+  console.log(`Ads URL: ${ADS_URL}`);
+});
