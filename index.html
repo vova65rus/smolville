@@ -8,14 +8,13 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-     background-image: url('bg.png');
-background-repeat: repeat;         /* включаем повтор */
-background-size: auto;             /* убираем cover */
-background-position: top left;     /* точка начала паттерна */
-background-attachment: scroll;     /* fixed не нужен, если фон — паттерн */
-color: white;
-font-family: Arial, sans-serif;
-
+      background-image: url('bg.png');
+      background-repeat: repeat;         /* включаем повтор */
+      background-size: auto;             /* убираем cover */
+      background-position: top left;     /* точка начала паттерна */
+      background-attachment: scroll;     /* fixed не нужен, если фон — паттерн */
+      color: white;
+      font-family: Arial, sans-serif;
     }
     .event-card {
       background: rgba(255, 255, 255, 0.1);
@@ -78,7 +77,10 @@ font-family: Arial, sans-serif;
   <div id="adminModal" class="modal hidden">
     <div class="modal-content">
       <h2 class="text-lg font-bold">Админ-панель</h2>
+      <div id="eventList" class="mb-4"></div>
+      <h3 class="text-md font-bold mt-4">Добавить/Редактировать событие</h3>
       <form id="eventForm">
+        <input type="text" id="eventRecordId" class="hidden">
         <input type="text" id="eventId" placeholder="ID (например, event1)" class="border p-2 w-full mb-2">
         <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
         <input type="text" id="eventType" placeholder="Тип (Спорт, Выставки)" class="border p-2 w-full mb-2">
@@ -86,7 +88,7 @@ font-family: Arial, sans-serif;
         <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
         <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
         <input type="file" id="eventImage" accept="image/*" class="mb-2">
-        <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded-lg">Добавить/Обновить</button>
+        <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded-lg">Сохранить</button>
       </form>
       <button class="bg-red-500 text-white px-4 py-2 mt-2 rounded-lg" onclick="closeAdminModal()">Закрыть</button>
     </div>
@@ -104,13 +106,34 @@ font-family: Arial, sans-serif;
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     console.log('User ID:', user.id); // Для отладки
-    const adminId = 366825437; // Замените на ваш Telegram ID
-    const isAdmin = user.id === adminId;
-    console.log('Is Admin:', isAdmin);
-    if (isAdmin) {
-      document.getElementById('adminBtn').classList.remove('hidden');
-    } else {
-      console.log('Admin panel hidden - wrong user ID');
+
+    async function checkIsAdmin(userId) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
+        const data = await response.json();
+        return data.isAdmin;
+      } catch (err) {
+        console.error('Error checking admin:', err);
+        return false;
+      }
+    }
+
+    async function initAdmin() {
+      const isAdmin = await checkIsAdmin(user.id);
+      console.log('Is Admin:', isAdmin);
+      if (isAdmin) {
+        document.getElementById('adminBtn').classList.remove('hidden');
+      } else {
+        console.log('Admin panel hidden - not admin');
+      }
+    }
+
+    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+    function formatDate(dateStr) {
+      if (!dateStr) return 'Без даты';
+      const [year, month, day] = dateStr.split('-');
+      return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
     }
 
     async function renderEvents() {
@@ -126,17 +149,17 @@ font-family: Arial, sans-serif;
           throw new Error(`Backend error: ${response.status} - ${errorText}`);
         }
         const data = await response.json();
-        console.log('Events data:', data); // Для отладки
-        eventsContainer.innerHTML = ''; // Очищаем контейнер
+        console.log('Events data:', data);
+        eventsContainer.innerHTML = '';
         if (data.records && Array.isArray(data.records) && data.records.length > 0) {
           data.records.forEach(record => {
-            console.log('Processing record:', record); // Для отладки
+            console.log('Processing record:', record);
             const event = record.fields || {};
             const div = document.createElement('div');
             div.className = 'event-card p-2 fade-in';
             div.innerHTML = `
               <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
-              <p class="text-xs text-gray-400">${event.Date || 'Без даты'}</p>
+              <p class="text-xs text-gray-400">${formatDate(event.Date)}</p>
               <p class="text-xs text-gray-400">${event.Location || 'Без места'}</p>
               <img src="${event.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
             `;
@@ -154,11 +177,43 @@ font-family: Arial, sans-serif;
       }
     }
 
+    async function renderAdminEvents() {
+      const eventList = document.getElementById('eventList');
+      eventList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events`, {
+          mode: 'cors'
+        });
+        if (!response.ok) {
+          throw new Error('Ошибка загрузки ивентов');
+        }
+        const data = await response.json();
+        eventList.innerHTML = '';
+        if (data.records && data.records.length > 0) {
+          data.records.forEach(record => {
+            const event = record.fields || {};
+            const div = document.createElement('div');
+            div.className = 'p-2 border-b';
+            div.innerHTML = `
+              <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
+              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.Image?.[0]?.url || ''}')" class="bg-yellow-500 text-white px-2 py-1 rounded mr-2">Редактировать</button>
+              <button onclick="deleteEvent('${record.id}')" class="bg-red-500 text-white px-2 py-1 rounded">Удалить</button>
+            `;
+            eventList.appendChild(div);
+          });
+        } else {
+          eventList.innerHTML = '<p class="text-center text-gray-400">Ивенты не найдены</p>';
+        }
+      } catch (err) {
+        alert(`Ошибка: ${err.message}`);
+      }
+    }
+
     function showEventModal(record) {
       const modal = document.getElementById('eventModal');
       const event = record.fields || {};
       document.getElementById('modalTitle').textContent = event.Title || 'Без названия';
-      document.getElementById('modalDate').textContent = event.Date || 'Без даты';
+      document.getElementById('modalDate').textContent = formatDate(event.Date) || 'Без даты';
       document.getElementById('modalLocation').textContent = event.Location || 'Без места';
       document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
       document.getElementById('modalImage').src = event.Image?.[0]?.url || 'https://via.placeholder.com/150';
@@ -170,6 +225,8 @@ font-family: Arial, sans-serif;
     }
 
     function showAdminModal() {
+      renderAdminEvents();
+      clearForm();
       document.getElementById('adminModal').classList.remove('hidden');
     }
 
@@ -177,9 +234,47 @@ font-family: Arial, sans-serif;
       document.getElementById('adminModal').classList.add('hidden');
     }
 
+    function clearForm() {
+      document.getElementById('eventRecordId').value = '';
+      document.getElementById('eventId').value = '';
+      document.getElementById('eventTitle').value = '';
+      document.getElementById('eventType').value = '';
+      document.getElementById('eventDate').value = '';
+      document.getElementById('eventLocation').value = '';
+      document.getElementById('eventDescription').value = '';
+      document.getElementById('eventImage').value = '';
+    }
+
+    function editEvent(recordId, id, title, type, date, location, description, imageUrl) {
+      document.getElementById('eventRecordId').value = recordId;
+      document.getElementById('eventId').value = id;
+      document.getElementById('eventTitle').value = title;
+      document.getElementById('eventType').value = type;
+      document.getElementById('eventDate').value = date;
+      document.getElementById('eventLocation').value = location;
+      document.getElementById('eventDescription').value = description;
+      // Для изображения нельзя заполнить файл, но можно показать текущее
+      alert('Текущее изображение: ' + imageUrl);
+    }
+
+    async function deleteEvent(recordId) {
+      if (!confirm('Удалить ивент?')) return;
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events/${recordId}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Ошибка удаления');
+        alert('Ивент удален');
+        renderAdminEvents();
+        renderEvents();
+      } catch (err) {
+        alert(`Ошибка: ${err.message}`);
+      }
+    }
+
     document.getElementById('eventForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const formData = new FormData();
+      const recordId = document.getElementById('eventRecordId').value;
       const eventData = {
         fields: {
           ID: document.getElementById('eventId').value,
@@ -211,14 +306,17 @@ font-family: Arial, sans-serif;
         }
       }
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, {
-          method: 'POST',
+        const method = recordId ? 'PATCH' : 'POST';
+        const url = recordId ? `${BACKEND_URL}/api/events/${recordId}` : `${BACKEND_URL}/api/events`;
+        const response = await fetch(url, {
+          method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(eventData)
         });
-        if (!response.ok) throw new Error('Ошибка добавления события');
-        alert('Событие добавлено!');
-        closeAdminModal();
+        if (!response.ok) throw new Error('Ошибка сохранения события');
+        alert('Событие сохранено');
+        clearForm();
+        renderAdminEvents();
         renderEvents();
       } catch (err) {
         alert(`Ошибка: ${err.message}`);
@@ -226,6 +324,7 @@ font-family: Arial, sans-serif;
     });
 
     // Запуск
+    initAdmin();
     renderEvents();
   </script>
 </body>
