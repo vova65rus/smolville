@@ -8,6 +8,14 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Middleware для CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*'); // Разрешить все источники или укажите 'https://smolville-psi.vercel.app'
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const upload = multer({ dest: 'uploads/' });
@@ -45,7 +53,10 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     const response = await axios.post(EVENTS_URL, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
     res.json(response.data);
   } catch (error) {
@@ -69,7 +80,10 @@ app.get('/api/events/:id', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
     res.json(response.data);
   } catch (error) {
@@ -105,7 +119,10 @@ app.get('/api/ads', async (req, res) => {
 app.post('/api/ads', async (req, res) => {
   try {
     const response = await axios.post(ADS_URL, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
     res.json(response.data);
   } catch (error) {
@@ -117,7 +134,10 @@ app.post('/api/ads', async (req, res) => {
 app.patch('/api/ads/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
     res.json(response.data);
   } catch (error) {
@@ -152,7 +172,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
 
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
+  fs.mkdirSync(UploadsDir, { recursive: true });
 }
 
 app.listen(port, () => {
