@@ -7,19 +7,29 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #000000;
+      --hint-color: #707579;
+      --link-color: #3390ec;
+      --button-color: #3390ec;
+      --button-text-color: #ffffff;
+      --secondary-bg-color: #f4f4f5;
+    }
     body {
       background-image: url('bg.png');
       background-repeat: repeat;
       background-size: 200px 200px;
-      background-color: #1a202c; /* Темный фон для автомобильной тематики */
-      color: #e2e8f0; /* Светлый текст для контраста */
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
     .event-card {
-      background: rgba(255, 255, 255, 0.15); /* Чуть более прозрачный фон */
+      background: rgba(255, 255, 255, 0.15);
       border-radius: 8px;
       backdrop-filter: blur(5px);
       margin-bottom: 10px;
-      transition: background 0.3s ease; /* Плавный переход для ховера */
+      transition: background 0.3s ease;
     }
     .event-card:hover {
       background: rgba(255, 255, 255, 0.25);
@@ -28,7 +38,7 @@
       display: none;
     }
     .modal {
-      background: rgba(0, 0, 0, 0.85); /* Более темный фон модального окна */
+      background: rgba(0, 0, 0, 0.85);
       position: fixed;
       top: 0;
       left: 0;
@@ -40,13 +50,14 @@
       z-index: 1000;
     }
     .modal-content {
-      background: #2d3748; /* Темно-серый фон для модального контента */
-      color: #e2e8f0; /* Светлый текст */
+      background: var(--secondary-bg-color);
+      color: var(--text-color);
       padding: 20px;
       border-radius: 8px;
       max-width: 90%;
       max-height: 80%;
       overflow-y: auto;
+      transition: background 0.3s ease, color 0.3s ease;
     }
     .fade-in {
       animation: fadeIn 0.5s ease-in;
@@ -56,34 +67,42 @@
       to { opacity: 1; }
     }
     input, textarea, select {
-      background: #4a5568; /* Темный фон для полей ввода */
-      color: #e2e8f0; /* Светлый текст */
-      border: 1px solid #718096; /* Серый бордер */
+      background: var(--bg-color);
+      color: var(--text-color);
+      border: 1px solid var(--hint-color);
+      transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     }
     input::placeholder, textarea::placeholder {
-      color: #a0aec0; /* Светлый цвет placeholder */
+      color: var(--hint-color);
     }
     .tab {
-      background: #4a5568; /* Темный фон для вкладок */
-      color: #e2e8f0; /* Светлый текст */
+      background: var(--secondary-bg-color);
+      color: var(--text-color);
       padding: 8px 16px;
       border-radius: 4px 4px 0 0;
       cursor: pointer;
       transition: background 0.3s ease;
     }
     .tab:hover {
-      background: #718096; /* Ховер для вкладок */
+      background: var(--hint-color);
     }
     .tab.active {
-      background: #2d3748; /* Активная вкладка совпадает с модальным фоном */
+      background: var(--bg-color);
       font-weight: bold;
-      color: #ffffff;
+      color: var(--text-color);
     }
     .tab-content {
       display: none;
     }
     .tab-content.active {
       display: block;
+    }
+    /* Safe areas for mobile */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
     }
   </style>
 </head>
@@ -92,7 +111,7 @@
     <img src="logo.PNG" alt="https://t.me/smolville_drift" class="mx-auto h-16 mb-4">
     <h1 class="text-2xl font-bold text-center mb-4">Автособытия Сахалина</h1>
     <div id="events" class="grid grid-cols-1 gap-4"></div>
-    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition" onclick="showAdminModal()">Админ</button>
+    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition" onclick="showAdminModal()">Админ</button>
   </div>
 
   <div id="eventModal" class="modal hidden">
@@ -102,7 +121,7 @@
       <p id="modalLocation"></p>
       <p id="modalDescription"></p>
       <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
-      <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 mt-4 rounded-lg transition" onclick="closeEventModal()">Закрыть</button>
+      <button class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 mt-4 rounded-lg transition" onclick="closeEventModal()">Закрыть</button>
     </div>
   </div>
 
@@ -133,7 +152,7 @@
           <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
           <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
           <input type="file" id="eventImage" accept="image/*" class="mb-2">
-          <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition">Сохранить</button>
+          <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Сохранить</button>
         </form>
       </div>
       <div id="tab-settings" class="tab-content">
@@ -148,11 +167,24 @@
     const BACKEND_URL = 'https://smolville.onrender.com';
     const tg = window.Telegram?.WebApp;
     if (!tg) {
-      document.body.innerHTML = '<p class="text-center text-white">Ошибка: Запустите в Telegram WebApp</p>';
+      document.body.innerHTML = '<p class="text-center text-[var(--text-color)]">Ошибка: Запустите в Telegram WebApp</p>';
       throw new Error('Telegram WebApp not found');
     }
     tg.ready();
     tg.expand();
+
+    function applyTheme() {
+      const params = tg.themeParams;
+      document.documentElement.style.setProperty('--bg-color', params.bg_color || '#ffffff');
+      document.documentElement.style.setProperty('--text-color', params.text_color || '#000000');
+      document.documentElement.style.setProperty('--hint-color', params.hint_color || '#707579');
+      document.documentElement.style.setProperty('--link-color', params.link_color || '#3390ec');
+      document.documentElement.style.setProperty('--button-color', params.button_color || '#3390ec');
+      document.documentElement.style.setProperty('--button-text-color', params.button_text_color || '#ffffff');
+      document.documentElement.style.setProperty('--secondary-bg-color', params.secondary_bg_color || '#f4f4f5');
+    }
+    applyTheme();
+    tg.onEvent('themeChanged', applyTheme);
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     console.log('User ID:', user.id);
@@ -188,7 +220,7 @@
 
     async function renderEvents() {
       const eventsContainer = document.getElementById('events');
-      eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
       try {
         const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (!response.ok) {
@@ -208,8 +240,8 @@
             div.className = 'event-card p-2 fade-in';
             div.innerHTML = `
               <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
-              <p class="text-xs text-gray-300">${formatDate(event.Date)}</p>
-              <p class="text-xs text-gray-300">${event.Location || 'Без места'}</p>
+              <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
+              <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
               <img src="${event.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
             `;
             div.addEventListener('click', () => showEventModal(record));
@@ -217,18 +249,18 @@
           });
         } else {
           console.log('No records found');
-          eventsContainer.innerHTML = '<p class="text-center text-gray-300">Мероприятия не найдены</p>';
+          eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
         }
       } catch (err) {
         console.error('Render events error:', err);
-        eventsContainer.innerHTML = `<p class="text-center text-gray-300">Ошибка: ${err.message}</p>`;
+        eventsContainer.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
         alert(`Ошибка загрузки мероприятий: ${err.message}`);
       }
     }
 
     async function renderAdminEvents() {
       const eventList = document.getElementById('eventList');
-      eventList.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
       try {
         const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (!response.ok) {
@@ -241,7 +273,7 @@
           data.records.forEach(record => {
             const event = record.fields || {};
             const div = document.createElement('div');
-            div.className = 'p-2 border-b border-gray-600';
+            div.className = 'p-2 border-b border-[var(--hint-color)]';
             div.innerHTML = `
               <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
               <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.Image?.[0]?.url || ''}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
@@ -250,7 +282,7 @@
             eventList.appendChild(div);
           });
         } else {
-          eventList.innerHTML = '<p class="text-center text-gray-300">Ивенты не найдены</p>';
+          eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Ивенты не найдены</p>';
         }
       } catch (err) {
         alert(`Ошибка: ${err.message}`);
@@ -276,20 +308,26 @@
       document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
       document.getElementById('modalImage').src = event.Image?.[0]?.url || 'https://via.placeholder.com/150';
       modal.classList.remove('hidden');
+      tg.BackButton.show();
+      tg.BackButton.onClick(closeEventModal);
     }
 
     function closeEventModal() {
       document.getElementById('eventModal').classList.add('hidden');
+      tg.BackButton.hide();
     }
 
     function showAdminModal() {
       showTab('tab-list');
       clearForm();
       document.getElementById('adminModal').classList.remove('hidden');
+      tg.BackButton.show();
+      tg.BackButton.onClick(closeAdminModal);
     }
 
     function closeAdminModal() {
       document.getElementById('adminModal').classList.add('hidden');
+      tg.BackButton.hide();
     }
 
     function clearForm() {
