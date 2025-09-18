@@ -1,231 +1,144 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smolville</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-body {background-image:url('bg.png'); background-size:cover; background-position:center; background-attachment:fixed; color:white; font-family:Arial,sans-serif;}
-.event-card {background:rgba(255,255,255,0.1); border-radius:8px; margin-bottom:10px; cursor:pointer; transition:0.2s;}
-.event-card:hover {background:rgba(255,255,255,0.2);}
-.modal {background:rgba(0,0,0,0.8); position:fixed;top:0;left:0;right:0;bottom:0; display:flex;justify-content:center;align-items:center; z-index:3000;}
-.modal-content {background:#f0f0f0;color:#333;padding:20px;border-radius:8px; max-width:90%; max-height:80%; overflow-y:auto;}
-.toast {position:fixed;bottom:20px;left:50%; transform:translateX(-50%); background:#333; color:white; padding:10px 20px; border-radius:5px; opacity:0; transition:opacity 0.5s; z-index:4000;}
-.fade-in {animation:fadeIn 0.5s ease-in;}
-@keyframes fadeIn {from {opacity:0;} to {opacity:1;}}
-input,textarea,select{background:#fff;color:#000;border:1px solid #ccc;}
-.tab {background:#e0e0e0;color:#333;padding:8px 16px;border-radius:4px 4px 0 0;cursor:pointer;}
-.tab.active {background:#fff;font-weight:bold;}
-.tab-content {display:none;}
-.tab-content.active {display:block;}
-.filter-btn {margin-right:5px; padding:5px 10px;border-radius:5px; cursor:pointer; background:#f3f3f3;color:#000;border:1px solid #ccc;}
-.filter-btn.active {background:#4ade80;color:#000;}
-.past-event{opacity:0.5;}
-.gallery img{max-width:100%; margin-top:5px;border-radius:5px;}
-#adminBtn {position:fixed; bottom:20px; right:20px; z-index:5000;}
-#uploadStatus {text-align:center; font-size:0.9rem; color:#333; margin-bottom:5px; display:none;}
-.ad-block {background: rgba(255,200,0,0.3); color:#000; padding:10px; text-align:center; border-radius:5px; margin:10px 0;}
-</style>
-</head>
-<body class="min-h-screen flex flex-col">
-
-<div class="container mx-auto p-4 flex-grow">
-  <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
-  <h1 class="text-2xl font-bold text-center mb-4">Smolville Events</h1>
-
-  <!-- Фильтры и поиск -->
-  <div class="mb-4 flex flex-wrap justify-between items-center gap-2 bg-black/50 p-2 rounded">
-    <div class="flex gap-2 flex-wrap">
-      <button class="filter-btn active" data-type="">Все</button>
-      <button class="filter-btn" data-type="Спорт">Спорт</button>
-      <button class="filter-btn" data-type="Выставки">Выставки</button>
-    </div>
-    <div class="flex gap-2 flex-wrap">
-      <input type="text" id="searchInput" placeholder="Поиск по названию/месту" class="border p-2 rounded w-60 text-black">
-      <select id="sortSelect" class="border p-2 rounded text-black">
-        <option value="asc">По дате ↑</option>
-        <option value="desc">По дате ↓</option>
-      </select>
-    </div>
-  </div>
-
-  <div id="events" class="grid grid-cols-1 gap-4"></div>
-  <button id="adminBtn" class="hidden bg-blue-500 text-white px-4 py-2 rounded-lg" onclick="showAdminModal()">Админ</button>
-</div>
-
-<!-- Модалки -->
-<div id="eventModal" class="modal hidden">
-  <div class="modal-content">
-    <h2 id="modalTitle" class="text-lg font-bold"></h2>
-    <p id="modalDate"></p>
-    <p id="modalLocation"></p>
-    <p id="modalDescription"></p>
-    <div class="gallery" id="modalGallery"></div>
-    <button class="bg-blue-500 text-white px-4 py-2 mt-4 rounded-lg" onclick="closeEventModal()">Закрыть</button>
-  </div>
-</div>
-
-<div id="adminModal" class="modal hidden">
-  <div class="modal-content">
-    <h2 class="text-lg font-bold mb-4">Админ-панель</h2>
-    <div class="flex mb-4">
-      <div class="tab active" onclick="showTab('tab-list')">Список событий</div>
-      <div class="tab" onclick="showTab('tab-form')">Добавить/Редактировать</div>
-    </div>
-    <div id="tab-list" class="tab-content active">
-      <h3 class="text-md font-bold mb-2">Список событий</h3>
-      <div id="eventList" class="mb-4"></div>
-    </div>
-    <div id="tab-form" class="tab-content">
-      <h3 class="text-md font-bold mb-2">Добавить/Редактировать событие</h3>
-      <div id="uploadStatus">Загрузка...</div>
-      <form id="eventForm">
-        <input type="hidden" id="eventRecordId">
-        <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
-        <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
-        <select id="eventType" class="border p-2 w-full mb-2">
-          <option value="">Выберите тип</option>
-          <option value="Спорт">Спорт</option>
-          <option value="Выставки">Выставки</option>
-        </select>
-        <input type="date" id="eventDate" class="border p-2 w-full mb-2">
-        <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
-        <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
-        <input type="file" id="eventImage" accept="image/*" multiple class="mb-2">
-        <div id="previewImages" class="flex gap-2 flex-wrap mb-2"></div>
-        <button type="submit" id="saveBtn" class="bg-green-500 text-white px-4 py-2 rounded-lg">Сохранить</button>
-      </form>
-    </div>
-    <button class="bg-red-500 text-white px-4 py-2 mt-4 rounded-lg" onclick="closeAdminModal()">Закрыть</button>
-  </div>
-</div>
-
-<!-- Toast -->
-<div id="toast" class="toast"></div>
-
-<script>
-// === Конфиг и Telegram ===
-const BACKEND_URL='https://smolville.onrender.com';
-const tg = window.Telegram?.WebApp;
-tg?.ready(); tg?.expand();
-const user = tg?.initDataUnsafe?.user || { id:0, first_name:'Гость' };
-let allEvents=[];
-
-// === Вспомогательные функции ===
-function showToast(msg,duration=3000){const t=document.getElementById('toast'); t.textContent=msg; t.style.opacity=1; setTimeout(()=>t.style.opacity=0,duration);}
-const months=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-function formatDate(d){if(!d)return 'Без даты'; const [y,m,day]=d.split('-'); return `${parseInt(day)} ${months[parseInt(m)-1]} ${y}`;}
-
-// === Проверка админа ===
-async function checkIsAdmin(id){try{const res=await fetch(`${BACKEND_URL}/api/is-admin?userId=${id}`);const data=await res.json();return data.isAdmin;}catch(e){return false;}}
-async function initAdmin(){if(await checkIsAdmin(user.id)) document.getElementById('adminBtn').classList.remove('hidden');}
-
-// === Рендер событий с рекламой ===
-async function renderEvents(){ 
-  const container=document.getElementById('events'); container.innerHTML='<p class="text-center text-gray-400">Загрузка...</p>';
-  try{ const res=await fetch(`${BACKEND_URL}/api/events`,{mode:'cors'}); const data=await res.json(); allEvents=data.records||[];
-    container.innerHTML=''; let count=0;
-    const typeFilter=document.querySelector('.filter-btn.active').dataset.type;
-    const searchFilter=document.getElementById('searchInput').value.toLowerCase();
-    const sortOrder=document.getElementById('sortSelect').value;
-    let events=allEvents.map(r=>r.fields).filter(e=>{
-      let matchType=typeFilter?e.Type===typeFilter:true;
-      let matchSearch=e.Title?.toLowerCase().includes(searchFilter)||e.Location?.toLowerCase().includes(searchFilter);
-      return matchType&&matchSearch;
-    });
-    events.sort((a,b)=>sortOrder==='asc'? new Date(a.Date)-new Date(b.Date): new Date(b.Date)-new Date(a.Date));
-    events.forEach((e,i)=>{
-      const div=document.createElement('div'); div.className='event-card p-2 fade-in';
-      if(new Date(e.Date)<new Date()) div.classList.add('past-event');
-      div.innerHTML=`<h3 class="text-sm font-bold">${e.Title||'Без названия'}</h3>
-      <p class="text-xs text-gray-400">${formatDate(e.Date)}</p>
-      <p class="text-xs text-gray-400">${e.Location||'Без места'}</p>
-      <img src="${e.Image?.[0]?.url||'https://via.placeholder.com/150'}" class="w-full h-20 object-cover rounded-lg mt-1">`;
-      div.addEventListener('click',()=>showEventModal(e)); container.appendChild(div);
-      // вставляем рекламу через 3 события
-      if((i+1)%3===0){const ad=document.createElement('div'); ad.className='ad-block'; ad.textContent='Реклама'; container.appendChild(ad);}
-    });
-  }catch(e){container.innerHTML=`<p class="text-center text-gray-400">Ошибка: ${e.message}</p>`;}
-}
-
-// === Модалки ===
-function showEventModal(e){ 
-  document.getElementById('modalTitle').textContent=e.Title||'Без названия';
-  document.getElementById('modalDate').textContent=formatDate(e.Date);
-  document.getElementById('modalLocation').textContent=e.Location||'Без места';
-  document.getElementById('modalDescription').textContent=e.Description||'Без описания';
-  const g=document.getElementById('modalGallery'); g.innerHTML='';
-  if(e.Image) e.Image.forEach(img=>{const im=document.createElement('img'); im.src=img.url; g.appendChild(im);});
-  document.getElementById('eventModal').classList.remove('hidden');
-}
-function closeEventModal(){document.getElementById('eventModal').classList.add('hidden');}
-function showAdminModal(){showTab('tab-list'); clearForm(); document.getElementById('adminModal').classList.remove('hidden');}
-function closeAdminModal(){document.getElementById('adminModal').classList.add('hidden');}
-
-// === Админка ===
-function showTab(id){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active')); document.querySelector(`[onclick="showTab('${id}')"]`).classList.add('active'); document.getElementById(id).classList.add('active'); if(id==='tab-list') renderAdminEvents();}
-function clearForm(){['eventRecordId','eventId','eventTitle','eventType','eventDate','eventLocation','eventDescription'].forEach(id=>document.getElementById(id).value=''); document.getElementById('eventImage').value=''; document.getElementById('previewImages').innerHTML=''; document.getElementById('uploadStatus').style.display='none';}
-
-// === Рендер админки ===
-async function renderAdminEvents(){
-  const list=document.getElementById('eventList'); list.innerHTML='<p class="text-center text-gray-400">Загрузка...</p>';
-  try{ const res=await fetch(`${BACKEND_URL}/api/events`); const data=await res.json();
-    list.innerHTML=''; data.records?.sort((a,b)=>new Date(a.fields.Date)-new Date(b.fields.Date)).forEach(r=>{
-      const e=r.fields||{}; const div=document.createElement('div'); div.className='p-2 border-b';
-      div.innerHTML=`<p class="text-sm">${e.Title||'Без названия'} (${formatDate(e.Date)})</p>
-      <button onclick="editEvent('${r.id}','${e.ID}','${e.Title}','${e.Type}','${e.Date}','${e.Location}','${e.Description}','${JSON.stringify(e.Image||[])}')" class="bg-yellow-500 text-white px-2 py-1 rounded mr-2">Редактировать</button>
-      <button onclick="deleteEvent('${r.id}')" class="bg-red-500 text-white px-2 py-1 rounded">Удалить</button>`; list.appendChild(div);
-    });
-  }catch(e){showToast('Ошибка: '+e.message);}
-}
-
-// === CRUD ===
-function editEvent(recordId,id,title,type,date,loc,desc,img){document.getElementById('eventRecordId').value=recordId;document.getElementById('eventId').value=id;document.getElementById('eventTitle').value=title;document.getElementById('eventType').value=type;document.getElementById('eventDate').value=date;document.getElementById('eventLocation').value=loc;document.getElementById('eventDescription').value=desc;
-const images=JSON.parse(img); const prev=document.getElementById('previewImages'); prev.innerHTML=''; images.forEach(im=>{const imEl=document.createElement('img'); imEl.src=im.url; imEl.style.height='50px'; prev.appendChild(imEl);}); showTab('tab-form');}
-async function deleteEvent(recordId){if(!confirm('Удалить ивент?')) return; try{const res=await fetch(`${BACKEND_URL}/api/events/${recordId}`,{method:'DELETE'}); if(!res.ok) throw new Error('Ошибка удаления'); showToast('Ивент удален'); renderAdminEvents(); renderEvents();}catch(e){showToast('Ошибка: '+e.message);}
-
-// === Загрузка и сохранение ===
-document.getElementById('eventImage').addEventListener('change',e=>{
-  const preview=document.getElementById('previewImages'); preview.innerHTML='';
-  Array.from(e.target.files).forEach(f=>{
-    const img=document.createElement('img'); img.src=URL.createObjectURL(f); img.style.height='50px'; preview.appendChild(img);
-  });
-});
-
-document.getElementById('eventForm').addEventListener('submit', async e=>{
-  e.preventDefault();
-  let eventId=document.getElementById('eventId').value || String(Math.floor(Math.random()*1000000)); document.getElementById('eventId').value=eventId;
-  const recordId=document.getElementById('eventRecordId').value;
-  const eventData={fields:{ID:eventId,Title:document.getElementById('eventTitle').value,Type:document.getElementById('eventType').value,Date:document.getElementById('eventDate').value,Location:document.getElementById('eventLocation').value,Description:document.getElementById('eventDescription').value}};
-  const files=document.getElementById('eventImage').files;
-  const status=document.getElementById('uploadStatus'); if(files.length>0) status.style.display='block';
-  try{
-    if(files.length>0){
-      const uploadForm=new FormData();
-      Array.from(files).forEach(f=>uploadForm.append('image',f));
-      const uploadResp=await fetch(`${BACKEND_URL}/api/upload`,{method:'POST',body:uploadForm});
-      const uploadData=await uploadResp.json();
-      if(uploadData.url) eventData.fields.Image=[{url:uploadData.url}]; else throw new Error('Ошибка загрузки изображения');
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smolville</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
     }
-    const method=recordId?'PATCH':'POST';
-    const url=recordId?`${BACKEND_URL}/api/events/${recordId}`:`${BACKEND_URL}/api/events`;
-    const res=await fetch(url,{method,headers:{'Content-Type':'application/json'}, body:JSON.stringify(eventData)});
-    if(!res.ok) throw new Error('Ошибка сохранения события');
-    showToast('Событие сохранено'); clearForm(); renderAdminEvents(); renderEvents(); showTab('tab-list');
-  }catch(err){showToast('Ошибка: '+err.message);} finally{status.style.display='none';}
-});
+    .event-card {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+      transition: transform 0.2s;
+    }
+    .event-card:hover {
+      transform: scale(1.02);
+    }
+    .modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: #222;
+      padding: 20px;
+      border-radius: 10px;
+      max-width: 400px;
+      width: 90%;
+    }
+    .hidden {
+      display: none;
+    }
+    .admin-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #e50914;
+      padding: 12px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="p-4">
+  <h1 class="text-xl font-bold mb-4">Афиша мероприятий</h1>
+  <div id="eventsContainer"></div>
 
-// === Фильтры и поиск ===
-document.querySelectorAll('.filter-btn').forEach(btn=>btn.addEventListener('click',()=>{
-  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderEvents();
-}));
-document.getElementById('searchInput').addEventListener('input',renderEvents);
-document.getElementById('sortSelect').addEventListener('change',renderEvents);
+  <!-- Модалка события -->
+  <div id="eventModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 id="modalTitle" class="text-lg font-bold"></h2>
+      <p id="modalDate"></p>
+      <p id="modalLocation"></p>
+      <p id="modalDescription"></p>
+      <button onclick="closeEventModal()" class="bg-red-500 text-white px-3 py-1 mt-3 rounded">Закрыть</button>
+    </div>
+  </div>
 
-// === Запуск ===
-initAdmin(); renderEvents();
-</script>
+  <!-- Кнопка админки -->
+  <div class="admin-btn" onclick="showAdminModal()">⚙️</div>
+
+  <!-- Админка -->
+  <div id="adminModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 class="text-lg font-bold mb-3">Добавить событие</h2>
+      <form id="eventForm">
+        <input id="eventTitle" type="text" placeholder="Название" class="w-full mb-2 p-2 rounded bg-gray-700">
+        <input id="eventDate" type="date" class="w-full mb-2 p-2 rounded bg-gray-700">
+        <input id="eventLocation" type="text" placeholder="Место" class="w-full mb-2 p-2 rounded bg-gray-700">
+        <textarea id="eventDescription" placeholder="Описание" class="w-full mb-2 p-2 rounded bg-gray-700"></textarea>
+        <button type="submit" class="bg-green-500 w-full py-2 rounded">Сохранить</button>
+      </form>
+      <button onclick="closeAdminModal()" class="bg-red-500 text-white w-full mt-2 py-2 rounded">Закрыть</button>
+    </div>
+  </div>
+
+  <script>
+    let events = [];
+
+    function renderEvents() {
+      const container = document.getElementById('eventsContainer');
+      container.innerHTML = '';
+      events.forEach((event, index) => {
+        const div = document.createElement('div');
+        div.className = 'event-card';
+        div.innerHTML = `
+          <h3 class="text-lg font-bold">${event.title}</h3>
+          <p>${event.date}</p>
+          <p>${event.location}</p>
+        `;
+        div.onclick = () => showEventModal(index);
+        container.appendChild(div);
+      });
+    }
+
+    function showEventModal(index) {
+      const event = events[index];
+      document.getElementById('modalTitle').textContent = event.title;
+      document.getElementById('modalDate').textContent = event.date;
+      document.getElementById('modalLocation').textContent = event.location;
+      document.getElementById('modalDescription').textContent = event.description;
+      document.getElementById('eventModal').classList.remove('hidden');
+    }
+
+    function closeEventModal() {
+      document.getElementById('eventModal').classList.add('hidden');
+    }
+
+    function showAdminModal() {
+      document.getElementById('adminModal').classList.remove('hidden');
+    }
+
+    function closeAdminModal() {
+      document.getElementById('adminModal').classList.add('hidden');
+    }
+
+    document.getElementById('eventForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const newEvent = {
+        title: document.getElementById('eventTitle').value,
+        date: document.getElementById('eventDate').value,
+        location: document.getElementById('eventLocation').value,
+        description: document.getElementById('eventDescription').value,
+      };
+      events.push(newEvent);
+      renderEvents();
+      closeAdminModal();
+    });
+
+    renderEvents();
+  </script>
 </body>
 </html>
