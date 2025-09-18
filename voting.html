@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Голосование</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { touch-action: manipulation; margin: 0; background: #000; color: #fff; }
+        .instagram-style { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; padding: 10px; }
+        .nominee { background: #111; border-radius: 10px; overflow: hidden; cursor: pointer; }
+        .nominee img { width: 100%; height: 150px; object-fit: cover; }
+        .nominee p { padding: 10px; margin: 0; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1 id="pollTitle">Голосование</h1>
+    <div id="nomineesGrid" class="instagram-style"></div>
+    <p id="errorMsg" class="error" style="display:none;"></p>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.requestLocation();
+        const userId = tg.initDataUnsafe.user.id;
+        const urlParams = new URLSearchParams(window.location.search);
+        const eventId = urlParams.get('eventId');
+
+        async function loadPoll() {
+            const res = await fetch(`/api/polls/${eventId}`);
+            const poll = await res.json();
+            document.getElementById('pollTitle').textContent = `Голосование для события ${eventId}`;
+            document.getElementById('nomineesGrid').innerHTML = (poll.Nominees || []).map(n => `
+                <div class="nominee" onclick="vote('${n.id}')">
+                    <img src="${n.photoUrl}" alt="${n.name}">
+                    <p>${n.name} (${n.votes || 0} голосов)</p>
+                </div>
+            `).join('');
+        }
+
+        async function vote(nomineeId) {
+            const position = tg.initDataUnsafe.location || { latitude: 0, longitude: 0 };
+            const res = await fetch('/api/vote', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ eventId, nomineeId, userId, lat: position.latitude, lng: position.longitude })
+            });
+            const result = await res.json();
+            if (result.error) {
+                document.getElementById('errorMsg').textContent = result.error;
+                document.getElementById('errorMsg').style.display = 'block';
+            } else {
+                tg.showAlert('Голос учтён!');
+                loadPoll();
+            }
+        }
+
+        loadPoll();
+    </script>
+</body>
+</html>
