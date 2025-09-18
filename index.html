@@ -28,16 +28,16 @@
       background: rgba(255, 255, 255, 0.2);
     }
     .modal {
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0,0,0,0.8);
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top:0;
+      left:0;
+      right:0;
+      bottom:0;
       display: flex;
       justify-content: center;
       align-items: center;
-      z-index: 1000;
+      z-index: 3000;
     }
     .modal-content {
       background: #f0f0f0;
@@ -59,19 +59,40 @@
       border-radius: 5px;
       opacity: 0;
       transition: opacity 0.5s;
-      z-index: 2000;
+      z-index: 4000;
     }
     .fade-in { animation: fadeIn 0.5s ease-in; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    input, textarea, select { background: #fff; color: #333; border: 1px solid #ccc; }
+    input, textarea, select {
+      background: #fff;
+      color: #000;
+      border: 1px solid #ccc;
+    }
     .tab { background: #e0e0e0; color: #333; padding: 8px 16px; border-radius: 4px 4px 0 0; cursor: pointer; }
     .tab.active { background: #fff; font-weight: bold; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .filter-btn { margin-right: 5px; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-    .filter-btn.active { background: #4ade80; color: #000; }
+    .filter-btn {
+      margin-right: 5px;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      background: #f3f3f3;
+      color: #000;
+      border: 1px solid #ccc;
+    }
+    .filter-btn.active {
+      background: #4ade80;
+      color: #000;
+    }
     .past-event { opacity: 0.5; }
     .gallery img { max-width: 100%; margin-top: 5px; border-radius: 5px; }
+    #adminBtn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 5000;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -80,19 +101,23 @@
     <h1 class="text-2xl font-bold text-center mb-4">Smolville Events</h1>
 
     <!-- Фильтры и поиск -->
-    <div class="mb-4 flex flex-wrap justify-center items-center gap-2">
-      <button class="filter-btn active" data-type="">Все</button>
-      <button class="filter-btn" data-type="Спорт">Спорт</button>
-      <button class="filter-btn" data-type="Выставки">Выставки</button>
-      <input type="text" id="searchInput" placeholder="Поиск по названию/месту" class="border p-2 rounded w-60">
-      <select id="sortSelect" class="border p-2 rounded">
-        <option value="asc">По дате ↑</option>
-        <option value="desc">По дате ↓</option>
-      </select>
+    <div class="mb-4 flex flex-wrap justify-between items-center gap-2 bg-black/50 p-2 rounded">
+      <div class="flex gap-2 flex-wrap">
+        <button class="filter-btn active" data-type="">Все</button>
+        <button class="filter-btn" data-type="Спорт">Спорт</button>
+        <button class="filter-btn" data-type="Выставки">Выставки</button>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <input type="text" id="searchInput" placeholder="Поиск по названию/месту" class="border p-2 rounded w-60 text-black">
+        <select id="sortSelect" class="border p-2 rounded text-black">
+          <option value="asc">По дате ↑</option>
+          <option value="desc">По дате ↓</option>
+        </select>
+      </div>
     </div>
 
     <div id="events" class="grid grid-cols-1 gap-4"></div>
-    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg" onclick="showAdminModal()">Админ</button>
+    <button id="adminBtn" class="hidden bg-blue-500 text-white px-4 py-2 rounded-lg" onclick="showAdminModal()">Админ</button>
   </div>
 
   <!-- Модалки -->
@@ -151,75 +176,68 @@
     tg?.expand();
 
     const user = tg?.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
+    let allEvents = [];
 
-    // Тост уведомления
-    function showToast(message, duration=3000) {
+    function showToast(message, duration=3000){
       const toast = document.getElementById('toast');
       toast.textContent = message;
       toast.style.opacity = 1;
-      setTimeout(() => toast.style.opacity = 0, duration);
+      setTimeout(()=>toast.style.opacity=0, duration);
     }
 
-    // Форматирование дат
     const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-    function formatDate(dateStr) {
+    function formatDate(dateStr){
       if(!dateStr) return 'Без даты';
       const [year, month, day] = dateStr.split('-');
-      const d = new Date(dateStr);
-      const today = new Date();
-      if(d.toDateString() === today.toDateString()) return 'Сегодня';
-      const tomorrow = new Date(); tomorrow.setDate(today.getDate()+1);
-      if(d.toDateString() === tomorrow.toDateString()) return 'Завтра';
       return `${parseInt(day,10)} ${months[parseInt(month,10)-1]} ${year}`;
     }
 
-    let allEvents = [];
+    async function checkIsAdmin(userId){
+      try{
+        const res = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
+        const data = await res.json();
+        return data.isAdmin;
+      }catch(err){ console.error(err); return false; }
+    }
 
-    async function renderEvents() {
-      const eventsContainer = document.getElementById('events');
-      eventsContainer.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, {mode:'cors'});
-        const data = await response.json();
+    async function initAdmin(){
+      const isAdmin = await checkIsAdmin(user.id);
+      if(isAdmin) document.getElementById('adminBtn').classList.remove('hidden');
+    }
+
+    async function renderEvents(){
+      const container = document.getElementById('events');
+      container.innerHTML = '<p class="text-center text-gray-400">Загрузка...</p>';
+      try{
+        const res = await fetch(`${BACKEND_URL}/api/events`, {mode:'cors'});
+        const data = await res.json();
         allEvents = data.records || [];
         updateEventDisplay();
-      } catch(err) {
-        eventsContainer.innerHTML = `<p class="text-center text-gray-400">Ошибка: ${err.message}</p>`;
+      }catch(err){
+        container.innerHTML = `<p class="text-center text-gray-400">Ошибка: ${err.message}</p>`;
       }
     }
 
-    function updateEventDisplay() {
+    function updateEventDisplay(){
       const container = document.getElementById('events');
       container.innerHTML = '';
-
       const filterType = document.querySelector('.filter-btn.active')?.dataset.type || '';
       const searchTerm = document.getElementById('searchInput').value.toLowerCase();
       const sortOrder = document.getElementById('sortSelect').value;
 
       let events = [...allEvents];
-      if(filterType) events = events.filter(e => e.fields.Type === filterType);
-      if(searchTerm) events = events.filter(e => 
-        (e.fields.Title?.toLowerCase().includes(searchTerm) || e.fields.Location?.toLowerCase().includes(searchTerm))
-      );
+      if(filterType) events = events.filter(e=>e.fields.Type===filterType);
+      if(searchTerm) events = events.filter(e=> (e.fields.Title?.toLowerCase().includes(searchTerm) || e.fields.Location?.toLowerCase().includes(searchTerm)));
+      events.sort((a,b)=> sortOrder==='asc'?new Date(a.fields.Date)-new Date(b.fields.Date):new Date(b.fields.Date)-new Date(a.fields.Date));
 
-      events.sort((a,b)=>{
-        const d1 = new Date(a.fields.Date);
-        const d2 = new Date(b.fields.Date);
-        return sortOrder==='asc'?d1-d2:d2-d1;
-      });
-
-      if(events.length===0){
-        container.innerHTML = '<p class="text-center text-gray-400">Мероприятия не найдены</p>';
-        return;
-      }
+      if(events.length===0){ container.innerHTML='<p class="text-center text-gray-400">Мероприятия не найдены</p>'; return; }
 
       events.forEach(record=>{
         const ev = record.fields;
-        const d = new Date(ev.Date);
-        const isPast = d < new Date();
+        const isPast = new Date(ev.Date)<new Date();
         const div = document.createElement('div');
-        div.className = 'event-card p-2 fade-in' + (isPast?' past-event':'');
-        div.innerHTML = `
+        div.className='event-card p-2 fade-in' + (isPast?' past-event':'');
+        div.innerHTML=`
           <h3 class="text-sm font-bold">${ev.Title||'Без названия'}</h3>
           <p class="text-xs text-gray-400">${formatDate(ev.Date)}</p>
           <p class="text-xs text-gray-400">${ev.Location||'Без места'}</p>
@@ -231,17 +249,13 @@
     }
 
     // Фильтры
-    document.querySelectorAll('.filter-btn').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        updateEventDisplay();
-      });
-    });
-    document.getElementById('searchInput').addEventListener('input', updateEventDisplay);
-    document.getElementById('sortSelect').addEventListener('change', updateEventDisplay);
+    document.querySelectorAll('.filter-btn').forEach(btn=>btn.addEventListener('click',()=>{
+      document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active'); updateEventDisplay();
+    }));
+    document.getElementById('searchInput').addEventListener('input',updateEventDisplay);
+    document.getElementById('sortSelect').addEventListener('change',updateEventDisplay);
 
-    // Модалки
     function showEventModal(record){
       const modal = document.getElementById('eventModal');
       const ev = record.fields;
@@ -249,41 +263,130 @@
       document.getElementById('modalDate').textContent = formatDate(ev.Date);
       document.getElementById('modalLocation').textContent = ev.Location||'Без места';
       document.getElementById('modalDescription').textContent = ev.Description||'Без описания';
-      const gallery = document.getElementById('modalGallery');
-      gallery.innerHTML = ev.Image?.map(img=>`<img src="${img.url}">`).join('')||'';
+      document.getElementById('modalGallery').innerHTML = ev.Image?.map(img=>`<img src="${img.url}">`).join('')||'';
       modal.classList.remove('hidden');
     }
-    function closeEventModal(){document.getElementById('eventModal').classList.add('hidden');}
+    function closeEventModal(){ document.getElementById('eventModal').classList.add('hidden'); }
 
-    // Админка
-    document.getElementById('eventImage').addEventListener('change', function(){
-      const preview = document.getElementById('previewImages');
-      preview.innerHTML = '';
+    function showTab(tabId){
+      document.querySelectorAll('.tab').forEach(tab=>tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content=>content.classList.remove('active'));
+      document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+      if(tabId==='tab-list') renderAdminEvents();
+    }
+
+    function showAdminModal(){ showTab('tab-list'); clearForm(); document.getElementById('adminModal').classList.remove('hidden'); }
+    function closeAdminModal(){ document.getElementById('adminModal').classList.add('hidden'); }
+
+    function clearForm(){
+      document.getElementById('eventRecordId').value='';
+      document.getElementById('eventId').value='';
+      document.getElementById('eventTitle').value='';
+      document.getElementById('eventType').value='';
+      document.getElementById('eventDate').value='';
+      document.getElementById('eventLocation').value='';
+      document.getElementById('eventDescription').value='';
+      document.getElementById('eventImage').value='';
+      document.getElementById('previewImages').innerHTML='';
+    }
+
+    document.getElementById('eventImage').addEventListener('change',function(){
+      const preview = document.getElementById('previewImages'); preview.innerHTML='';
       Array.from(this.files).forEach(file=>{
         const reader = new FileReader();
-        reader.onload = e=>{
-          const img = document.createElement('img');
-          img.src = e.target.result;
-          img.className = 'w-20 h-20 object-cover rounded';
+        reader.onload=e=>{
+          const img = document.createElement('img'); img.src=e.target.result;
+          img.className='w-20 h-20 object-cover rounded';
           preview.appendChild(img);
         };
         reader.readAsDataURL(file);
       });
     });
 
-    document.getElementById('eventForm').addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      // Валидация
-      const title = document.getElementById('eventTitle').value.trim();
-      const date = document.getElementById('eventDate').value;
-      const location = document.getElementById('eventLocation').value.trim();
-      if(!title || !date || !location){showToast('Заполните обязательные поля'); return;}
-      showToast('Форма прошла валидацию. (Отправка на сервер)');
+    async function renderAdminEvents(){
+      const list = document.getElementById('eventList');
+      list.innerHTML='<p class="text-center text-gray-400">Загрузка...</p>';
+      try{
+        const res = await fetch(`${BACKEND_URL}/api/events`,{mode:'cors'});
+        const data = await res.json();
+        list.innerHTML='';
+        if(data.records.length===0){ list.innerHTML='<p class="text-center text-gray-400">Ивенты не найдены</p>'; return; }
+        data.records.sort((a,b)=>new Date(a.fields.Date)-new Date(b.fields.Date));
+        data.records.forEach(record=>{
+          const ev = record.fields;
+          const div = document.createElement('div');
+          div.className='p-2 border-b';
+          div.innerHTML=`
+            <p class="text-sm">${ev.Title||'Без названия'} (${formatDate(ev.Date)})</p>
+            <button onclick="editEvent('${record.id}')" class="bg-yellow-500 text-white px-2 py-1 rounded mr-2">Редактировать</button>
+            <button onclick="deleteEvent('${record.id}')" class="bg-red-500 text-white px-2 py-1 rounded">Удалить</button>
+          `;
+          list.appendChild(div);
+        });
+      }catch(err){ showToast('Ошибка загрузки админ списка'); }
+    }
 
-      // Здесь можно оставить существующую логику отправки на сервер
+    async function editEvent(recordId){
+      try{
+        const res = await fetch(`${BACKEND_URL}/api/events/${recordId}`);
+        const data = await res.json();
+        const ev = data.fields;
+        document.getElementById('eventRecordId').value = recordId;
+        document.getElementById('eventId').value = ev.ID;
+        document.getElementById('eventTitle').value = ev.Title;
+        document.getElementById('eventType').value = ev.Type;
+        document.getElementById('eventDate').value = ev.Date;
+        document.getElementById('eventLocation').value = ev.Location;
+        document.getElementById('eventDescription').value = ev.Description;
+        document.getElementById('previewImages').innerHTML = ev.Image?.map(img=>`<img src="${img.url}" class="w-20 h-20 object-cover rounded">`).join('')||'';
+        showTab('tab-form');
+      }catch(err){ showToast('Ошибка редактирования'); }
+    }
+
+    async function deleteEvent(recordId){
+      if(!confirm('Удалить ивент?')) return;
+      try{
+        await fetch(`${BACKEND_URL}/api/events/${recordId}`,{method:'DELETE'});
+        showToast('Ивент удалён');
+        renderAdminEvents(); renderEvents();
+      }catch(err){ showToast('Ошибка удаления'); }
+    }
+
+    document.getElementById('eventForm').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const recordId = document.getElementById('eventRecordId').value;
+      const eventData = {
+        fields:{
+          ID: document.getElementById('eventId').value || String(Math.floor(Math.random()*1000000)),
+          Title: document.getElementById('eventTitle').value,
+          Type: document.getElementById('eventType').value,
+          Date: document.getElementById('eventDate').value,
+          Location: document.getElementById('eventLocation').value,
+          Description: document.getElementById('eventDescription').value
+        }
+      };
+      const files = document.getElementById('eventImage').files;
+      if(files.length>0){
+        const formData = new FormData();
+        Array.from(files).forEach(f=>formData.append('image', f));
+        try{
+          const up = await fetch(`${BACKEND_URL}/api/upload`,{method:'POST',body:formData});
+          const upData = await up.json();
+          if(upData.url) eventData.fields.Image = [{url:upData.url}];
+        }catch(err){ showToast('Ошибка загрузки изображения'); return; }
+      }
+      try{
+        const method = recordId?'PATCH':'POST';
+        const url = recordId?`${BACKEND_URL}/api/events/${recordId}`:`${BACKEND_URL}/api/events`;
+        await fetch(url,{method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(eventData)});
+        showToast('Событие сохранено');
+        clearForm(); renderAdminEvents(); renderEvents(); showTab('tab-list');
+      }catch(err){ showToast('Ошибка сохранения события'); }
     });
 
-    // Запуск
+    // Инициализация
+    initAdmin();
     renderEvents();
   </script>
 </body>
