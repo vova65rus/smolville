@@ -17,9 +17,6 @@
       --secondary-bg-color: #f4f4f5;
     }
     body {
-      background-image: url('bg.png');
-      background-repeat: repeat;
-      background-size: 200px 200px;
       background-color: var(--bg-color);
       color: var(--text-color);
       transition: background-color 0.3s ease, color 0.3s ease;
@@ -121,7 +118,6 @@
       <p id="modalLocation"></p>
       <p id="modalDescription"></p>
       <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
-      <button class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 mt-4 rounded-lg transition" onclick="closeEventModal()">Закрыть</button>
     </div>
   </div>
 
@@ -159,7 +155,6 @@
         <h3 class="text-md font-bold mb-2">Настройки</h3>
         <p>Пока нет доступных настроек. В будущем здесь можно добавить управление админами или рекламой.</p>
       </div>
-      <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 mt-4 rounded-lg transition" onclick="closeAdminModal()">Закрыть</button>
     </div>
   </div>
 
