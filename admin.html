@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Админ панель</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { touch-action: manipulation; font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        nav button { margin: 5px; }
+        .event { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+        .instagram-style { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+        .nominee { text-align: center; border: 1px solid #ddd; padding: 10px; }
+        .nominee img { width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Админ-панель</h1>
+    <nav>
+        <button onclick="showSection('events')">Список событий</button>
+        <button onclick="showSection('addEvent')">Добавить/Редактировать</button>
+        <button onclick="showSection('settings')">Настройки</button>
+        <button onclick="showSection('polls')">Голосование</button>
+    </nav>
+
+    <div id="eventsSection">
+        <div id="adminEventsList"></div>
+    </div>
+
+    <div id="addEventSection" style="display:none;">
+        <h3>Добавить/Редактировать событие</h3>
+        <input type="text" id="eventName" placeholder="Название">
+        <textarea id="eventDesc" placeholder="Описание"></textarea>
+        <input type="url" id="locationLink" placeholder="Ссылка на 2GIS">
+        <input type="checkbox" id="hasPoll"> Включить голосование
+        <select id="eventType">
+            <option value="Спорт">Спорт</option>
+            <option value="Выставки">Выставки</option>
+        </select>
+        <button onclick="saveEvent()">Сохранить</button>
+    </div>
+
+    <div id="settingsSection" style="display:none;">
+        <p>Пока нет доступных настроек.</p>
+    </div>
+
+    <div id="pollsSection" style="display:none;">
+        <h3>Голосование</h3>
+        <select id="pollEventSelect"></select>
+        <input type="text" id="nomineeName" placeholder="Имя авто">
+        <input type="file" id="nomineePhoto">
+        <button onclick="addNominee()">Добавить номинанта</button>
+        <div id="nomineesList" class="instagram-style"></div>
+        <button onclick="startPoll()">Запустить</button>
+        <button onclick="stopPoll()">Стоп (выгрузить)</button>
+        <select id="exportFormat"><option value="jpeg">JPEG</option><option value="docx">DOCX</option></select>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        const userId = tg.initDataUnsafe.user.id;
+
+        fetch(`/api/is-admin?userId=${userId}`).then(res => res.json()).then(data => {
+            if (!data.isAdmin) {
+                tg.showAlert('Доступ запрещён');
+                tg.close();
+            }
+        });
+
+        function showSection(sec) {
+            document.querySelectorAll('div[id$="Section"]').forEach(d => d.style.display = 'none');
+            document.getElementById(sec + 'Section').style.display = 'block';
+        }
+
+        async function loadAdminEvents() {
+            const res = await fetch('/api/events');
+            const data = await res.json();
+            document.getElementById('adminEventsList').innerHTML = data.records.map(e => `
+                <div class="event">
+                    <h3>${e.fields.Name}</h3>
+                    <input value="${e.fields.LocationLink || ''}" onchange="updateEvent('${e.id}', {LocationLink: this.value})">
+                    <label><input type="checkbox" ${e.fields.HasPoll ? 'checked' : ''} onchange="updateEvent('${e.id}', {HasPoll: this.checked})"> Голосование</label>
+                </div>
+            `).join('');
+            document.getElementById('pollEventSelect').innerHTML = '<option value="">Выберите событие</option>' + data.records.map(e => `<option value="${e.id}">${e.fields.Name}</option>`).join('');
+        }
+
+        async function updateEvent(id, fields) {
+            await fetch(`/api/events/${id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ fields })
+            });
+        }
+
+        async function saveEvent() {
+            const fields = {
+                Name: document.getElementById('eventName').value,
+                Description: document.getElementById('eventDesc').value,
+                LocationLink: document.getElementById('locationLink').value,
+                HasPoll: document.getElementById('hasPoll').checked,
+                Type: document.getElementById('eventType').value
+            };
+            await fetch('/api/events', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ fields })
+            });
+            loadAdminEvents();
+        }
+
+        let currentPollEventId = '';
+        document.getElementById('pollEventSelect').onchange = (e) => {
+            currentPollEventId = e.target.value;
+            loadNominees();
+        };
+
+        async function loadNominees() {
+            if (!currentPollEventId) return;
+            const res = await fetch(`/api/polls/${currentPollEventId}`);
+            const poll = await res.json();
+            document.getElementById('nomineesList').innerHTML = (poll.Nominees || []).map(n => `
+                <div class="nominee">
+                    <img src="${n.photoUrl}" alt="${n.name}">
+                    <p>${n.name} (${n.votes || 0} голосов)</p>
+                </div>
+            `).join('');
+        }
+
+        async function addNominee() {
+            const name = document.getElementById('nomineeName').value;
+            const photoFile = document.getElementById('nomineePhoto').files[0];
+            if (!name || !photoFile || !currentPollEventId) return tg.showAlert('Заполните все поля');
+            const formData = new FormData();
+            formData.append('image', photoFile);
+            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+            const { url } = await uploadRes.json();
+            const res = await fetch(`/api/polls/${currentPollEventId}`);
+            const poll = await res.json();
+            const nominees = poll.Nominees || [];
+            nominees.push({ id: Date.now(), name, photoUrl: url, votes: 0 });
+            await fetch('/api/polls', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ EventId: currentPollEventId, Nominees: nominees, IsActive: false })
+            });
+            loadNominees();
+        }
+
+        async function startPoll() {
+            if (!currentPollEventId) return tg.showAlert('Выберите событие');
+            const res = await fetch(`/api/polls/${currentPollEventId}`);
+            const poll = await res.json();
+            await fetch(`/api/polls/${pollRes.data.records[0]?.id || 'new'}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ fields: { IsActive: true } })
+            });
+            tg.showAlert('Голосование запущено');
+        }
+
+        async function stopPoll() {
+            if (!currentPollEventId) return tg.showAlert('Выберите событие');
+            const format = document.getElementById('exportFormat').value;
+            const res = await fetch(`/api/polls/${currentPollEventId}/stop`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ format })
+            });
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `results.${format}`;
+            a.click();
+        }
+
+        loadAdminEvents();
+        showSection('events');
+    </script>
+</body>
+</html>
