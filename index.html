@@ -170,15 +170,17 @@
     <div class="modal-content">
       <h2 class="text-lg font-bold mb-4">Админ-панель</h2>
       <div class="flex mb-4">
-        <div class="tab active" onclick="showTab('tab-list')">Список событий</div>
-        <div class="tab" onclick="showTab('tab-form')">Добавить/Редактировать</div>
-        <div class="tab" onclick="showTab('tab-ads')">Реклама</div>
-        <div class="tab" onclick="showTab('tab-settings')">Настройки</div>
+        <div class="tab active" onclick="showTab('tab-list')">События</div>
+        <div class="tab" onclick="showTab('tab-form')">Добавить событие</div>
+        <div class="tab" onclick="showTab('tab-ads-list')">Реклама</div>
+        <div class="tab" onclick="showTab('tab-ad-form')">Добавить рекламу</div>
       </div>
+      
       <div id="tab-list" class="tab-content active">
         <h3 class="text-md font-bold mb-2">Список событий</h3>
         <div id="eventList" class="mb-4"></div>
       </div>
+      
       <div id="tab-form" class="tab-content">
         <h3 class="text-md font-bold mb-2">Добавить/Редактировать событие</h3>
         <form id="eventForm">
@@ -195,17 +197,29 @@
           <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
           <input type="text" id="eventMapLink" placeholder="Ссылка на карту (2GIS)" class="border p-2 w-full mb-2">
           <input type="file" id="eventImage" accept="image/*" class="mb-2">
-          <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Сохранить</button>
+          <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Сохранить событие</button>
         </form>
       </div>
-      <div id="tab-ads" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Управление рекламой</h3>
+      
+      <div id="tab-ads-list" class="tab-content">
+        <h3 class="text-md font-bold mb-2">Список рекламных блоков</h3>
         <div id="adsList" class="mb-4"></div>
         <button onclick="loadAds()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Обновить список</button>
       </div>
-      <div id="tab-settings" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Настройки</h3>
-        <p>Пока нет доступных настроек. В будущем здесь можно добавить управление админами или рекламой.</p>
+      
+      <div id="tab-ad-form" class="tab-content">
+        <h3 class="text-md font-bold mb-2">Добавить/Редактировать рекламу</h3>
+        <form id="adForm">
+          <input type="hidden" id="adRecordId">
+          <input type="text" id="adTitle" placeholder="Заголовок рекламы" class="border p-2 w-full mb-2" required>
+          <textarea id="adDescription" placeholder="Описание рекламы" class="border p-2 w-full mb-2"></textarea>
+          <input type="url" id="adUrl" placeholder="Ссылка (URL)" class="border p-2 w-full mb-2">
+          <input type="file" id="adImage" accept="image/*" class="mb-2">
+          <div class="flex space-x-2">
+            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition flex-1">Сохранить рекламу</button>
+            <button type="button" onclick="clearAdForm()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">Очистить</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -270,39 +284,30 @@
       eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
       
       try {
-        // Загружаем и события и рекламу параллельно
         const [eventsResponse, adsResponse] = await Promise.all([
           fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' }),
           fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' })
         ]);
 
-        if (!eventsResponse.ok) {
-          throw new Error('Ошибка загрузки событий');
-        }
+        if (!eventsResponse.ok) throw new Error('Ошибка загрузки событий');
 
         const eventsData = await eventsResponse.json();
         let adsData = { records: [] };
         
-        if (adsResponse.ok) {
-          adsData = await adsResponse.json();
-        }
+        if (adsResponse.ok) adsData = await adsResponse.json();
 
         eventsContainer.innerHTML = '';
         
-        // Объединяем события и рекламу в один массив
         let allItems = [];
         
-        // Добавляем события
-        if (eventsData.records && Array.isArray(eventsData.records)) {
+        if (eventsData.records) {
           eventsData.records.forEach(record => {
             allItems.push({ type: 'event', data: record });
           });
         }
         
-        // Добавляем рекламу (каждое 3-е место)
-        if (adsData.records && Array.isArray(adsData.records)) {
+        if (adsData.records) {
           adsData.records.forEach((ad, index) => {
-            // Вставляем рекламу после каждого 2-го события
             const position = (index + 1) * 3 - 1;
             if (position <= allItems.length) {
               allItems.splice(position, 0, { type: 'ad', data: ad });
@@ -312,21 +317,9 @@
           });
         }
 
-        // Сортируем события по дате
-        allItems = allItems.filter(item => {
-          if (item.type === 'event') {
-            return true;
-          }
-          return true; // Реклама всегда показывается
-        });
-
-        // Рендерим все элементы
         allItems.forEach(item => {
-          if (item.type === 'event') {
-            renderEventItem(item.data);
-          } else if (item.type === 'ad') {
-            renderAdItem(item.data);
-          }
+          if (item.type === 'event') renderEventItem(item.data);
+          else if (item.type === 'ad') renderAdItem(item.data);
         });
 
         if (allItems.length === 0) {
@@ -376,9 +369,7 @@
       
       try {
         const response = await fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' });
-        if (!response.ok) {
-          throw new Error('Ошибка загрузки рекламы');
-        }
+        if (!response.ok) throw new Error('Ошибка загрузки рекламы');
         
         const data = await response.json();
         adsList.innerHTML = '';
@@ -386,12 +377,21 @@
         if (data.records && data.records.length > 0) {
           data.records.forEach(record => {
             const ad = record.fields || {};
+            const safeTitle = ad.Title ? ad.Title.replace(/'/g, "\\'") : '';
+            const safeDescription = ad.Description ? ad.Description.replace(/'/g, "\\'") : '';
+            const safeUrl = ad.URL ? ad.URL.replace(/'/g, "\\'") : '';
+            const safeImageUrl = ad.IMG?.[0]?.url ? ad.IMG[0].url.replace(/'/g, "\\'") : '';
+            
             const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)]';
+            div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
             div.innerHTML = `
-              <p class="text-sm"><strong>${ad.Title || 'Без названия'}</strong></p>
+              <p class="text-sm font-bold">${ad.Title || 'Без названия'}</p>
               <p class="text-xs">${ad.Description || 'Без описания'}</p>
-              <p class="text-xs">URL: ${ad.URL || 'Не указан'}</p>
+              <p class="text-xs text-[var(--hint-color)]">URL: ${ad.URL || 'Не указан'}</p>
+              <div class="flex space-x-2 mt-2">
+                <button onclick="editAd('${record.id}', '${safeTitle}', '${safeDescription}', '${safeUrl}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
+                <button onclick="deleteAd('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
+              </div>
             `;
             adsList.appendChild(div);
           });
@@ -403,6 +403,103 @@
       }
     }
 
+    function editAd(recordId, title, description, url, imageUrl) {
+      document.getElementById('adRecordId').value = recordId;
+      document.getElementById('adTitle').value = title || '';
+      document.getElementById('adDescription').value = description || '';
+      document.getElementById('adUrl').value = url || '';
+      alert('Текущее изображение: ' + (imageUrl || 'отсутствует'));
+      showTab('tab-ad-form');
+    }
+
+    async function deleteAd(recordId) {
+      if (!confirm('Удалить рекламный блок?')) return;
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/ads/${recordId}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Ошибка удаления');
+        alert('Рекламный блок удален');
+        loadAds();
+        renderEvents();
+      } catch (err) {
+        alert(`Ошибка: ${err.message}`);
+      }
+    }
+
+    function clearAdForm() {
+      document.getElementById('adRecordId').value = '';
+      document.getElementById('adTitle').value = '';
+      document.getElementById('adDescription').value = '';
+      document.getElementById('adUrl').value = '';
+      document.getElementById('adImage').value = '';
+    }
+
+    document.getElementById('adForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const recordId = document.getElementById('adRecordId').value;
+      const title = document.getElementById('adTitle').value;
+      const description = document.getElementById('adDescription').value;
+      const url = document.getElementById('adUrl').value;
+
+      if (!title) {
+        alert('Заголовок рекламы обязателен для заполнения');
+        return;
+      }
+
+      const adData = {
+        fields: {
+          Title: title,
+          Description: description || '',
+          URL: url || ''
+        }
+      };
+
+      const imageFile = document.getElementById('adImage').files[0];
+      if (imageFile) {
+        try {
+          const uploadForm = new FormData();
+          uploadForm.append('image', imageFile);
+          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
+            method: 'POST',
+            body: uploadForm
+          });
+          const uploadData = await uploadResponse.json();
+          if (uploadData.url) {
+            adData.fields.IMG = [{ url: uploadData.url }];
+          } else {
+            throw new Error('Ошибка загрузки изображения');
+          }
+        } catch (err) {
+          alert(`Ошибка загрузки изображения: ${err.message}`);
+          return;
+        }
+      }
+
+      try {
+        const method = recordId ? 'PATCH' : 'POST';
+        const url = recordId ? `${BACKEND_URL}/api/ads/${recordId}` : `${BACKEND_URL}/api/ads`;
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(adData)
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || 'Ошибка сохранения рекламы');
+        }
+
+        alert('Рекламный блок сохранен');
+        clearAdForm();
+        loadAds();
+        renderEvents();
+      } catch (err) {
+        console.error('Ошибка сохранения рекламы:', err);
+        alert(`Ошибка сохранения рекламы: ${err.message}`);
+      }
+    });
+
     function showTab(tabId) {
       document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -411,7 +508,7 @@
       
       if (tabId === 'tab-list') {
         renderAdminEvents();
-      } else if (tabId === 'tab-ads') {
+      } else if (tabId === 'tab-ads-list') {
         loadAds();
       }
     }
@@ -426,15 +523,12 @@
       document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
       document.getElementById('modalImage').src = event.Image?.[0]?.url || 'https://via.placeholder.com/150';
       
-      // Обработка кнопки "На карте"
       const mapButtonContainer = document.getElementById('modalMapButtonContainer');
       const mapButton = document.getElementById('modalMapButton');
       
       if (event.MapLink) {
         mapButtonContainer.classList.remove('hidden');
-        mapButton.onclick = () => {
-          tg.openLink(event.MapLink);
-        };
+        mapButton.onclick = () => tg.openLink(event.MapLink);
       } else {
         mapButtonContainer.classList.add('hidden');
       }
@@ -454,9 +548,8 @@
       
       const adButton = document.getElementById('adModalButton');
       if (ad.URL) {
-        adButton.onclick = () => {
-          tg.openLink(ad.URL);
-        };
+        adButton.onclick = () => tg.openLink(ad.URL);
+        adButton.style.display = 'block';
       } else {
         adButton.style.display = 'none';
       }
@@ -476,18 +569,16 @@
       tg.BackButton.hide();
     }
 
-    // ... остальной код (showAdminModal, closeAdminModal, clearForm, editEvent, deleteEvent) ...
-
     async function renderAdminEvents() {
       const eventList = document.getElementById('eventList');
       eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
       try {
         const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (!response.ok) {
-          throw new Error('Ошибка загрузки ивентов');
-        }
+        if (!response.ok) throw new Error('Ошибка загрузки ивентов');
+        
         const data = await response.json();
         eventList.innerHTML = '';
+        
         if (data.records && data.records.length > 0) {
           data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
@@ -518,6 +609,7 @@
     function showAdminModal() {
       showTab('tab-list');
       clearForm();
+      clearAdForm();
       document.getElementById('adminModal').classList.remove('hidden');
       tg.BackButton.show();
       tg.BackButton.onClick(closeAdminModal);
@@ -571,12 +663,9 @@
     document.getElementById('eventForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       let eventId = document.getElementById('eventId').value;
-      if (!eventId) {
-        eventId = String(Math.floor(Math.random() * 1000000));
-        document.getElementById('eventId').value = eventId;
-      }
-      const recordId = document.getElementById('eventRecordId').value;
+      if (!eventId) eventId = String(Math.floor(Math.random() * 1000000));
       
+      const recordId = document.getElementById('eventRecordId').value;
       const eventData = {
         fields: {
           ID: eventId,
@@ -589,9 +678,7 @@
       };
       
       const mapLink = document.getElementById('eventMapLink').value;
-      if (mapLink) {
-        eventData.fields.MapLink = mapLink;
-      }
+      if (mapLink) eventData.fields.MapLink = mapLink;
       
       const imageFile = document.getElementById('eventImage').files[0];
       if (imageFile) {
@@ -603,11 +690,8 @@
             body: uploadForm
           });
           const uploadData = await uploadResponse.json();
-          if (uploadData.url) {
-            eventData.fields.Image = [{ url: uploadData.url }];
-          } else {
-            throw new Error('Ошибка загрузки изображения');
-          }
+          if (uploadData.url) eventData.fields.Image = [{ url: uploadData.url }];
+          else throw new Error('Ошибка загрузки изображения');
         } catch (err) {
           alert(`Ошибка загрузки изображения: ${err.message}`);
           return;
@@ -623,10 +707,7 @@
           body: JSON.stringify(eventData)
         });
         
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText || 'Ошибка сохранения события');
-        }
+        if (!response.ok) throw new Error('Ошибка сохранения события');
         
         alert('Событие сохранено');
         clearForm();
@@ -634,7 +715,6 @@
         renderEvents();
         showTab('tab-list');
       } catch (err) {
-        console.error('Ошибка сохранения:', err);
         alert(`Ошибка сохранения: ${err.message}`);
       }
     });
