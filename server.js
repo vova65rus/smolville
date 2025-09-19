@@ -16,8 +16,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 const upload = multer({ dest: 'uploads/' });
 
 // Env vars
@@ -27,8 +27,8 @@ const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
 
-// Хардкод админа (можно перенести в env var ADMIN_ID)
-const ADMIN_ID = 366825437; // Замените на ваш ID
+// Хардкод админа
+const ADMIN_ID = 366825437;
 
 if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
   console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
@@ -58,30 +58,18 @@ app.get('/api/events', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Events GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/events', async (req, res) => {
   try {
-    console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
-    
     const response = await axios.post(EVENTS_URL, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
-    
     res.json(response.data);
   } catch (error) {
     console.error('Events POST error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -94,30 +82,18 @@ app.get('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
 
 app.patch('/api/events/:id', async (req, res) => {
   try {
-    console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
-    
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
     });
-    
     res.json(response.data);
   } catch (error) {
     console.error('Event PATCH error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -130,14 +106,11 @@ app.delete('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event DELETE error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
 
-// API для рекламы (если нужно)
+// API для рекламы
 app.get('/api/ads', async (req, res) => {
   try {
     const response = await axios.get(ADS_URL, {
@@ -146,9 +119,6 @@ app.get('/api/ads', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -161,9 +131,6 @@ app.post('/api/ads', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads POST error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -176,9 +143,6 @@ app.patch('/api/ads/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads PATCH error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -204,6 +168,70 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   } catch (error) {
     console.error('Upload error:', error.message);
     if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// НОВЫЕ ENDPOINTS ДЛЯ "Я ПОЙДУ!"
+app.post('/api/events/:eventId/attend', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+
+    // Получаем текущее значение счетчика
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+
+    const currentCount = eventResponse.data.fields.AttendeesCount || 0;
+
+    // Обновляем счетчик
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, {
+      fields: {
+        AttendeesCount: currentCount + 1
+      }
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json({ success: true, count: currentCount + 1 });
+  } catch (error) {
+    console.error('Attend error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/events/:eventId/unattend', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+
+    // Получаем текущее значение счетчика
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+
+    const currentCount = eventResponse.data.fields.AttendeesCount || 0;
+    const newCount = Math.max(0, currentCount - 1);
+
+    // Обновляем счетчик
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, {
+      fields: {
+        AttendeesCount: newCount
+      }
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json({ success: true, count: newCount });
+  } catch (error) {
+    console.error('Unattend error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
