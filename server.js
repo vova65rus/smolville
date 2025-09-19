@@ -16,8 +16,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const upload = multer({ dest: 'uploads/' });
 
 // Env vars
@@ -58,18 +58,30 @@ app.get('/api/events', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Events GET error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/events', async (req, res) => {
   try {
+    console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
+    
     const response = await axios.post(EVENTS_URL, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
+    
     res.json(response.data);
   } catch (error) {
     console.error('Events POST error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -82,18 +94,30 @@ app.get('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event GET error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
 
 app.patch('/api/events/:id', async (req, res) => {
   try {
+    console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
+    
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
+    
     res.json(response.data);
   } catch (error) {
     console.error('Event PATCH error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -106,6 +130,9 @@ app.delete('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event DELETE error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -119,6 +146,9 @@ app.get('/api/ads', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads GET error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -131,6 +161,9 @@ app.post('/api/ads', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads POST error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -143,6 +176,9 @@ app.patch('/api/ads/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads PATCH error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
