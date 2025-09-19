@@ -172,23 +172,36 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// НОВЫЕ ENDPOINTS ДЛЯ "Я ПОЙДУ!"
+// НОВЫЕ ENDPOINTS ДЛЯ "Я ПОЙДУ!" С ЗАЩИТОЙ ОТ НАКРУТКИ
 app.post('/api/events/:eventId/attend', async (req, res) => {
   try {
     const { eventId } = req.params;
     const { userId } = req.body;
 
-    // Получаем текущее значение счетчика
+    // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
-    const currentCount = eventResponse.data.fields.AttendeesCount || 0;
+    const event = eventResponse.data.fields;
+    const currentAttendees = event.AttendeesIDs || '';
+    const currentCount = event.AttendeesCount || 0;
+    
+    // Проверяем, не записан ли уже пользователь
+    const attendeesArray = currentAttendees.split(',').filter(id => id.trim());
+    
+    if (attendeesArray.includes(userId.toString())) {
+      return res.status(400).json({ error: 'User already attending' });
+    }
 
-    // Обновляем счетчик
+    // Добавляем пользователя и обновляем счетчик
+    const newAttendees = currentAttendees ? `${currentAttendees},${userId}` : userId;
+    const newCount = currentCount + 1;
+
     const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, {
       fields: {
-        AttendeesCount: currentCount + 1
+        AttendeesIDs: newAttendees,
+        AttendeesCount: newCount
       }
     }, {
       headers: { 
@@ -197,7 +210,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       }
     });
 
-    res.json({ success: true, count: currentCount + 1 });
+    res.json({ success: true, count: newCount, attending: true });
   } catch (error) {
     console.error('Attend error:', error.message);
     res.status(500).json({ error: error.message });
@@ -209,17 +222,24 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     const { eventId } = req.params;
     const { userId } = req.body;
 
-    // Получаем текущее значение счетчика
+    // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
-    const currentCount = eventResponse.data.fields.AttendeesCount || 0;
+    const event = eventResponse.data.fields;
+    const currentAttendees = event.AttendeesIDs || '';
+    const currentCount = event.AttendeesCount || 0;
+    
+    // Удаляем пользователя из списка
+    const attendeesArray = currentAttendees.split(',').filter(id => id.trim());
+    const newAttendeesArray = attendeesArray.filter(id => id !== userId.toString());
+    const newAttendees = newAttendeesArray.join(',');
     const newCount = Math.max(0, currentCount - 1);
 
-    // Обновляем счетчик
     const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, {
       fields: {
+        AttendeesIDs: newAttendees,
         AttendeesCount: newCount
       }
     }, {
@@ -229,9 +249,31 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       }
     });
 
-    res.json({ success: true, count: newCount });
+    res.json({ success: true, count: newCount, attending: false });
   } catch (error) {
     console.error('Unattend error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Проверяем статус участия пользователя
+app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
+  try {
+    const { eventId, userId } = req.params;
+
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+
+    const event = eventResponse.data.fields;
+    const attendees = event.AttendeesIDs || '';
+    const attendeesArray = attendees.split(',').filter(id => id.trim());
+    
+    const isAttending = attendeesArray.includes(userId.toString());
+
+    res.json({ isAttending });
+  } catch (error) {
+    console.error('Attend status error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
