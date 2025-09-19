@@ -120,6 +120,11 @@
       <p id="modalLocation"></p>
       <p id="modalDescription"></p>
       <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
+      <div id="modalMapButtonContainer" class="hidden mt-3">
+        <button id="modalMapButton" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">
+          На карте
+        </button>
+      </div>
     </div>
   </div>
 
@@ -149,6 +154,7 @@
           <input type="date" id="eventDate" class="border p-2 w-full mb-2">
           <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2">
           <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
+          <input type="text" id="eventMapLink" placeholder="Ссылка на карту (2GIS)" class="border p-2 w-full mb-2">
           <input type="file" id="eventImage" accept="image/*" class="mb-2">
           <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Сохранить</button>
         </form>
@@ -273,7 +279,7 @@
             div.className = 'p-2 border-b border-[var(--hint-color)]';
             div.innerHTML = `
               <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
-              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.Image?.[0]?.url || ''}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
+              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.MapLink || ''}', '${event.Image?.[0]?.url || ''}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
               <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
             `;
             eventList.appendChild(div);
@@ -299,11 +305,26 @@
     function showEventModal(record) {
       const modal = document.getElementById('eventModal');
       const event = record.fields || {};
+      
       document.getElementById('modalTitle').textContent = event.Title || 'Без названия';
       document.getElementById('modalDate').textContent = formatDate(event.Date) || 'Без даты';
       document.getElementById('modalLocation').textContent = event.Location || 'Без места';
       document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
       document.getElementById('modalImage').src = event.Image?.[0]?.url || 'https://via.placeholder.com/150';
+      
+      // Обработка кнопки "На карте"
+      const mapButtonContainer = document.getElementById('modalMapButtonContainer');
+      const mapButton = document.getElementById('modalMapButton');
+      
+      if (event.MapLink) {
+        mapButtonContainer.classList.remove('hidden');
+        mapButton.onclick = () => {
+          tg.openLink(event.MapLink); // Открываем ссылку во внешнем приложении
+        };
+      } else {
+        mapButtonContainer.classList.add('hidden');
+      }
+      
       modal.classList.remove('hidden');
       tg.BackButton.show();
       tg.BackButton.onClick(closeEventModal);
@@ -335,10 +356,11 @@
       document.getElementById('eventDate').value = '';
       document.getElementById('eventLocation').value = '';
       document.getElementById('eventDescription').value = '';
+      document.getElementById('eventMapLink').value = '';
       document.getElementById('eventImage').value = '';
     }
 
-    function editEvent(recordId, id, title, type, date, location, description, imageUrl) {
+    function editEvent(recordId, id, title, type, date, location, description, mapLink, imageUrl) {
       document.getElementById('eventRecordId').value = recordId;
       document.getElementById('eventId').value = id;
       document.getElementById('eventTitle').value = title;
@@ -346,6 +368,7 @@
       document.getElementById('eventDate').value = date;
       document.getElementById('eventLocation').value = location;
       document.getElementById('eventDescription').value = description;
+      document.getElementById('eventMapLink').value = mapLink || '';
       alert('Текущее изображение: ' + imageUrl);
       showTab('tab-form');
     }
@@ -380,7 +403,8 @@
           Type: document.getElementById('eventType').value,
           Date: document.getElementById('eventDate').value,
           Location: document.getElementById('eventLocation').value,
-          Description: document.getElementById('eventDescription').value
+          Description: document.getElementById('eventDescription').value,
+          MapLink: document.getElementById('eventMapLink').value // Добавляем ссылку на карту
         }
       };
       const imageFile = document.getElementById('eventImage').files[0];
