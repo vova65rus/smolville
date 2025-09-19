@@ -275,11 +275,18 @@
           data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
             const event = record.fields || {};
+            // Экранируем специальные символы для корректной работы JavaScript
+            const safeTitle = event.Title ? event.Title.replace(/'/g, "\\'") : '';
+            const safeLocation = event.Location ? event.Location.replace(/'/g, "\\'") : '';
+            const safeDescription = event.Description ? event.Description.replace(/'/g, "\\'") : '';
+            const safeMapLink = event.MapLink ? event.MapLink.replace(/'/g, "\\'") : '';
+            const safeImageUrl = event.Image?.[0]?.url ? event.Image[0].url.replace(/'/g, "\\'") : '';
+            
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)]';
             div.innerHTML = `
               <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
-              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.MapLink}', '${event.Image?.[0]?.url || ''}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
+              <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
               <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
             `;
             eventList.appendChild(div);
@@ -396,6 +403,8 @@
         document.getElementById('eventId').value = eventId;
       }
       const recordId = document.getElementById('eventRecordId').value;
+      
+      // Создаем объект с данными события
       const eventData = {
         fields: {
           ID: eventId,
@@ -403,10 +412,16 @@
           Type: document.getElementById('eventType').value,
           Date: document.getElementById('eventDate').value,
           Location: document.getElementById('eventLocation').value,
-          Description: document.getElementById('eventDescription').value,
-          MapLink: document.getElementById('eventMapLink').value // Добавляем ссылку на карту
+          Description: document.getElementById('eventDescription').value
         }
       };
+      
+      // Добавляем ссылку на карту только если она не пустая
+      const mapLink = document.getElementById('eventMapLink').value;
+      if (mapLink) {
+        eventData.fields.MapLink = mapLink;
+      }
+      
       const imageFile = document.getElementById('eventImage').files[0];
       if (imageFile) {
         try {
@@ -427,6 +442,7 @@
           return;
         }
       }
+      
       try {
         const method = recordId ? 'PATCH' : 'POST';
         const url = recordId ? `${BACKEND_URL}/api/events/${recordId}` : `${BACKEND_URL}/api/events`;
@@ -435,14 +451,20 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(eventData)
         });
-        if (!response.ok) throw new Error('Ошибка сохранения события');
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || 'Ошибка сохранения события');
+        }
+        
         alert('Событие сохранено');
         clearForm();
         renderAdminEvents();
         renderEvents();
         showTab('tab-list');
       } catch (err) {
-        alert(`Ошибка: ${err.message}`);
+        console.error('Ошибка сохранения:', err);
+        alert(`Ошибка сохранения: ${err.message}`);
       }
     });
 
