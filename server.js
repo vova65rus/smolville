@@ -16,8 +16,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const upload = multer({ dest: 'uploads/' });
 
 // Env vars
@@ -58,18 +58,29 @@ app.get('/api/events', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Events GET error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/events', async (req, res) => {
   try {
+    console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
+    
     const response = await axios.post(EVENTS_URL, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
     console.error('Events POST error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -82,23 +93,34 @@ app.get('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event GET error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
 
 app.patch('/api/events/:id', async (req, res) => {
   try {
+    console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
+    
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
     console.error('Event PATCH error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/events/:id', async (req, res) => {
+app.delete('/api/events/:id', async (req, res) {
   try {
     const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
@@ -106,6 +128,9 @@ app.delete('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event DELETE error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -119,6 +144,9 @@ app.get('/api/ads', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads GET error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -126,11 +154,17 @@ app.get('/api/ads', async (req, res) => {
 app.post('/api/ads', async (req, res) => {
   try {
     const response = await axios.post(ADS_URL, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
     console.error('Ads POST error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -138,11 +172,17 @@ app.post('/api/ads', async (req, res) => {
 app.patch('/api/ads/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' }
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
     console.error('Ads PATCH error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -172,11 +212,13 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// НОВЫЕ ENDPOINTS ДЛЯ "Я ПОЙДУ!" С ЗАЩИТОЙ ОТ НАКРУТКИ
+// НОВЫЕ ENDPOINTS ДЛЯ "Я ПОЙДУ!" 
 app.post('/api/events/:eventId/attend', async (req, res) => {
   try {
     const { eventId } = req.params;
     const { userId } = req.body;
+
+    console.log(`User ${userId} attending event ${eventId}`);
 
     // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
@@ -187,16 +229,23 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     const currentAttendees = event.AttendeesIDs || '';
     const currentCount = event.AttendeesCount || 0;
     
+    console.log('Current attendees:', currentAttendees);
+    console.log('Current count:', currentCount);
+
     // Проверяем, не записан ли уже пользователь
     const attendeesArray = currentAttendees.split(',').filter(id => id.trim());
     
     if (attendeesArray.includes(userId.toString())) {
+      console.log('User already attending');
       return res.status(400).json({ error: 'User already attending' });
     }
 
     // Добавляем пользователя и обновляем счетчик
-    const newAttendees = currentAttendees ? `${currentAttendees},${userId}` : userId;
+    const newAttendees = currentAttendees ? `${currentAttendees},${userId}` : userId.toString();
     const newCount = currentCount + 1;
+
+    console.log('New attendees:', newAttendees);
+    console.log('New count:', newCount);
 
     const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, {
       fields: {
@@ -206,13 +255,17 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     }, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json' 
       }
     });
 
+    console.log('Update successful');
     res.json({ success: true, count: newCount, attending: true });
   } catch (error) {
     console.error('Attend error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -222,6 +275,8 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     const { eventId } = req.params;
     const { userId } = req.body;
 
+    console.log(`User ${userId} unattending event ${eventId}`);
+
     // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
@@ -231,11 +286,17 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     const currentAttendees = event.AttendeesIDs || '';
     const currentCount = event.AttendeesCount || 0;
     
+    console.log('Current attendees:', currentAttendees);
+    console.log('Current count:', currentCount);
+
     // Удаляем пользователя из списка
     const attendeesArray = currentAttendees.split(',').filter(id => id.trim());
     const newAttendeesArray = attendeesArray.filter(id => id !== userId.toString());
     const newAttendees = newAttendeesArray.join(',');
     const newCount = Math.max(0, currentCount - 1);
+
+    console.log('New attendees:', newAttendees);
+    console.log('New count:', newCount);
 
     const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, {
       fields: {
@@ -245,13 +306,17 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     }, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json' 
       }
     });
 
+    console.log('Unattend successful');
     res.json({ success: true, count: newCount, attending: false });
   } catch (error) {
     console.error('Unattend error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -260,6 +325,8 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
 app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
   try {
     const { eventId, userId } = req.params;
+
+    console.log(`Checking attend status for user ${userId} in event ${eventId}`);
 
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
@@ -271,9 +338,13 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
     
     const isAttending = attendeesArray.includes(userId.toString());
 
+    console.log('Is attending:', isAttending);
     res.json({ isAttending });
   } catch (error) {
     console.error('Attend status error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -289,4 +360,7 @@ app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   console.log(`Events URL: ${EVENTS_URL}`);
   console.log(`Ads URL: ${ADS_URL}`);
+  console.log('Make sure you have these columns in Airtable:');
+  console.log('- AttendeesIDs: Single line text');
+  console.log('- AttendeesCount: Number');
 });
