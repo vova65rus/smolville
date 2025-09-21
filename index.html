@@ -97,7 +97,7 @@
       transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     }
     input::placeholder, textarea::placeholder {
-color: var(--hint-color);
+      color: var(--hint-color);
     }
     .tab {
       background: var(--secondary-bg-color);
@@ -197,7 +197,6 @@ color: var(--hint-color);
         <form id="eventForm">
           <input type="hidden" id="eventRecordId">
           <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
-          <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w
           <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2">
           <select id="eventType" class="border p-2 w-full mb-2">
             <option value="">Выберите тип</option>
@@ -249,6 +248,92 @@ color: var(--hint-color);
     let currentEventRecord = null;
     let currentAttendeesCount = 0;
     let isUserAttending = false;
+
+    // ФУНКЦИИ ДЛЯ КНОПКИ "Я ПОЙДУ!" - ПЕРЕМЕЩЕНЫ В НАЧАЛО
+    async function attendEvent() {
+      if (!currentEventRecord) return;
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/attend`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: user.id
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          currentAttendeesCount = result.count;
+          isUserAttending = true;
+          
+          document.getElementById('attendeesCount').textContent = result.count;
+          
+          const attendButton = document.getElementById('attendButton');
+          attendButton.textContent = 'Не пойду';
+          attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+          attendButton.onclick = () => unattendEvent();
+          
+          alert('Отлично! Вы идете на мероприятие!');
+        } else {
+          const error = await response.json();
+          if (error.error === 'User already attending') {
+            alert('Вы уже записаны на это мероприятие!');
+            // Обновляем статус на случай рассинхронизации
+            isUserAttending = true;
+            const attendButton = document.getElementById('attendButton');
+            attendButton.textContent = 'Не пойду';
+            attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+            attendButton.onclick = () => unattendEvent();
+          } else {
+            throw new Error('Ошибка при записи');
+          }
+        }
+      } catch (err) {
+        console.error('Attend error:', err);
+        alert('Ошибка при записи на мероприятие: ' + err.message);
+      }
+    }
+
+    async function unattendEvent() {
+      if (!currentEventRecord) return;
+      
+      if (!confirm('Вы действительно не пойдете на мероприятие?')) return;
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/unattend`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: user.id
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          currentAttendeesCount = result.count;
+          isUserAttending = false;
+          
+          document.getElementById('attendeesCount').textContent = result.count;
+          
+          const attendButton = document.getElementById('attendButton');
+          attendButton.textContent = 'Я пойду!';
+          attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+          attendButton.onclick = () => attendEvent();
+          
+          alert('Вы больше не идете на мероприятие');
+        } else {
+          throw new Error('Ошибка при отмене записи');
+        }
+      } catch (err) {
+        console.error('Unattend error:', err);
+        alert('Ошибка при отмене записи: ' + err.message);
+      }
+    }
 
     document.getElementById('adminBtn').classList.add('hidden');
 
@@ -591,91 +676,6 @@ color: var(--hint-color);
       modal.classList.remove('hidden');
       tg.BackButton.show();
       tg.BackButton.onClick(closeEventModal);
-    }
-
-    async function attendEvent() {
-      if (!currentEventRecord) return;
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/attend`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          currentAttendeesCount = result.count;
-          isUserAttending = true;
-          
-          document.getElementById('attendeesCount').textContent = result.count;
-          
-          const attendButton = document.getElementById('attendButton');
-          attendButton.textContent = 'Не пойду';
-          attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-          attendButton.onclick = () => unattendEvent();
-          
-          alert('Отлично! Вы идете на мероприятие!');
-        } else {
-          const error = await response.json();
-          if (error.error === 'User already attending') {
-            alert('Вы уже записаны на это мероприятие!');
-            // Обновляем статус на случай рассинхронизации
-            isUserAttending = true;
-            const attendButton = document.getElementById('attendButton');
-            attendButton.textContent = 'Не пойду';
-            attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-            attendButton.onclick = () => unattendEvent();
-          } else {
-            throw new Error('Ошибка при записи');
-          }
-        }
-      } catch (err) {
-        console.error('Attend error:', err);
-        alert('Ошибка при записи на мероприятие');
-      }
-    }
-
-    async function unattendEvent() {
-      if (!currentEventRecord) return;
-      
-      if (!confirm('Вы действительно не пойдете на мероприятие?')) return;
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/unattend`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          currentAttendeesCount = result.count;
-          isUserAttending = false;
-          
-          document.getElementById('attendeesCount').textContent = result.count;
-          
-          const attendButton = document.getElementById('attendButton');
-          attendButton.textContent = 'Я пойду!';
-          attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
-          attendButton.onclick = () => attendEvent();
-          
-          alert('Вы больше не идете на мероприятие');
-        } else {
-          throw new Error('Ошибка при отмене записи');
-        }
-      } catch (err) {
-        console.error('Unattend error:', err);
-        alert('Ошибка при отмене записи');
-      }
     }
 
     function showAdModal(record) {
