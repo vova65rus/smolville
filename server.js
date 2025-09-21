@@ -1,724 +1,1301 @@
-const express = require('express');
-const axios = require('axios');
-const multer = require('multer');
-const fs = require('fs');
-const FormData = require('form-data');
-const path = require('path');
+```javascript
+const BACKEND_URL = 'https://smolville.onrender.com';
+const tg = window.Telegram?.WebApp;
+if (!tg) {
+  document.body.innerHTML = '<p class="text-center text-[var(--text-color)]">Ошибка: Запустите в Telegram WebApp</p>';
+  throw new Error('Telegram WebApp not found');
+}
+tg.ready();
+tg.expand();
 
-const app = express();
-const port = process.env.PORT || 3000;
+let currentEventRecord = null;
+let currentAttendeesCount = 0;
+let isUserAttending = false;
+let currentVotingRecord = null;
+let userLocation = null;
+let optionImages = {};
 
-// Middleware для CORS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
+const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
+console.log('User ID:', user.id);
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-const upload = multer({ dest: 'uploads/' });
+// ==================== ОСНОВНЫЕ ФУНКЦИИ ====================
 
-// Env vars
-const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
-const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
-const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
-const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
-const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
+function applyTheme() {
+  const params = tg.themeParams;
+  document.documentElement.style.setProperty('--bg-color', params.bg_color || '#ffffff');
+  document.documentElement.style.setProperty('--text-color', params.text_color || '#000000');
+  document.documentElement.style.setProperty('--hint-color', params.hint_color || '#707579');
+  document.documentElement.style.setProperty('--link-color', params.link_color || '#3390ec');
+  document.documentElement.style.setProperty('--button-color', params.button_color || '#3390ec');
+  document.documentElement.style.setProperty('--button-text-color', params.button_text_color || '#ffffff');
+  document.documentElement.style.setProperty('--secondary-bg-color', params.secondary_bg_color || '#f4f4f5');
+}
+applyTheme();
+tg.onEvent('themeChanged', applyTheme);
 
-// Хардкод админа
-const ADMIN_ID = 366825437;
+// ==================== ФУНКЦИИ ДЛЯ СОБЫТИЙ ====================
 
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
-  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
-  process.exit(1);
+const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+function formatDate(dateStr) {
+  if (!dateStr) return 'Без даты';
+  const [year, month, day] = dateStr.split('-');
+  return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
 }
 
-const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
-const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
-const VOTINGS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${VOTINGS_TABLE}`;
+async function renderEvents() {
+  const eventsContainer = document.getElementById('events');
+  eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
 
-app.get('/', (req, res) => {
-  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
-});
-
-// ==================== API ДЛЯ АДМИНА ====================
-
-app.get('/api/is-admin', (req, res) => {
-  const userId = parseInt(req.query.userId, 10);
-  const isAdmin = userId === ADMIN_ID;
-  res.json({ isAdmin });
-});
-
-// ==================== API ДЛЯ СОБЫТИЙ ====================
-
-app.get('/api/events', async (req, res) => {
   try {
-    const response = await axios.get(EVENTS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Events GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
+    const [eventsResponse, adsResponse, votingsResponse] = await Promise.all([
+      fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' }),
+      fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' }),
+      fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' })
+    ]);
+
+    if (!eventsResponse.ok) {
+      const errorData = await eventsResponse.json();
+      throw new Error(errorData.error || 'Ошибка загрузки событий');
     }
-    res.status(500).json({ error: error.message });
-  }
-});
 
-app.post('/api/events', async (req, res) => {
-  try {
-    console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
-    
-    const response = await axios.post(EVENTS_URL, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
+    const eventsData = await eventsResponse.json();
+    let adsData = { records: [] };
+    let votingsData = { records: [] };
+
+    if (adsResponse.ok) adsData = await adsResponse.json();
+    if (votingsResponse.ok) votingsData = await votingsResponse.json();
+
+    eventsContainer.innerHTML = '';
+
+    // Создаем массивы для элементов
+    let activeVotings = [];
+    let events = [];
+    let ads = [];
+
+    // Собираем активные голосования
+    if (votingsData.records) {
+      activeVotings = votingsData.records
+        .filter(record => record.fields.Status !== 'Completed')
+        .map(record => ({
+          type: 'voting',
+          data: record,
+          date: new Date(record.createdTime || Date.now())
+        }))
+        .sort((a, b) => b.date - a.date);
+    }
+
+    // Собираем события и сортируем по дате
+    if (eventsData.records) {
+      events = eventsData.records
+        .map(record => ({
+          type: 'event',
+          data: record,
+          date: new Date(record.fields.Date || record.createdTime || Date.now())
+        }))
+        .sort((a, b) => b.date - a.date);
+    }
+
+    // Собираем рекламу
+    if (adsData.records) {
+      ads = adsData.records.map(record => ({
+        type: 'ad',
+        data: record,
+        date: new Date(record.createdTime || Date.now())
+      }));
+    }
+
+    // Формируем итоговый список
+    let allItems = [];
+
+    // Сначала добавляем активные голосования
+    allItems.push(...activeVotings);
+
+    // Затем добавляем события с рекламой каждые 2 элемента
+    let adIndex = 0;
+    events.forEach((event, index) => {
+      allItems.push(event);
+      if ((index + 1) % 2 === 0 && adIndex < ads.length) {
+        allItems.push(ads[adIndex]);
+        adIndex++;
       }
     });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Events POST error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
 
-app.get('/api/events/:id', async (req, res) => {
-  try {
-    const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Event GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.patch('/api/events/:id', async (req, res) => {
-  try {
-    console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
-    
-    const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Event PATCH error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/events/:id', async (req, res) => {
-  try {
-    const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Event DELETE error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== API ДЛЯ РЕКЛАМЫ ====================
-
-app.get('/api/ads', async (req, res) => {
-  try {
-    const response = await axios.get(ADS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Ads GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/ads', async (req, res) => {
-  try {
-    const response = await axios.post(ADS_URL, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Ads POST error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.patch('/api/ads/:id', async (req, res) => {
-  try {
-    const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Ads PATCH error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/ads/:id', async (req, res) => {
-  try {
-    const response = await axios.delete(`${ADS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Ad DELETE error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== API ДЛЯ ГОЛОСОВАНИЙ ====================
-
-app.get('/api/votings', async (req, res) => {
-  try {
-    const response = await axios.get(VOTINGS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Votings GET error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/votings', async (req, res) => {
-  try {
-    const response = await axios.post(VOTINGS_URL, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Votings POST error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.patch('/api/votings/:id', async (req, res) => {
-  try {
-    const response = await axios.patch(`${VOTINGS_URL}/${req.params.id}`, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Votings PATCH error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/votings/:id', async (req, res) => {
-  try {
-    const response = await axios.delete(`${VOTINGS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Votings DELETE error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Получить голосования по ID мероприятия
-app.get('/api/events/:eventId/votings', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const response = await axios.get(VOTINGS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-      params: {
-        filterByFormula: `{EventID} = '${eventId}'`
-      }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Event votings GET error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Проголосовать
-app.post('/api/votings/:id/vote', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { userId, optionIndex, userLat, userLon } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
+    // Добавляем оставшуюся рекламу в конец
+    while (adIndex < ads.length) {
+      allItems.push(ads[adIndex]);
+      adIndex++;
     }
 
-    // Получаем данные голосования
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    // Отрисовываем элементы
+    allItems.forEach(item => {
+      if (item.type === 'event') renderEventItem(item.data);
+      else if (item.type === 'ad') renderAdItem(item.data);
+      else if (item.type === 'voting') renderVotingItem(item.data);
+    });
+
+    if (allItems.length === 0) {
+      eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
+    }
+  } catch (err) {
+    console.error('Render events error:', err);
+    eventsContainer.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
+  }
+}
+
+function renderEventItem(record) {
+  const eventsContainer = document.getElementById('events');
+  const event = record.fields || {};
+  const attendeesCount = event.AttendeesCount || 0;
+  
+  const div = document.createElement('div');
+  div.className = 'event-card p-2 fade-in';
+  div.innerHTML = `
+    <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
+    <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
+    <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
+    <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
+    <img src="${event.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+  `;
+  div.addEventListener('click', () => showEventModal(record));
+  eventsContainer.appendChild(div);
+}
+
+async function showEventModal(record) {
+  const modal = document.getElementById('eventModal');
+  const event = record.fields || {};
+  currentEventRecord = record;
+  currentAttendeesCount = event.AttendeesCount || 0;
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/events/${record.id}/attend-status/${user.id}`);
+    if (response.ok) {
+      const status = await response.json();
+      isUserAttending = status.isAttending;
+    } else {
+      isUserAttending = false;
+    }
+  } catch (err) {
+    console.error('Error checking attend status:', err);
+    isUserAttending = false;
+  }
+  
+  document.getElementById('modalTitle').textContent = event.Title || 'Без названия';
+  document.getElementById('modalDate').textContent = formatDate(event.Date) || 'Без даты';
+  document.getElementById('modalLocation').textContent = event.Location || 'Без места';
+  document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
+  document.getElementById('modalImage').src = event.Image?.[0]?.url || 'https://via.placeholder.com/150';
+  document.getElementById('attendeesCount').textContent = currentAttendeesCount;
+  
+  const mapButtonContainer = document.getElementById('modalMapButtonContainer');
+  const mapButton = document.getElementById('modalMapButton');
+  
+  if (event.MapLink) {
+    mapButtonContainer.classList.remove('hidden');
+    mapButton.onclick = () => tg.openLink(event.MapLink);
+  } else {
+    mapButtonContainer.classList.add('hidden');
+  }
+  
+  const attendButton = document.getElementById('attendButton');
+  if (isUserAttending) {
+    attendButton.textContent = 'Не пойду';
+    attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+    attendButton.onclick = () => unattendEvent();
+  } else {
+    attendButton.textContent = 'Я пойду!';
+    attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+    attendButton.onclick = () => attendEvent();
+  }
+  
+  modal.classList.remove('hidden');
+  tg.BackButton.show();
+  tg.BackButton.onClick(closeEventModal);
+}
+
+async function attendEvent() {
+  if (!currentEventRecord) return;
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/attend`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: user.id
+      })
     });
     
-    const voting = votingResponse.data;
-    if (!voting.fields) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    // Проверяем, голосовал ли уже пользователь
-    const votedUserIds = voting.fields.VotedUserIDs || '';
-    const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
-    
-    if (votedUsersArray.includes(userId.toString())) {
-      return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
-    }
-
-    // Проверяем геолокацию
-    const votingLat = voting.fields.Latitude;
-    const votingLon = voting.fields.Longitude;
-    
-    if (votingLat && votingLon && userLat && userLon) {
-      const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
-      if (distance > 1000) {
-        return res.status(400).json({ error: 'Вы находитесь слишком далеко от места голосования' });
+    if (response.ok) {
+      const result = await response.json();
+      currentAttendeesCount = result.count;
+      isUserAttending = true;
+      
+      document.getElementById('attendeesCount').textContent = result.count;
+      
+      const attendButton = document.getElementById('attendButton');
+      attendButton.textContent = 'Не пойду';
+      attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+      attendButton.onclick = () => unattendEvent();
+      
+      alert('Отлично! Вы идете на мероприятие!');
+    } else {
+      const error = await response.json();
+      if (error.error === 'User already attending') {
+        alert('Вы уже записаны на это мероприятие!');
+        isUserAttending = true;
+        const attendButton = document.getElementById('attendButton');
+        attendButton.textContent = 'Не пойду';
+        attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+        attendButton.onclick = () => unattendEvent();
+      } else {
+        throw new Error(error.error || 'Ошибка при записи');
       }
     }
+  } catch (err) {
+    console.error('Attend error:', err);
+    alert('Ошибка при записи на мероприятие: ' + err.message);
+  }
+}
 
-    // Обновляем результаты голосования
-    const currentVotes = voting.fields.Votes || {};
-    currentVotes[userId] = optionIndex;
+async function unattendEvent() {
+  if (!currentEventRecord) return;
+  
+  if (!confirm('Вы действительно не пойдете на мероприятие?')) return;
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/unattend`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: user.id
+      })
+    });
     
-    // Добавляем пользователя в список проголосовавших
-    const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
+    if (response.ok) {
+      const result = await response.json();
+      currentAttendeesCount = result.count;
+      isUserAttending = false;
+      
+      document.getElementById('attendeesCount').textContent = result.count;
+      
+      const attendButton = document.getElementById('attendButton');
+      attendButton.textContent = 'Я пойду!';
+      attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+      attendButton.onclick = () => attendEvent();
+      
+      alert('Вы больше не идете на мероприятие');
+    } else {
+      throw new Error('Ошибка при отмене записи');
+    }
+  } catch (err) {
+    console.error('Unattend error:', err);
+    alert('Ошибка при отмене записи: ' + err.message);
+  }
+}
 
-    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
-      fields: { 
-        Votes: currentVotes,
-        VotedUserIDs: newVotedUserIDs
+function closeEventModal() {
+  document.getElementById('eventModal').classList.add('hidden');
+  tg.BackButton.hide();
+  currentEventRecord = null;
+}
+
+// ==================== ФУНКЦИИ ДЛЯ РЕКЛАМЫ ====================
+
+function renderAdItem(record) {
+  const eventsContainer = document.getElementById('events');
+  const ad = record.fields || {};
+  
+  const div = document.createElement('div');
+  div.className = 'ad-card p-2 fade-in relative';
+  div.innerHTML = `
+    <div class="ad-badge">Реклама</div>
+    <h3 class="text-sm font-bold">${ad.Title || 'Реклама'}</h3>
+    <p class="text-xs">${ad.Description || 'Специальное предложение'}</p>
+    <img src="${ad.IMG?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+  `;
+  div.addEventListener('click', () => showAdModal(record));
+  eventsContainer.appendChild(div);
+}
+
+function showAdModal(record) {
+  const modal = document.getElementById('adModal');
+  const ad = record.fields || {};
+  
+  document.getElementById('adModalTitle').textContent = ad.Title || 'Реклама';
+  document.getElementById('adModalDescription').textContent = ad.Description || 'Специальное предложение';
+  document.getElementById('adModalImage').src = ad.IMG?.[0]?.url || 'https://via.placeholder.com/150';
+  
+  const adButton = document.getElementById('adModalButton');
+  if (ad.URL) {
+    adButton.onclick = () => tg.openLink(ad.URL);
+    adButton.style.display = 'block';
+  } else {
+    adButton.style.display = 'none';
+  }
+  
+  modal.classList.remove('hidden');
+  tg.BackButton.show();
+  tg.BackButton.onClick(closeAdModal);
+}
+
+function closeAdModal() {
+  document.getElementById('adModal').classList.add('hidden');
+  tg.BackButton.hide();
+}
+
+async function loadAds() {
+  const adsList = document.getElementById('adsList');
+  adsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка рекламы...</p>';
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' });
+    if (!response.ok) throw new Error('Ошибка загрузки рекламы');
+    
+    const data = await response.json();
+    adsList.innerHTML = '';
+    
+    if (data.records && data.records.length > 0) {
+      data.records.forEach(record => {
+        const ad = record.fields || {};
+        const safeTitle = ad.Title ? ad.Title.replace(/'/g, "\\'") : '';
+        const safeDescription = ad.Description ? ad.Description.replace(/'/g, "\\'") : '';
+        const safeUrl = ad.URL ? ad.URL.replace(/'/g, "\\'") : '';
+        const safeImageUrl = ad.IMG?.[0]?.url ? ad.IMG[0].url.replace(/'/g, "\\'") : '';
+        
+        const div = document.createElement('div');
+        div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
+        div.innerHTML = `
+          <p class="text-sm font-bold">${ad.Title || 'Без названия'}</p>
+          <p class="text-xs">${ad.Description || 'Без описания'}</p>
+          <p class="text-xs text-[var(--hint-color)]">URL: ${ad.URL || 'Не указан'}</p>
+          <div class="flex space-x-2 mt-2">
+            <button onclick="editAd('${record.id}', '${safeTitle}', '${safeDescription}', '${safeUrl}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
+            <button onclick="deleteAd('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
+          </div>
+        `;
+        adsList.appendChild(div);
+      });
+    } else {
+      adsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Рекламные материалы не найдены</p>';
+    }
+  } catch (err) {
+    adsList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
+  }
+}
+
+function editAd(recordId, title, description, url, imageUrl) {
+  document.getElementById('adRecordId').value = recordId;
+  document.getElementById('adTitle').value = title || '';
+  document.getElementById('adDescription').value = description || '';
+  document.getElementById('adUrl').value = url || '';
+  alert('Текущее изображение: ' + (imageUrl || 'отсутствует'));
+  showTab('tab-ad-form');
+}
+
+async function deleteAd(recordId) {
+  if (!confirm('Удалить рекламный блок?')) return;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/ads/${recordId}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Ошибка удаления');
+    alert('Рекламный блок удален');
+    loadAds();
+    renderEvents();
+  } catch (err) {
+    alert(`Ошибка: ${err.message}`);
+  }
+}
+
+function clearAdForm() {
+  document.getElementById('adRecordId').value = '';
+  document.getElementById('adTitle').value = '';
+  document.getElementById('adDescription').value = '';
+  document.getElementById('adUrl').value = '';
+  document.getElementById('adImage').value = '';
+}
+
+document.getElementById('adForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const recordId = document.getElementById('adRecordId').value;
+  const title = document.getElementById('adTitle').value;
+  const description = document.getElementById('adDescription').value;
+  const url = document.getElementById('adUrl').value;
+
+  if (!title) {
+    alert('Заголовок рекламы обязателен для заполнения');
+    return;
+  }
+
+  const adData = {
+    fields: {
+      Title: title,
+      Description: description || '',
+      URL: url || ''
+    }
+  };
+
+  const imageFile = document.getElementById('adImage').files[0];
+  if (imageFile) {
+    try {
+      const uploadForm = new FormData();
+      uploadForm.append('image', imageFile);
+      const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
+        method: 'POST',
+        body: uploadForm
+      });
+      const uploadData = await uploadResponse.json();
+      if (uploadData.url) {
+        adData.fields.IMG = [{ url: uploadData.url, filename: `ad_image_${Date.now()}.jpg` }];
+      } else {
+        throw new Error('Ошибка загрузки изображения');
       }
-    }, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
+    } catch (err) {
+      alert(`Ошибка загрузки изображения: ${err.message}`);
+      return;
+    }
+  }
+
+  try {
+    const method = recordId ? 'PATCH' : 'POST';
+    const url = recordId ? `${BACKEND_URL}/api/ads/${recordId}` : `${BACKEND_URL}/api/ads`;
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adData)
     });
 
-    res.json({ success: true, voting: updateResponse.data });
-  } catch (error) {
-    console.error('Vote error:', error.message);
-    res.status(500).json({ error: error.message });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Ошибка сохранения рекламы');
+    }
+
+    alert('Рекламный блок сохранен');
+    clearAdForm();
+    loadAds();
+    renderEvents();
+  } catch (err) {
+    console.error('Ошибка сохранения рекламы:', err);
+    alert(`Ошибка сохранения рекламы: ${err.message}`);
   }
 });
 
-// Проверить статус голосования пользователя
-app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
-  try {
-    const { id, userId } = req.params;
+// ==================== ФУНКЦИИ ДЛЯ ГОЛОСОВАНИЙ ====================
 
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+async function loadVotings() {
+  const votingsList = document.getElementById('votingsList');
+  votingsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Ошибка загрузки голосований');
+    }
+    
+    const data = await response.json();
+    votingsList.innerHTML = '';
+    
+    if (data.records && data.records.length > 0) {
+      data.records.forEach(record => {
+        const voting = record.fields || {};
+        const safeTitle = voting.Title ? voting.Title.replace(/'/g, "\\'") : '';
+        const safeDescription = voting.Description ? voting.Description.replace(/'/g, "\\'") : '';
+        const options = voting.Options ? voting.Options.split(',') : [];
+        const status = voting.Status || 'Active';
+        
+        const div = document.createElement('div');
+        div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
+        div.innerHTML = `
+          <p class="text-sm font-bold">${voting.Title || 'Без названия'} 
+            <span class="text-xs ${status === 'Completed' ? 'text-green-600' : 'text-red-600'}">
+              (${status === 'Completed' ? 'Завершено' : 'Активно'})
+            </span>
+          </p>
+          ${voting.EventID ? `<p class="text-xs">Мероприятие: ${voting.EventID}</p>` : ''}
+          <p class="text-xs">Номинантов: ${options.length}</p>
+          <p class="text-xs text-gray-500">Проголосовало: ${voting.VotedUserIDs ? voting.VotedUserIDs.split(',').length : 0} человек</p>
+          <div class="flex space-x-2 mt-2">
+            <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || 0}, ${voting.Longitude || 0}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
+            ${status === 'Active' ? `<button onclick="completeVoting('${record.id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs transition">Завершить</button>` : ''}
+            <button onclick="deleteVoting('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
+          </div>
+        `;
+        votingsList.appendChild(div);
+      });
+    } else {
+      votingsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Голосования не найдены</p>';
+    }
+  } catch (err) {
+    votingsList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
+  }
+}
+
+async function loadEventsForVoting() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
+    if (response.ok) {
+      const data = await response.json();
+      const select = document.getElementById('votingEventId');
+      
+      while (select.options.length > 1) {
+        select.remove(1);
+      }
+      
+      if (data.records && data.records.length > 0) {
+        data.records.forEach(record => {
+          const event = record.fields || {};
+          if (event.Title && event.ID) {
+            const option = document.createElement('option');
+            option.value = event.ID;
+            option.textContent = event.Title;
+            select.appendChild(option);
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error loading events for voting:', err);
+  }
+}
+
+function addOption() {
+  const container = document.getElementById('votingOptionsContainer');
+  const newOption = document.createElement('div');
+  newOption.className = 'option-item flex flex-col mb-3 p-2 border rounded';
+  newOption.innerHTML = `
+    <div class="flex mb-2">
+      <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2" required>
+      <button type="button" onclick="removeOption(this)" class="bg-red-500 text-white px-3 rounded">-</button>
+    </div>
+    <div class="flex items-center mb-2">
+      <input type="file" class="option-image hidden" accept="image/*">
+      <button type="button" onclick="triggerImageUpload(this)" class="bg-blue-500 text-white px-3 py-1 rounded text-xs mr-2">
+        📷 Выбрать фото
+      </button>
+      <span class="image-status text-xs text-gray-500"></span>
+    </div>
+    <img class="option-preview mt-2 w-20 h-20 object-cover rounded hidden">
+  `;
+  container.appendChild(newOption);
+  
+  const fileInput = newOption.querySelector('.option-image');
+  fileInput.addEventListener('change', function(e) {
+    handleImageUpload(e, this);
+  });
+}
+
+function triggerImageUpload(button) {
+  const fileInput = button.parentElement.querySelector('.option-image');
+  fileInput.click();
+}
+
+async function handleImageUpload(event, fileInput) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const container = fileInput.closest('.option-item');
+  const imageStatus = container.querySelector('.image-status');
+  const preview = container.querySelector('.option-preview');
+  const uploadBtn = container.querySelector('button');
+  const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    preview.src = e.target.result;
+    preview.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+  
+  uploadBtn.textContent = '⏳ Загружаем...';
+  uploadBtn.disabled = true;
+  imageStatus.textContent = 'Загрузка...';
+  
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    const response = await fetch(`${BACKEND_URL}/api/votings/upload-option-image`, {
+      method: 'POST',
+      body: formData
     });
     
-    const voting = votingResponse.data;
-    if (!voting.fields) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
+    if (response.ok) {
+      const data = await response.json();
+      
+      optionImages[optionIndex] = data.url;
+      
+      imageStatus.textContent = 'Фото загружено';
+      uploadBtn.textContent = '✅ Фото загружено';
+      uploadBtn.classList.remove('bg-blue-500');
+      uploadBtn.classList.add('bg-green-500');
+    } else {
+      throw new Error('Ошибка загрузки');
     }
-
-    const votedUserIds = voting.fields.VotedUserIDs || '';
-    const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
-    
-    const hasVoted = votedUsersArray.includes(userId.toString());
-    const userVote = voting.fields.Votes ? voting.fields.Votes[userId] : null;
-
-    res.json({ hasVoted, userVote });
   } catch (error) {
-    console.error('Vote status error:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Image upload error:', error);
+    imageStatus.textContent = 'Ошибка загрузки';
+    uploadBtn.textContent = '📷 Попробовать снова';
+    delete optionImages[optionIndex];
+  } finally {
+    uploadBtn.disabled = false;
+  }
+}
+
+function removeOption(button) {
+  const container = button.closest('.option-item');
+  const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
+  
+  delete optionImages[optionIndex];
+  
+  if (document.querySelectorAll('.option-item').length > 1) {
+    container.remove();
+    
+    const newOptionImages = {};
+    document.querySelectorAll('.option-item').forEach((item, newIndex) => {
+      const oldIndex = Array.from(item.parentElement.children).indexOf(item);
+      if (optionImages[oldIndex]) {
+        newOptionImages[newIndex] = optionImages[oldIndex];
+      }
+    });
+    optionImages = newOptionImages;
+  }
+}
+
+function editVoting(recordId, title, description, lat, lon, options, eventId, status) {
+  document.getElementById('votingRecordId').value = recordId;
+  document.getElementById('votingTitle').value = title || '';
+  document.getElementById('votingDescription').value = description || '';
+  document.getElementById('votingLatitude').value = lat || '';
+  document.getElementById('votingLongitude').value = lon || '';
+  document.getElementById('votingEventId').value = eventId || '';
+  
+  optionImages = {};
+  
+  const completeBtn = document.getElementById('completeVotingBtn');
+  if (status === 'Active') {
+    completeBtn.classList.remove('hidden');
+    completeBtn.onclick = () => completeVoting(recordId);
+  } else {
+    completeBtn.classList.add('hidden');
+  }
+  
+  const optionsContainer = document.getElementById('votingOptionsContainer');
+  optionsContainer.innerHTML = '';
+  
+  try {
+    const optionsArray = typeof options === 'string' ? JSON.parse(options) : options;
+    if (optionsArray && optionsArray.length > 0) {
+      optionsArray.forEach((option, index) => {
+        addOption();
+        const items = optionsContainer.querySelectorAll('.option-item');
+        const currentItem = items[items.length - 1];
+        currentItem.querySelector('.option-name').value = option;
+      });
+    } else {
+      addOption();
+    }
+  } catch (e) {
+    addOption();
+  }
+  
+  showTab('tab-voting-form');
+}
+
+async function completeVoting(recordId) {
+  if (!confirm('Завершить голосование? После этого нельзя будет голосовать.')) return;
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/votings/${recordId}/complete`, {
+      method: 'POST'
+    });
+    
+    if (response.ok) {
+      alert('Голосование завершено! Результаты подсчитаны.');
+      loadVotings();
+    } else {
+      const error = await response.json();
+      alert(error.error || 'Ошибка при завершении голосования');
+    }
+  } catch (err) {
+    console.error('Complete voting error:', err);
+    alert('Ошибка при завершении голосования: ' + err.message);
+  }
+}
+
+async function deleteVoting(recordId) {
+  if (!confirm('Удалить голосование?')) return;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/votings/${recordId}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Ошибка удаления');
+    alert('Голосование удалено');
+    loadVotings();
+    renderEvents();
+  } catch (err) {
+    alert(`Ошибка: ${err.message}`);
+  }
+}
+
+document.getElementById('votingForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const recordId = document.getElementById('votingRecordId').value;
+  const title = document.getElementById('votingTitle').value;
+  const description = document.getElementById('votingDescription').value;
+  const latitude = document.getElementById('votingLatitude').value;
+  const longitude = document.getElementById('votingLongitude').value;
+  const eventId = document.getElementById('votingEventId').value;
+  
+  // Валидация координат
+  if (latitude && (isNaN(latitude) || latitude < -90 || latitude > 90)) {
+    alert('Широта должна быть числом от -90 до 90');
+    return;
+  }
+  if (longitude && (isNaN(longitude) || longitude < -180 || longitude > 180)) {
+    alert('Долгота должна быть числом от -180 до 180');
+    return;
+  }
+  
+  const options = [];
+  const optionImageUrls = [];
+  
+  document.querySelectorAll('.option-item').forEach((item, index) => {
+    const nameInput = item.querySelector('.option-name');
+    
+    if (nameInput.value.trim()) {
+      options.push(nameInput.value.trim());
+      
+      if (optionImages[index]) {
+        optionImageUrls.push({ 
+          url: optionImages[index],
+          filename: `option_image_${index}_${Date.now()}.jpg`
+        });
+      } else {
+        optionImageUrls.push(null);
+      }
+    }
+  });
+  
+  if (options.length < 2) {
+    alert('Добавьте хотя бы два номинанта');
+    return;
+  }
+  
+  const votingData = {
+    fields: {
+      Title: title,
+      Description: description || '',
+      Options: options.join(','),
+      Votes: JSON.stringify({}),
+      VotedUserIDs: '',
+      Status: 'Active'
+    }
+  };
+  
+  if (optionImageUrls.some(img => img !== null)) {
+    votingData.fields.OptionImages = optionImageUrls.filter(img => img !== null);
+  }
+  
+  if (latitude) votingData.fields.Latitude = parseFloat(latitude);
+  if (longitude) votingData.fields.Longitude = parseFloat(longitude);
+  if (eventId) votingData.fields.EventID = eventId; // Предполагается, что EventID - текст, если связь, измените на массив
+  
+  console.log('Отправляемые данные голосования:', JSON.stringify(votingData, null, 2));
+  
+  try {
+    const method = recordId ? 'PATCH' : 'POST';
+    const url = recordId ? `${BACKEND_URL}/api/votings/${recordId}` : `${BACKEND_URL}/api/votings`;
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(votingData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Ошибка сохранения голосования');
+    }
+    
+    alert('Голосование сохранено');
+    
+    document.getElementById('votingForm').reset();
+    document.getElementById('votingRecordId').value = '';
+    document.getElementById('votingOptionsContainer').innerHTML = '';
+    optionImages = {};
+    addOption();
+    
+    loadVotings();
+    renderEvents();
+    showTab('tab-votings-list');
+  } catch (err) {
+    console.error('Voting save error:', err);
+    alert(`Ошибка сохранения: ${err.message}`);
   }
 });
 
-// Завершить голосование и посчитать результаты
-app.post('/api/votings/:id/complete', async (req, res) => {
+function renderVotingItem(record) {
+  const eventsContainer = document.getElementById('events');
+  const voting = record.fields || {};
+  const isCompleted = voting.Status === 'Completed';
+  
+  const div = document.createElement('div');
+  div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
+  
+  if (isCompleted) {
+    div.style.background = 'var(--voting-completed-bg)';
+    div.style.borderColor = 'var(--voting-completed-border)';
+    div.style.color = 'var(--voting-completed-text)';
+  }
+  
+  div.innerHTML = `
+    <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
+    <h3 class="text-sm font-bold">${voting.Title || 'Без названия'}</h3>
+    <p class="text-xs">${voting.Description || ''}</p>
+    ${voting.EventID ? `<p class="text-xs text-gray-500">Для мероприятия: ${voting.EventID}</p>` : ''}
+    <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'} mt-1">
+      ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
+    </p>
+  `;
+  
+  div.addEventListener('click', () => showVotingModal(record));
+  eventsContainer.appendChild(div);
+}
+
+async function showVotingModal(record) {
+  const modal = document.getElementById('votingModal');
+  const voting = record.fields || {};
+  currentVotingRecord = record;
+  
+  document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
+  document.getElementById('votingModalDescription').textContent = voting.Description || '';
+  
   try {
-    const { id } = req.params;
-
-    // Получаем данные голосования
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    
-    const voting = votingResponse.data;
-    if (!voting.fields) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
+    const response = await fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`);
+    if (response.ok) {
+      const status = await response.json();
+      
+      if (status.hasVoted || voting.Status === 'Completed') {
+        showVotingResults(voting, status.userVote);
+      } else {
+        showVotingOptions(voting);
+      }
+    } else {
+      throw new Error('Ошибка проверки статуса голосования');
     }
+  } catch (err) {
+    console.error('Error checking vote status:', err);
+    showVotingOptions(voting);
+  }
+  
+  modal.classList.remove('hidden');
+  tg.BackButton.show();
+  tg.BackButton.onClick(closeVotingModal);
+}
 
-    // Подсчитываем финальные результаты
-    const votes = voting.fields.Votes || {};
+function showVotingOptions(voting) {
+  const optionsContainer = document.getElementById('votingOptions');
+  optionsContainer.innerHTML = '<h4 class="font-bold mb-2">Выберите номинанта:</h4>';
+  
+  document.getElementById('getLocationBtn').style.display = 'block';
+  
+  if (voting.Options && voting.Options.split(',').length > 0) {
+    const optionsArray = voting.Options.split(',');
+    const optionImages = voting.OptionImages || [];
+    
+    optionsArray.forEach((option, index) => {
+      const optionDiv = document.createElement('div');
+      optionDiv.className = 'mb-3 p-2 border rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition';
+      optionDiv.onclick = () => castVote(index);
+      
+      let imageHtml = '';
+      if (optionImages[index] && optionImages[index].url) {
+        imageHtml = `
+          <div class="flex-shrink-0 mr-3">
+            <img src="${optionImages[index].url}" alt="${option}" 
+                 class="w-16 h-16 object-cover rounded-lg border">
+          </div>
+        `;
+      }
+      
+      optionDiv.innerHTML = `
+        <div class="flex items-center">
+          ${imageHtml}
+          <div class="flex-grow">
+            <span class="font-medium">${option}</span>
+          </div>
+          <div class="text-2xl">→</div>
+        </div>
+      `;
+      
+      optionsContainer.appendChild(optionDiv);
+    });
+  }
+}
+
+function showVotingResults(voting, userVote) {
+  const optionsContainer = document.getElementById('votingOptions');
+  const isCompleted = voting.Status === 'Completed';
+  
+  optionsContainer.innerHTML = isCompleted ? 
+    '<h4 class="font-bold mb-2">Финальные результаты:</h4>' : 
+    '<h4 class="font-bold mb-2">Текущие результаты:</h4>';
+  
+  document.getElementById('getLocationBtn').style.display = 'none';
+  
+  if (voting.Options && voting.Options.split(',').length > 0) {
+    const optionsArray = voting.Options.split(',');
+    const optionImages = voting.OptionImages || [];
+    
     const results = {};
+    optionsArray.forEach((option, index) => {
+      results[index] = {
+        option: option,
+        count: 0,
+        percentage: 0,
+        image: optionImages[index] ? optionImages[index].url : null
+      };
+    });
     
-    if (voting.fields.Options) {
-      const options = voting.fields.Options.split(',');
-      options.forEach((option, index) => {
-        results[index] = {
-          option: option,
-          count: 0,
-          percentage: 0
-        };
+    if (voting.Votes) {
+      const votes = typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes;
+      Object.values(votes).forEach(voteIndex => {
+        if (results[voteIndex]) {
+          results[voteIndex].count++;
+        }
       });
     }
-
-    // Считаем голоса
-    Object.values(votes).forEach(voteIndex => {
-      if (results[voteIndex]) {
-        results[voteIndex].count++;
-      }
-    });
-
-    // Считаем проценты
+    
     const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
     Object.values(results).forEach(result => {
       result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
     });
-
-    // Обновляем голосование
-    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
-      fields: { 
-        Status: 'Completed',
-        Results: JSON.stringify(results)
+    
+    Object.values(results).forEach((result, index) => {
+      const isUserChoice = userVote === index;
+      
+      const resultDiv = document.createElement('div');
+      resultDiv.className = 'mb-4 p-3 border rounded-lg bg-white';
+      
+      let imageHtml = '';
+      if (result.image) {
+        imageHtml = `
+          <div class="flex-shrink-0 mr-3">
+            <img src="${result.image}" alt="${result.option}" 
+                 class="w-16 h-16 object-cover rounded-lg border">
+          </div>
+        `;
       }
-    }, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
+      
+      resultDiv.innerHTML = `
+        <div class="flex items-start">
+          ${imageHtml}
+          <div class="flex-grow">
+            <div class="flex justify-between items-start mb-2">
+              <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-gray-800'}">
+                ${result.option}
+              </span>
+              <span class="text-sm text-gray-500 whitespace-nowrap">
+                ${result.count} голосов (${result.percentage}%)
+              </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div class="bg-blue-600 h-2 rounded-full" style="width: ${result.percentage}%"></div>
+            </div>
+            ${isUserChoice ? '<div class="text-xs text-blue-600">✓ Ваш выбор</div>' : ''}
+          </div>
+        </div>
+      `;
+      
+      optionsContainer.appendChild(resultDiv);
     });
-
-    res.json({ success: true, results: results, voting: updateResponse.data });
-  } catch (error) {
-    console.error('Complete voting error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API для загрузки изображений номинантов
-app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
+    
+    if (isCompleted) {
+      optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
     }
-    
-    const filePath = req.file.path;
-    const formData = new FormData();
-    formData.append('image', fs.createReadStream(filePath));
-    
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
+  }
+}
+
+async function castVote(optionIndex) {
+  if (!currentVotingRecord) return;
+  
+  if (!userLocation) {
+    alert('Сначала необходимо определить ваше местоположение');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: user.id,
+        optionIndex: optionIndex,
+        userLat: userLocation.latitude,
+        userLon: userLocation.longitude
+      })
     });
     
-    fs.unlinkSync(filePath);
-    
-    if (response.data.success) {
-      res.json({ url: response.data.data.url });
+    if (response.ok) {
+      showVotingModal(currentVotingRecord);
     } else {
-      res.status(500).json({ error: 'ImgBB upload failed' });
+      const error = await response.json();
+      alert(error.error || 'Ошибка при голосовании');
     }
-  } catch (error) {
-    console.error('Option image upload error:', error.message);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.error('Vote error:', err);
+    alert('Ошибка при голосовании: ' + err.message);
   }
+}
+
+document.getElementById('getLocationBtn').addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    alert('Геолокация не поддерживается вашим браузером');
+    return;
+  }
+  
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      userLocation = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      };
+      alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
+    },
+    (error) => {
+      alert('Не удалось определить ваше местоположение. Проверьте настройки геолокации.');
+      console.error('Geolocation error:', error);
+    }
+  );
 });
 
-// ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
+function closeVotingModal() {
+  document.getElementById('votingModal').classList.add('hidden');
+  tg.BackButton.hide();
+  currentVotingRecord = null;
+}
 
-app.post('/api/upload', upload.single('image'), async (req, res) => {
+// ==================== АДМИН-ФУНКЦИИ ====================
+
+async function checkIsAdmin(userId) {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
-    }
-    const filePath = req.file.path;
-    const formData = new FormData();
-    formData.append('image', fs.createReadStream(filePath));
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
-    });
-    fs.unlinkSync(filePath);
-    if (response.data.success) {
-      res.json({ url: response.data.data.url });
+    const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
+    const data = await response.json();
+    return data.isAdmin;
+  } catch (err) {
+    console.error('Error checking admin:', err);
+    return false;
+  }
+}
+
+async function initAdmin() {
+  try {
+    const isAdmin = await checkIsAdmin(user.id);
+    console.log('Is Admin:', isAdmin);
+    if (isAdmin) {
+      document.getElementById('adminBtn').classList.remove('hidden');
     } else {
-      res.status(500).json({ error: 'ImgBB upload failed' });
+      console.log('Admin panel hidden - not admin');
+      document.getElementById('adminBtn').classList.add('hidden');
     }
-  } catch (error) {
-    console.error('Upload error:', error.message);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.error('Admin init error:', err);
+    document.getElementById('adminBtn').classList.add('hidden');
   }
-});
-
-// ==================== API ДЛЯ "Я ПОЙДУ!" ====================
-
-app.post('/api/events/:eventId/attend', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const { userId } = req.body;
-
-    console.log(`User ${userId} attending event ${eventId}`);
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
-
-    // Получаем текущее событие
-    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const event = eventResponse.data;
-    
-    if (!event.fields) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    const currentAttendees = event.fields.AttendeesIDs || '';
-    const currentCount = event.fields.AttendeesCount || 0;
-    
-    console.log('Current attendees:', currentAttendees);
-    console.log('Current count:', currentCount);
-
-    // Обрабатываем разные форматы данных
-    let attendeesArray = [];
-    
-    if (Array.isArray(currentAttendees)) {
-      attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
-    } else if (typeof currentAttendees === 'string') {
-      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
-    }
-
-    // Проверяем, не записан ли уже пользователь
-    const userIdStr = userId.toString();
-    if (attendeesArray.includes(userIdStr)) {
-      console.log('User already attending');
-      return res.status(400).json({ error: 'User already attending' });
-    }
-
-    // Добавляем пользователя
-    attendeesArray.push(userIdStr);
-    const newAttendees = attendeesArray.join(',');
-    const newCount = currentCount + 1;
-
-    console.log('New attendees:', newAttendees);
-    console.log('New count:', newCount);
-
-    // Обновляем запись
-    const updateData = {
-      fields: {
-        AttendeesIDs: newAttendees,
-        AttendeesCount: newCount
-      }
-    };
-
-    console.log('Update data:', JSON.stringify(updateData, null, 2));
-
-    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
-
-    console.log('Update successful:', updateResponse.data);
-    res.json({ success: true, count: newCount, attending: true });
-    
-  } catch (error) {
-    console.error('Attend error:', error.message);
-    if (error.response) {
-      console.error('Airtable response status:', error.response.status);
-      console.error('Airtable response data:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/events/:eventId/unattend', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const { userId } = req.body;
-
-    console.log(`User ${userId} unattending event ${eventId}`);
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
-
-    // Получаем текущее событие
-    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const event = eventResponse.data;
-    
-    if (!event.fields) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    const currentAttendees = event.fields.AttendeesIDs || '';
-    const currentCount = event.fields.AttendeesCount || 0;
-    
-    console.log('Current attendees:', currentAttendees);
-    console.log('Current count:', currentCount);
-
-    // Обрабатываем разные форматы данных
-    let attendeesArray = [];
-    
-    if (Array.isArray(currentAttendees)) {
-      attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
-    } else if (typeof currentAttendees === 'string') {
-      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
-    }
-
-    // Удаляем пользователя
-    const userIdStr = userId.toString();
-    const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
-    const newAttendees = newAttendeesArray.join(',');
-    const newCount = Math.max(0, newAttendeesArray.length);
-
-    console.log('New attendees:', newAttendees);
-    console.log('New count:', newCount);
-
-    // Обновляем запись
-    const updateData = {
-      fields: {
-        AttendeesIDs: newAttendees,
-        AttendeesCount: newCount
-      }
-    };
-
-    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
-
-    console.log('Unattend successful');
-    res.json({ success: true, count: newCount, attending: false });
-    
-  } catch (error) {
-    console.error('Unattend error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Проверяем статус участия пользователя
-app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
-  try {
-    const { eventId, userId } = req.params;
-
-    console.log(`Checking attend status for user ${userId} in event ${eventId}`);
-
-    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const event = eventResponse.data;
-    
-    if (!event.fields) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    const attendees = event.fields.AttendeesIDs || '';
-    let attendeesArray = [];
-    
-    if (Array.isArray(attendees)) {
-      attendeesArray = attendees.filter(id => id && id.toString().trim());
-    } else if (typeof attendees === 'string') {
-      attendeesArray = attendees.split(',').filter(id => id && id.trim());
-    }
-    
-    const isAttending = attendeesArray.includes(userId.toString());
-
-    console.log('Is attending:', isAttending);
-    res.json({ isAttending });
-    
-  } catch (error) {
-    console.error('Attend status error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
-
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // Earth radius in meters
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  const distance = R * c;
-  return distance;
 }
 
-function deg2rad(deg) {
-  return deg * (Math.PI/180);
+function showTab(tabId) {
+  document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+  
+  if (tabId === 'tab-list') {
+    renderAdminEvents();
+  } else if (tabId === 'tab-ads-list') {
+    loadAds();
+  } else if (tabId === 'tab-votings-list') {
+    loadVotings();
+  }
 }
 
-// Создание папки uploads
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+async function renderAdminEvents() {
+  const eventList = document.getElementById('eventList');
+  eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Ошибка загрузки ивентов');
+    }
+    
+    const data = await response.json();
+    eventList.innerHTML = '';
+    
+    if (data.records && data.records.length > 0) {
+      data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
+      data.records.forEach(record => {
+        const event = record.fields || {};
+        const safeTitle = event.Title ? event.Title.replace(/'/g, "\\'") : '';
+        const safeLocation = event.Location ? event.Location.replace(/'/g, "\\'") : '';
+        const safeDescription = event.Description ? event.Description.replace(/'/g, "\\'") : '';
+        const safeMapLink = event.MapLink ? event.MapLink.replace(/'/g, "\\'") : '';
+        const safeImageUrl = event.Image?.[0]?.url ? event.Image[0].url.replace(/'/g, "\\'") : '';
+        
+        const div = document.createElement('div');
+        div.className = 'p-2 border-b border-[var(--hint-color)]';
+        div.innerHTML = `
+          <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
+          <p class="text-xs">Идут: ${event.AttendeesCount || 0} человек</p>
+          <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
+          <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
+        `;
+        eventList.appendChild(div);
+      });
+    } else {
+      eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Ивенты не найдены</p>';
+    }
+  } catch (err) {
+    alert(`Ошибка: ${err.message}`);
+  }
 }
 
-// Запуск сервера
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-  console.log(`Events URL: ${EVENTS_URL}`);
-  console.log(`Ads URL: ${ADS_URL}`);
-  console.log(`Votings URL: ${VOTINGS_URL}`);
-  console.log('Make sure you have these columns in Airtable:');
-  console.log('- Events: AttendeesIDs, AttendeesCount');
-  console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results');
+function showAdminModal() {
+  showTab('tab-list');
+  clearForm();
+  clearAdForm();
+  loadEventsForVoting();
+  document.getElementById('adminModal').classList.remove('hidden');
+  tg.BackButton.show();
+  tg.BackButton.onClick(closeAdminModal);
+}
+
+function closeAdminModal() {
+  document.getElementById('adminModal').classList.add('hidden');
+  tg.BackButton.hide();
+}
+
+function clearForm() {
+  document.getElementById('eventRecordId').value = '';
+  document.getElementById('eventId').value = '';
+  document.getElementById('eventTitle').value = '';
+  document.getElementById('eventType').value = '';
+  document.getElementById('eventDate').value = '';
+  document.getElementById('eventLocation').value = '';
+  document.getElementById('eventDescription').value = '';
+  document.getElementById('eventMapLink').value = '';
+  document.getElementById('eventImage').value = '';
+}
+
+function editEvent(recordId, id, title, type, date, location, description, mapLink, imageUrl) {
+  document.getElementById('eventRecordId').value = recordId;
+  document.getElementById('eventId').value = id;
+  document.getElementById('eventTitle').value = title;
+  document.getElementById('eventType').value = type;
+  document.getElementById('eventDate').value = date;
+  document.getElementById('eventLocation').value = location;
+  document.getElementById('eventDescription').value = description;
+  document.getElementById('eventMapLink').value = mapLink || '';
+  alert('Текущее изображение: ' + imageUrl);
+  showTab('tab-form');
+}
+
+async function deleteEvent(recordId) {
+  if (!confirm('Удалить ивент?')) return;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/events/${recordId}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Ошибка удаления');
+    alert('Ивент удален');
+    renderAdminEvents();
+    renderEvents();
+  } catch (err) {
+    alert(`Ошибка: ${err.message}`);
+  }
+}
+
+document.getElementById('eventForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  let eventId = document.getElementById('eventId').value;
+  if (!eventId) eventId = String(Math.floor(Math.random() * 1000000));
+  
+  const recordId = document.getElementById('eventRecordId').value;
+  const eventData = {
+    fields: {
+      ID: eventId,
+      Title: document.getElementById('eventTitle').value,
+      Type: document.getElementById('eventType').value,
+      Date: document.getElementById('eventDate').value,
+      Location: document.getElementById('eventLocation').value,
+      Description: document.getElementById('eventDescription').value,
+      AttendeesCount: 0,
+      AttendeesIDs: ''
+    }
+  };
+  
+  const mapLink = document.getElementById('eventMapLink').value;
+  if (mapLink) eventData.fields.MapLink = mapLink;
+  
+  const imageFile = document.getElementById('eventImage').files[0];
+  if (imageFile) {
+    try {
+      const uploadForm = new FormData();
+      uploadForm.append('image', imageFile);
+      const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
+        method: 'POST',
+        body: uploadForm
+      });
+      const uploadData = await uploadResponse.json();
+      if (uploadData.url) {
+        eventData.fields.Image = [{ 
+          url: uploadData.url,
+          filename: `event_image_${Date.now()}.jpg`
+        }];
+      } else {
+        throw new Error('Ошибка загрузки изображения');
+      }
+    } catch (err) {
+      alert(`Ошибка загрузки изображения: ${err.message}`);
+      return;
+    }
+  }
+  
+  try {
+    const method = recordId ? 'PATCH' : 'POST';
+    const url = recordId ? `${BACKEND_URL}/api/events/${recordId}` : `${BACKEND_URL}/api/events`;
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Ошибка сохранения события');
+    }
+    
+    alert('Событие сохранено');
+    clearForm();
+    renderAdminEvents();
+    renderEvents();
+    showTab('tab-list');
+  } catch (err) {
+    alert(`Ошибка сохранения: ${err.message}`);
+  }
 });
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
+initAdmin();
+renderEvents();
+
+addOption();
+```
