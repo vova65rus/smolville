@@ -120,7 +120,7 @@ app.patch('/api/events/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/events/:id', async (req, res) {
+app.delete('/api/events/:id', async (req, res) => {
   try {
     const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
@@ -187,6 +187,21 @@ app.patch('/api/ads/:id', async (req, res) => {
   }
 });
 
+app.delete('/api/ads/:id', async (req, res) => {
+  try {
+    const response = await axios.delete(`${ADS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Ad DELETE error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // API для загрузки изображений
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
@@ -220,51 +235,76 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
 
     console.log(`User ${userId} attending event ${eventId}`);
 
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
     // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
-    const event = eventResponse.data.fields;
-    const currentAttendees = event.AttendeesIDs || '';
-    const currentCount = event.AttendeesCount || 0;
+    const event = eventResponse.data;
+    
+    if (!event.fields) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const currentAttendees = event.fields.AttendeesIDs || '';
+    const currentCount = event.fields.AttendeesCount || 0;
     
     console.log('Current attendees:', currentAttendees);
     console.log('Current count:', currentCount);
 
-    // Проверяем, не записан ли уже пользователь
-    const attendeesArray = currentAttendees.split(',').filter(id => id.trim());
+    // Обрабатываем разные форматы данных
+    let attendeesArray = [];
     
-    if (attendeesArray.includes(userId.toString())) {
+    if (Array.isArray(currentAttendees)) {
+      attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
+    } else if (typeof currentAttendees === 'string') {
+      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
+    }
+
+    // Проверяем, не записан ли уже пользователь
+    const userIdStr = userId.toString();
+    if (attendeesArray.includes(userIdStr)) {
       console.log('User already attending');
       return res.status(400).json({ error: 'User already attending' });
     }
 
-    // Добавляем пользователя и обновляем счетчик
-    const newAttendees = currentAttendees ? `${currentAttendees},${userId}` : userId.toString();
+    // Добавляем пользователя
+    attendeesArray.push(userIdStr);
+    const newAttendees = attendeesArray.join(',');
     const newCount = currentCount + 1;
 
     console.log('New attendees:', newAttendees);
     console.log('New count:', newCount);
 
-    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, {
+    // Обновляем запись
+    const updateData = {
       fields: {
         AttendeesIDs: newAttendees,
         AttendeesCount: newCount
       }
-    }, {
+    };
+
+    console.log('Update data:', JSON.stringify(updateData, null, 2));
+
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
         'Content-Type': 'application/json' 
       }
     });
 
-    console.log('Update successful');
+    console.log('Update successful:', updateResponse.data);
     res.json({ success: true, count: newCount, attending: true });
+    
   } catch (error) {
     console.error('Attend error:', error.message);
     if (error.response) {
-      console.error('Airtable response:', error.response.data);
+      console.error('Airtable response status:', error.response.status);
+      console.error('Airtable response data:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -277,33 +317,54 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
 
     console.log(`User ${userId} unattending event ${eventId}`);
 
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
     // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
-    const event = eventResponse.data.fields;
-    const currentAttendees = event.AttendeesIDs || '';
-    const currentCount = event.AttendeesCount || 0;
+    const event = eventResponse.data;
+    
+    if (!event.fields) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const currentAttendees = event.fields.AttendeesIDs || '';
+    const currentCount = event.fields.AttendeesCount || 0;
     
     console.log('Current attendees:', currentAttendees);
     console.log('Current count:', currentCount);
 
-    // Удаляем пользователя из списка
-    const attendeesArray = currentAttendees.split(',').filter(id => id.trim());
-    const newAttendeesArray = attendeesArray.filter(id => id !== userId.toString());
+    // Обрабатываем разные форматы данных
+    let attendeesArray = [];
+    
+    if (Array.isArray(currentAttendees)) {
+      attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
+    } else if (typeof currentAttendees === 'string') {
+      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
+    }
+
+    // Удаляем пользователя
+    const userIdStr = userId.toString();
+    const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
     const newAttendees = newAttendeesArray.join(',');
-    const newCount = Math.max(0, currentCount - 1);
+    const newCount = Math.max(0, newAttendeesArray.length);
 
     console.log('New attendees:', newAttendees);
     console.log('New count:', newCount);
 
-    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, {
+    // Обновляем запись
+    const updateData = {
       fields: {
         AttendeesIDs: newAttendees,
         AttendeesCount: newCount
       }
-    }, {
+    };
+
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
         'Content-Type': 'application/json' 
@@ -312,6 +373,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
 
     console.log('Unattend successful');
     res.json({ success: true, count: newCount, attending: false });
+    
   } catch (error) {
     console.error('Unattend error:', error.message);
     if (error.response) {
@@ -332,14 +394,26 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
-    const event = eventResponse.data.fields;
-    const attendees = event.AttendeesIDs || '';
-    const attendeesArray = attendees.split(',').filter(id => id.trim());
+    const event = eventResponse.data;
+    
+    if (!event.fields) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const attendees = event.fields.AttendeesIDs || '';
+    let attendeesArray = [];
+    
+    if (Array.isArray(attendees)) {
+      attendeesArray = attendees.filter(id => id && id.toString().trim());
+    } else if (typeof attendees === 'string') {
+      attendeesArray = attendees.split(',').filter(id => id && id.trim());
+    }
     
     const isAttending = attendeesArray.includes(userId.toString());
 
     console.log('Is attending:', isAttending);
     res.json({ isAttending });
+    
   } catch (error) {
     console.error('Attend status error:', error.message);
     if (error.response) {
