@@ -401,7 +401,10 @@
           fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' })
         ]);
 
-        if (!eventsResponse.ok) throw new Error('Ошибка загрузки событий');
+        if (!eventsResponse.ok) {
+          const errorData = await eventsResponse.json();
+          throw new Error(errorData.error || 'Ошибка загрузки событий');
+        }
 
         const eventsData = await eventsResponse.json();
         let adsData = { records: [] };
@@ -426,7 +429,7 @@
               data: record,
               date: new Date(record.createdTime || Date.now())
             }))
-            .sort((a, b) => b.date - a.date); // Сортировка голосований по дате (новые сверху)
+            .sort((a, b) => b.date - a.date);
         }
 
         // Собираем события и сортируем по дате
@@ -437,7 +440,7 @@
               data: record,
               date: new Date(record.fields.Date || record.createdTime || Date.now())
             }))
-            .sort((a, b) => b.date - a.date); // Сортировка событий по дате (новые сверху)
+            .sort((a, b) => b.date - a.date);
         }
 
         // Собираем рекламу
@@ -459,14 +462,13 @@
         let adIndex = 0;
         events.forEach((event, index) => {
           allItems.push(event);
-          // Вставляем рекламу после каждого второго события, если реклама доступна
           if ((index + 1) % 2 === 0 && adIndex < ads.length) {
             allItems.push(ads[adIndex]);
             adIndex++;
           }
         });
 
-        // Добавляем оставшуюся рекламу в конец, если она есть
+        // Добавляем оставшуюся рекламу в конец
         while (adIndex < ads.length) {
           allItems.push(ads[adIndex]);
           adIndex++;
@@ -595,7 +597,7 @@
             attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
             attendButton.onclick = () => unattendEvent();
           } else {
-            throw new Error('Ошибка при записи');
+            throw new Error(error.error || 'Ошибка при записи');
           }
         }
       } catch (err) {
@@ -795,7 +797,7 @@
           });
           const uploadData = await uploadResponse.json();
           if (uploadData.url) {
-            adData.fields.IMG = [{ url: uploadData.url }];
+            adData.fields.IMG = [{ url: uploadData.url, filename: `ad_image_${Date.now()}.jpg` }];
           } else {
             throw new Error('Ошибка загрузки изображения');
           }
@@ -815,8 +817,8 @@
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText || 'Ошибка сохранения рекламы');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Ошибка сохранения рекламы');
         }
 
         alert('Рекламный блок сохранен');
@@ -837,7 +839,10 @@
       
       try {
         const response = await fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' });
-        if (!response.ok) throw new Error('Ошибка загрузки голосований');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Ошибка загрузки голосований');
+        }
         
         const data = await response.json();
         votingsList.innerHTML = '';
@@ -1065,7 +1070,7 @@
         }
       } catch (err) {
         console.error('Complete voting error:', err);
-        alert('Ошибка при завершении голосования');
+        alert('Ошибка при завершении голосования: ' + err.message);
       }
     }
 
@@ -1094,6 +1099,16 @@
       const longitude = document.getElementById('votingLongitude').value;
       const eventId = document.getElementById('votingEventId').value;
       
+      // Валидация координат
+      if (latitude && (isNaN(latitude) || latitude < -90 || latitude > 90)) {
+        alert('Широта должна быть числом от -90 до 90');
+        return;
+      }
+      if (longitude && (isNaN(longitude) || longitude < -180 || longitude > 180)) {
+        alert('Долгота должна быть числом от -180 до 180');
+        return;
+      }
+      
       const options = [];
       const optionImageUrls = [];
       
@@ -1104,7 +1119,10 @@
           options.push(nameInput.value.trim());
           
           if (optionImages[index]) {
-            optionImageUrls.push({ url: optionImages[index] });
+            optionImageUrls.push({ 
+              url: optionImages[index],
+              filename: `option_image_${index}_${Date.now()}.jpg`
+            });
           } else {
             optionImageUrls.push(null);
           }
@@ -1121,7 +1139,7 @@
           Title: title,
           Description: description || '',
           Options: options.join(','),
-          Votes: {},
+          Votes: JSON.stringify({}),
           VotedUserIDs: '',
           Status: 'Active'
         }
@@ -1133,7 +1151,9 @@
       
       if (latitude) votingData.fields.Latitude = parseFloat(latitude);
       if (longitude) votingData.fields.Longitude = parseFloat(longitude);
-      if (eventId) votingData.fields.EventID = eventId;
+      if (eventId) votingData.fields.EventID = eventId; // Предполагается, что EventID - текст, если связь, измените на массив
+      
+      console.log('Отправляемые данные голосования:', JSON.stringify(votingData, null, 2));
       
       try {
         const method = recordId ? 'PATCH' : 'POST';
@@ -1144,7 +1164,10 @@
           body: JSON.stringify(votingData)
         });
         
-        if (!response.ok) throw new Error('Ошибка сохранения голосования');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Ошибка сохранения голосования');
+        }
         
         alert('Голосование сохранено');
         
@@ -1158,6 +1181,7 @@
         renderEvents();
         showTab('tab-votings-list');
       } catch (err) {
+        console.error('Voting save error:', err);
         alert(`Ошибка сохранения: ${err.message}`);
       }
     });
@@ -1208,6 +1232,8 @@
           } else {
             showVotingOptions(voting);
           }
+        } else {
+          throw new Error('Ошибка проверки статуса голосования');
         }
       } catch (err) {
         console.error('Error checking vote status:', err);
@@ -1372,7 +1398,7 @@
         }
       } catch (err) {
         console.error('Vote error:', err);
-        alert('Ошибка при голосовании');
+        alert('Ошибка при голосовании: ' + err.message);
       }
     }
 
@@ -1452,7 +1478,10 @@
       eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
       try {
         const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (!response.ok) throw new Error('Ошибка загрузки ивентов');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Ошибка загрузки ивентов');
+        }
         
         const data = await response.json();
         eventList.innerHTML = '';
@@ -1572,8 +1601,14 @@
             body: uploadForm
           });
           const uploadData = await uploadResponse.json();
-          if (uploadData.url) eventData.fields.Image = [{ url: uploadData.url }];
-          else throw new Error('Ошибка загрузки изображения');
+          if (uploadData.url) {
+            eventData.fields.Image = [{ 
+              url: uploadData.url,
+              filename: `event_image_${Date.now()}.jpg`
+            }];
+          } else {
+            throw new Error('Ошибка загрузки изображения');
+          }
         } catch (err) {
           alert(`Ошибка загрузки изображения: ${err.message}`);
           return;
@@ -1589,7 +1624,10 @@
           body: JSON.stringify(eventData)
         });
         
-        if (!response.ok) throw new Error('Ошибка сохранения события');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Ошибка сохранения события');
+        }
         
         alert('Событие сохранено');
         clearForm();
