@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+Хочу проверить поместится ли тут код: <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
@@ -6,7 +6,7 @@
   <title>Smolville</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-    <style>
+  <style>
     :root {
       --bg-color: #ffffff;
       --text-color: #000000;
@@ -25,190 +25,152 @@
       --voting-completed-text: #006400;
       --voting-completed-border: #ccffcc;
     }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg-color: #1a1a1a;
-        --text-color: #ffffff;
-        --hint-color: #8e8e93;
-        --secondary-bg-color: #2c2c2e;
-        --ad-bg-color: #4a3c00;
-        --ad-text-color: #ffd700;
-        --ad-border-color: #665200;
-        --voting-bg-color: #4a0000;
-        --voting-text-color: #ff6b6b;
-        --voting-border-color: #660000;
-        --voting-completed-bg: #004d00;
-        --voting-completed-text: #00ff00;
-        --voting-completed-border: #006600;
-      }
-    }
-
     body {
       background-color: var(--bg-color);
       color: var(--text-color);
       transition: background-color 0.3s ease, color 0.3s ease;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-
     .event-card {
-      background: var(--secondary-bg-color);
-      border-radius: 12px;
-      margin-bottom: 12px;
-      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      backdrop-filter: blur(5px);
+      margin-bottom: 10px;
+      transition: background 0.3s ease;
       border: 1px solid var(--hint-color);
     }
-
     .event-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      background: rgba(255, 255, 255, 0.25);
     }
-
     .ad-card {
       background: var(--ad-bg-color);
-      border-radius: 12px;
-      margin-bottom: 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
       border: 2px solid var(--ad-border-color);
       color: var(--ad-text-color);
     }
-
+    .ad-card:hover {
+      background: #ffeaa7;
+      transform: scale(1.02);
+      transition: all 0.2s ease;
+    }
     .voting-card {
       background: var(--voting-bg-color);
-      border-radius: 12px;
-      margin-bottom: 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
       border: 2px solid var(--voting-border-color);
       color: var(--voting-text-color);
-      order: -1; /* Голосования всегда первые */
     }
-
+    .voting-card:hover {
+      background: #ffcccc;
+      transform: scale(1.02);
+      transition: all 0.2s ease;
+    }
     .voting-card.completed {
       background: var(--voting-completed-bg);
       border-color: var(--voting-completed-border);
       color: var(--voting-completed-text);
     }
-
-    .ad-badge, .voting-badge {
+    .ad-badge {
       position: absolute;
       top: 8px;
       right: 8px;
-      padding: 4px 10px;
+      background: var(--ad-border-color);
+      color: var(--ad-text-color);
+      padding: 2px 8px;
       border-radius: 12px;
       font-size: 10px;
       font-weight: bold;
     }
-
-    .ad-badge {
-      background: var(--ad-border-color);
-      color: var(--ad-text-color);
-    }
-
     .voting-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
       background: var(--voting-border-color);
       color: var(--voting-text-color);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: bold;
     }
-
+    .hidden {
+      display: none;
+    }
     .modal {
-      background: rgba(0, 0, 0, 0.8);
-      backdrop-filter: blur(5px);
+      background: rgba(0, 0, 0, 0.85);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
     }
-
     .modal-content {
       background: var(--secondary-bg-color);
       color: var(--text-color);
-      border-radius: 16px;
-      border: 1px solid var(--hint-color);
-    }
-
-    .tab {
-      background: var(--secondary-bg-color);
-      color: var(--text-color);
-      padding: 10px 16px;
+      padding: 20px;
       border-radius: 8px;
-      margin: 0 4px;
-      cursor: pointer;
-      transition: all 0.2s ease;
+      max-width: 90%;
+      max-height: 80%;
+      overflow-y: auto;
+      transition: background 0.3s ease, color 0.3s ease;
     }
-
-    .tab:hover {
-      background: var(--hint-color);
-      color: var(--bg-color);
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
     }
-
-    .tab.active {
-      background: var(--button-color);
-      color: var(--button-text-color);
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
-
     input, textarea, select {
       background: var(--bg-color);
       color: var(--text-color);
       border: 1px solid var(--hint-color);
-      border-radius: 8px;
-      padding: 12px;
-      width: 100%;
-      margin-bottom: 12px;
+      transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     }
-
     input::placeholder, textarea::placeholder {
       color: var(--hint-color);
     }
-
-    button {
-      border-radius: 8px;
-      padding: 10px 16px;
-      font-weight: 500;
-      transition: all 0.2s ease;
-      border: none;
+    .tab {
+      background: var(--secondary-bg-color);
+      color: var(--text-color);
+      padding: 8px 16px;
+      border-radius: 4px 4px 0 0;
       cursor: pointer;
+      transition: background 0.3s ease;
     }
-
-    .vote-button {
-      background: var(--button-color);
-      color: var(--button-text-color);
-    }
-
-    .vote-button:hover {
-      opacity: 0.9;
-    }
-
-    .vote-button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .results-bar {
+    .tab:hover {
       background: var(--hint-color);
-      height: 8px;
-      border-radius: 4px;
-      overflow: hidden;
-      margin: 8px 0;
     }
-
-    .results-fill {
-      background: var(--button-color);
-      height: 100%;
-      border-radius: 4px;
-      transition: width 0.3s ease;
+    .tab.active {
+      background: var(--bg-color);
+      font-weight: bold;
+      color: var(--text-color);
     }
-
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
     body {
       padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
     }
-
-    .hidden {
-      display: none;
+    .voting-option {
+      color: var(--text-color);
     }
-
-    .fade-in {
-      animation: fadeIn 0.5s ease-in;
+    .vote-button {
+      pointer-events: none;
+      opacity: 0.5;
     }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+    .vote-button.enabled {
+      pointer-events: auto;
+      opacity: 1;
     }
   </style>
 </head>
