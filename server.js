@@ -4,6 +4,7 @@ const multer = require('multer');
 const fs = require('fs');
 const FormData = require('form-data');
 const path = require('path');
+const sharp = require('sharp');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -345,7 +346,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     // Обновляем запись в Airtable
     const updateData = {
       fields: { 
-        Votes: JSON.stringify(currentVotes), // Сериализуем объект в строку
+        Votes: JSON.stringify(currentVotes),
         VotedUserIDs: newVotedUserIDs
       }
     };
@@ -460,6 +461,98 @@ app.post('/api/votings/:id/complete', async (req, res) => {
     res.json({ success: true, results: results, voting: updateResponse.data });
   } catch (error) {
     console.error('Complete voting error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Генерация изображения с результатами голосования
+app.post('/api/votings/:id/generate-results', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Получаем данные голосования
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+
+    const voting = votingResponse.data;
+    if (!voting.fields) {
+      return res.status(404).json({ error: 'Голосование не найдено' });
+    }
+
+    if (!voting.fields.Results) {
+      return res.status(400).json({ error: 'Результаты голосования недоступны' });
+    }
+
+    const results = JSON.parse(voting.fields.Results);
+    const title = voting.fields.Title || 'Результаты голосования';
+    const description = voting.fields.Description || '';
+    const optionImages = voting.fields.OptionImages || [];
+
+    // Генерируем SVG
+    let height = 600; // Базовая высота
+    const hasImages = optionImages.length > 0;
+    if (hasImages) height += optionImages.length * 110; // Увеличиваем высоту для изображений
+
+    let svg = `
+      <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="800" height="${height}" fill="#ffffff"/>
+        <text x="400" y="50" font-family="Arial" font-size="24" font-weight="bold" fill="#000" text-anchor="middle">${title}</text>
+        <text x="400" y="80" font-family="Arial" font-size="16" fill="#666" text-anchor="middle">${description}</text>
+    `;
+
+    let y = 120;
+    results.forEach((result, index) => {
+      const barWidth = (result.percentage / 100) * 400;
+      const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
+      svg += `
+        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0"/>
+        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}"/>
+        <text x="20" y="${y + 25}" font-family="Arial" font-size="16" font-weight="bold" fill="#000">${result.option}</text>
+        <text x="520" y="${y + 25}" font-family="Arial" font-size="16" fill="#666" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
+      `;
+      y += 50;
+    });
+
+    // Добавляем изображения номинантов, если они есть
+    if (hasImages) {
+      y += 20;
+      svg += `<text x="400" y="${y}" font-family="Arial" font-size="16" font-style="italic" fill="#000" text-anchor="middle">Изображения номинантов</text>`;
+      y += 30;
+      for (let i = 0; i < results.length; i++) {
+        if (optionImages[i] && optionImages[i].url) {
+          svg += `<image x="${100 + (i % 3) * 200}" y="${y + Math.floor(i / 3) * 110}" width="150" height="100" href="${optionImages[i].url}"/>`;
+        }
+      }
+    }
+
+    svg += `</svg>`;
+
+    // Конвертируем SVG в JPG
+    const svgBuffer = Buffer.from(svg);
+    const imageBuffer = await sharp(svgBuffer, { density: 300 })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    // Загружаем на ImgBB
+    const formData = new FormData();
+    formData.append('image', imageBuffer, { filename: 'results.jpg' });
+    const imgbbResponse = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
+      headers: formData.getHeaders()
+    });
+
+    if (imgbbResponse.data.success) {
+      console.log('Image uploaded to ImgBB:', imgbbResponse.data.data.url);
+      res.json({ success: true, imageUrl: imgbbResponse.data.data.url });
+    } else {
+      console.error('ImgBB upload failed:', imgbbResponse.data);
+      res.status(500).json({ error: 'Failed to upload image to ImgBB' });
+    }
+  } catch (error) {
+    console.error('Generate results image error:', error.message);
+    if (error.response) {
+      console.error('Airtable/ImgBB response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -749,5 +842,5 @@ app.listen(port, () => {
   console.log(`Votings URL: ${VOTINGS_URL}`);
   console.log('Make sure you have these columns in Airtable:');
   console.log('- Events: AttendeesIDs, AttendeesCount');
-  console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results');
+  console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results, OptionImages');
 });
