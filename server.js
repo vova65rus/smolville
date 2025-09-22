@@ -286,8 +286,11 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     const { id } = req.params;
     const { userId, optionIndex, userLat, userLon } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
+    console.log('Received vote request:', { id, userId, optionIndex, userLat, userLon });
+
+    if (!userId || optionIndex === undefined || userLat === undefined || userLon === undefined) {
+      console.error('Missing required fields');
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
     // Получаем данные голосования
@@ -297,7 +300,13 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     
     const voting = votingResponse.data;
     if (!voting.fields) {
+      console.error('Voting not found');
       return res.status(404).json({ error: 'Голосование не найдено' });
+    }
+
+    if (voting.fields.Status === 'Completed') {
+      console.error('Voting is completed');
+      return res.status(400).json({ error: 'Voting is completed' });
     }
 
     // Проверяем, голосовал ли уже пользователь
@@ -305,6 +314,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
     
     if (votedUsersArray.includes(userId.toString())) {
+      console.error('User has already voted');
       return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
     }
 
@@ -314,33 +324,48 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     
     if (votingLat && votingLon && userLat && userLon) {
       const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
+      console.log('Calculated distance:', distance);
       if (distance > 1000) {
+        console.error('User is too far away');
         return res.status(400).json({ error: 'Вы находитесь слишком далеко от места голосования' });
       }
     }
 
     // Обновляем результаты голосования
-    const currentVotes = voting.fields.Votes || {};
+    let currentVotes = voting.fields.Votes ? JSON.parse(voting.fields.Votes) : {};
+    console.log('Current votes:', currentVotes);
+
+    // Добавляем голос пользователя
     currentVotes[userId] = optionIndex;
-    
+    console.log('Updated votes:', currentVotes);
+
     // Добавляем пользователя в список проголосовавших
     const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
 
-    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+    // Обновляем запись в Airtable
+    const updateData = {
       fields: { 
-        Votes: currentVotes,
+        Votes: JSON.stringify(currentVotes), // Сериализуем объект в строку
         VotedUserIDs: newVotedUserIDs
       }
-    }, {
+    };
+
+    console.log('Updating voting record with:', JSON.stringify(updateData, null, 2));
+
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, updateData, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
         'Content-Type': 'application/json' 
       }
     });
 
+    console.log('Vote updated successfully:', updateResponse.data);
     res.json({ success: true, voting: updateResponse.data });
   } catch (error) {
     console.error('Vote error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -363,7 +388,11 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
     
     const hasVoted = votedUsersArray.includes(userId.toString());
-    const userVote = voting.fields.Votes ? voting.fields.Votes[userId] : null;
+    let userVote = null;
+    if (voting.fields.Votes) {
+      const votes = JSON.parse(voting.fields.Votes);
+      userVote = votes[userId] !== undefined ? votes[userId] : null;
+    }
 
     res.json({ hasVoted, userVote });
   } catch (error) {
@@ -388,7 +417,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
     }
 
     // Подсчитываем финальные результаты
-    const votes = voting.fields.Votes || {};
+    const votes = voting.fields.Votes ? JSON.parse(voting.fields.Votes) : {};
     const results = {};
     
     if (voting.fields.Options) {
@@ -404,7 +433,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
 
     // Считаем голоса
     Object.values(votes).forEach(voteIndex => {
-      if (results[voteIndex]) {
+      if (results[voteIndex] !== undefined) {
         results[voteIndex].count++;
       }
     });
