@@ -162,7 +162,15 @@
       padding-right: env(safe-area-inset-right);
     }
     .voting-option {
-      color: var(--text-color); /* Убедимся, что текст видим */
+      color: var(--text-color);
+    }
+    .vote-button {
+      pointer-events: none;
+      opacity: 0.5;
+    }
+    .vote-button.enabled {
+      pointer-events: auto;
+      opacity: 1;
     }
   </style>
 </head>
@@ -189,14 +197,12 @@
           На карте
         </button>
       </div>
-      
       <div class="mt-4 pt-3 border-t">
         <div class="flex items-center justify-between">
           <span class="text-sm font-medium">
             Идут: <span id="attendeesCount">0</span> человек
           </span>
-          <button id="attendButton" 
-                  class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
+          <button id="attendButton" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
             Я пойду!
           </button>
         </div>
@@ -221,9 +227,7 @@
     <div class="modal-content">
       <h2 id="votingModalTitle" class="text-lg font-bold"></h2>
       <p id="votingModalDescription"></p>
-      
       <div id="votingOptions" class="my-4"></div>
-      
       <div class="mt-4 pt-3 border-t">
         <p class="text-sm text-[var(--hint-color)]">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
         <button id="getLocationBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3">
@@ -245,13 +249,11 @@
         <div class="tab" onclick="showTab('tab-votings-list')">Голосования</div>
         <div class="tab" onclick="showTab('tab-voting-form')">Добавить голосование</div>
       </div>
-      
       <!-- Вкладка списка событий -->
       <div id="tab-list" class="tab-content active">
         <h3 class="text-md font-bold mb-2">Список событий</h3>
         <div id="eventList" class="mb-4"></div>
       </div>
-      
       <!-- Вкладка формы события -->
       <div id="tab-form" class="tab-content">
         <h3 class="text-md font-bold mb-2">Добавить/Редактировать событие</h3>
@@ -272,14 +274,12 @@
           <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Сохранить событие</button>
         </form>
       </div>
-      
       <!-- Вкладка списка рекламы -->
       <div id="tab-ads-list" class="tab-content">
         <h3 class="text-md font-bold mb-2">Список рекламных блоков</h3>
         <div id="adsList" class="mb-4"></div>
         <button onclick="loadAds()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Обновить список</button>
       </div>
-      
       <!-- Вкладка формы рекламы -->
       <div id="tab-ad-form" class="tab-content">
         <h3 class="text-md font-bold mb-2">Добавить/Редактировать рекламу</h3>
@@ -295,14 +295,12 @@
           </div>
         </form>
       </div>
-      
       <!-- Вкладка списка голосований -->
       <div id="tab-votings-list" class="tab-content">
         <h3 class="text-md font-bold mb-2">Список голосований</h3>
         <div id="votingsList" class="mb-4"></div>
         <button onclick="loadVotings()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Обновить список</button>
       </div>
-      
       <!-- Вкладка формы голосования -->
       <div id="tab-voting-form" class="tab-content">
         <h3 class="text-md font-bold mb-2">Добавить/Редактировать голосование</h3>
@@ -310,13 +308,9 @@
           <input type="hidden" id="votingRecordId">
           <input type="text" id="votingTitle" placeholder="Название голосования" class="border p-2 w-full mb-2" required>
           <textarea id="votingDescription" placeholder="Описание голосования" class="border p-2 w-full mb-2"></textarea>
-          
-          <!-- Выбор мероприятия -->
           <select id="votingEventId" class="border p-2 w-full mb-2">
             <option value="">Выберите мероприятие (опционально)</option>
-            <!-- Будет заполняться динамически -->
           </select>
-          
           <div id="votingOptionsContainer" class="mb-2">
             <div class="option-item flex flex-col mb-3 p-2 border rounded">
               <div class="flex mb-2">
@@ -333,12 +327,9 @@
               <img class="option-preview mt-2 w-20 h-20 object-cover rounded hidden">
             </div>
           </div>
-          
           <button type="button" onclick="addOption()" class="bg-gray-500 text-white px-3 py-1 rounded mb-2">+ Добавить номинанта</button>
-          
           <input type="number" id="votingLatitude" placeholder="Широта места голосования" step="any" class="border p-2 w-full mb-2">
           <input type="number" id="votingLongitude" placeholder="Долгота места голосования" step="any" class="border p-2 w-full mb-2">
-          
           <div class="flex space-x-2">
             <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition flex-1">Сохранить голосование</button>
             <button type="button" id="completeVotingBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition hidden">Завершить</button>
@@ -364,29 +355,9 @@
     let currentVotingRecord = null;
     let userLocation = null;
     let optionImages = {};
-
-    let eventsData = null; // Для кэширования событий
+    let eventsData = null;
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    console.log('User ID:', user.id);
-
-    // ==================== ОСНОВНЫЕ ФУНКЦИИ ====================
-
-    function applyTheme() {
-      const params = tg.themeParams;
-      document.documentElement.style.setProperty('--bg-color', params.bg_color || '#ffffff');
-      document.documentElement.style.setProperty('--text-color', params.text_color || '#000000');
-      document.documentElement.style.setProperty('--hint-color', params.hint_color || '#707579');
-      document.documentElement.style.setProperty('--link-color', params.link_color || '#3390ec');
-      document.documentElement.style.setProperty('--button-color', params.button_color || '#3390ec');
-      document.documentElement.style.setProperty('--button-text-color', params.button_text_color || '#ffffff');
-      document.documentElement.style.setProperty('--secondary-bg-color', params.secondary_bg_color || '#f4f4f5');
-    }
-    applyTheme();
-    tg.onEvent('themeChanged', applyTheme);
-
-    // ==================== ФУНКЦИИ ДЛЯ СОБЫТИЙ ====================
-
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
     function formatDate(dateStr) {
@@ -420,12 +391,10 @@
 
         eventsContainer.innerHTML = '';
 
-        // Создаем массивы для элементов
         let activeVotings = [];
         let events = [];
         let ads = [];
 
-        // Собираем активные голосования
         if (votingsData.records) {
           activeVotings = votingsData.records
             .filter(record => record.fields.Status !== 'Completed')
@@ -433,11 +402,9 @@
               type: 'voting',
               data: record,
               date: new Date(record.createdTime || Date.now())
-            }))
-            .sort((a, b) => b.date - a.date);
+            }));
         }
 
-        // Собираем события и сортируем по дате
         if (eventsData.records) {
           events = eventsData.records
             .map(record => ({
@@ -445,10 +412,9 @@
               data: record,
               date: new Date(record.fields.Date || record.createdTime || Date.now())
             }))
-            .sort((a, b) => b.date - a.date);
+            .sort((a, b) => a.date - b.date);
         }
 
-        // Собираем рекламу
         if (adsData.records) {
           ads = adsData.records.map(record => ({
             type: 'ad',
@@ -457,13 +423,8 @@
           }));
         }
 
-        // Формируем итоговый список
-        let allItems = [];
+        let allItems = [...activeVotings];
 
-        // Сначала добавляем активные голосования
-        allItems.push(...activeVotings);
-
-        // Затем добавляем события с рекламой каждые 2 элемента
         let adIndex = 0;
         events.forEach((event, index) => {
           allItems.push(event);
@@ -473,13 +434,11 @@
           }
         });
 
-        // Добавляем оставшуюся рекламу в конец
         while (adIndex < ads.length) {
           allItems.push(ads[adIndex]);
           adIndex++;
         }
 
-        // Отрисовываем элементы
         allItems.forEach(item => {
           if (item.type === 'event') renderEventItem(item.data);
           else if (item.type === 'ad') renderAdItem(item.data);
@@ -495,6 +454,265 @@
       }
     }
 
+    function showVotingOptions(voting) {
+      const optionsContainer = document.getElementById('votingOptions');
+      optionsContainer.innerHTML = '<h4 class="font-bold mb-2">Выберите номинанта:</h4>';
+
+      document.getElementById('getLocationBtn').style.display = 'block';
+
+      if (voting.Options && voting.Options.split(',').length > 0) {
+        const optionsArray = voting.Options.split(',');
+        const optionImages = voting.OptionImages || [];
+
+        optionsArray.forEach((option, index) => {
+          const optionDiv = document.createElement('div');
+          optionDiv.className = 'mb-3 p-2 border rounded-lg bg-white transition voting-option';
+
+          let imageHtml = '';
+          if (optionImages[index] && optionImages[index].url) {
+            imageHtml = `
+              <div class="flex-shrink-0 mr-3">
+                <img src="${optionImages[index].url}" alt="${option}" 
+                     class="w-24 h-24 object-cover rounded-lg border">
+              </div>
+            `;
+          }
+
+          optionDiv.innerHTML = `
+            <div class="flex items-center justify-between">
+              ${imageHtml}
+              <div class="flex-grow">
+                <span class="font-medium">${option}</span>
+              </div>
+              <button class="vote-button bg-blue-600 text-white px-3 py-1 rounded text-sm transition" 
+                      onclick="castVote(${index})" disabled>
+                Голосовать
+              </button>
+            </div>
+          `;
+
+          optionsContainer.appendChild(optionDiv);
+        });
+
+        updateVoteButtons();
+      }
+    }
+
+    function updateVoteButtons() {
+      const voteButtons = document.querySelectorAll('.vote-button');
+      voteButtons.forEach(button => {
+        if (userLocation) {
+          button.classList.add('enabled');
+          button.classList.remove('bg-blue-600');
+          button.classList.add('bg-green-600', 'hover:bg-green-700');
+          button.disabled = false;
+        } else {
+          button.classList.remove('enabled');
+          button.classList.add('bg-blue-600');
+          button.classList.remove('bg-green-600', 'hover:bg-green-700');
+          button.disabled = true;
+        }
+      });
+    }
+
+    async function castVote(optionIndex) {
+      if (!currentVotingRecord) return;
+
+      if (!userLocation) {
+        alert('Сначала необходимо определить ваше местоположение');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            optionIndex: optionIndex,
+            userLat: userLocation.latitude,
+            userLon: userLocation.longitude
+          })
+        });
+
+        if (response.ok) {
+          showVotingModal(currentVotingRecord);
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Ошибка при голосовании');
+        }
+      } catch (err) {
+        console.error('Vote error:', err);
+        alert('Ошибка при голосовании: ' + err.message);
+      }
+    }
+
+    document.getElementById('getLocationBtn').addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        alert('Геолокация не поддерживается вашим браузером');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          userLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
+          document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
+          document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
+          document.getElementById('getLocationBtn').classList.add('bg-green-600', 'hover:bg-green-700');
+          document.getElementById('getLocationBtn').disabled = true;
+          updateVoteButtons();
+        },
+        (error) => {
+          alert('Не удалось определить ваше местоположение. Проверьте настройки геолокации.');
+          console.error('Geolocation error:', error);
+        }
+      );
+    });
+
+    function showVotingModal(record) {
+      const modal = document.getElementById('votingModal');
+      const voting = record.fields || {};
+      currentVotingRecord = record;
+
+      document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
+      document.getElementById('votingModalDescription').textContent = voting.Description || '';
+
+      try {
+        fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
+          .then(response => {
+            if (response.ok) {
+              return response.json();
+            }
+            throw new Error('Ошибка проверки статуса голосования');
+          })
+          .then(status => {
+            if (status.hasVoted || voting.Status === 'Completed') {
+              showVotingResults(voting, status.userVote);
+            } else {
+              showVotingOptions(voting);
+            }
+          })
+          .catch(err => {
+            console.error('Error checking vote status:', err);
+            showVotingOptions(voting);
+          });
+      } catch (err) {
+        console.error('Error in showVotingModal:', err);
+        showVotingOptions(voting);
+      }
+
+      modal.classList.remove('hidden');
+      tg.BackButton.show();
+      tg.BackButton.onClick(closeVotingModal);
+    }
+
+    function showVotingResults(voting, userVote) {
+      const optionsContainer = document.getElementById('votingOptions');
+      const isCompleted = voting.Status === 'Completed';
+      
+      optionsContainer.innerHTML = isCompleted ? 
+        '<h4 class="font-bold mb-2">Финальные результаты:</h4>' : 
+        '<h4 class="font-bold mb-2">Текущие результаты:</h4>';
+      
+      document.getElementById('getLocationBtn').style.display = 'none';
+      
+      if (voting.Options && voting.Options.split(',').length > 0) {
+        const optionsArray = voting.Options.split(',');
+        const optionImages = voting.OptionImages || [];
+        
+        const results = {};
+        optionsArray.forEach((option, index) => {
+          results[index] = {
+            option: option,
+            count: 0,
+            percentage: 0,
+            image: optionImages[index] ? optionImages[index].url : null
+          };
+        });
+        
+        if (voting.Votes) {
+          const votes = typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes;
+          Object.values(votes).forEach(voteIndex => {
+            if (results[voteIndex]) {
+              results[voteIndex].count++;
+            }
+          });
+        }
+        
+        const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
+        Object.values(results).forEach(result => {
+          result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
+        });
+        
+        Object.values(results).forEach((result, index) => {
+          const isUserChoice = userVote === index;
+          
+          const resultDiv = document.createElement('div');
+          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-white voting-option';
+          
+          let imageHtml = '';
+          if (result.image) {
+            imageHtml = `
+              <div class="flex-shrink-0 mr-3">
+                <img src="${result.image}" alt="${result.option}" 
+                     class="w-24 h-24 object-cover rounded-lg border">
+              </div>
+            `;
+          }
+          
+          resultDiv.innerHTML = `
+            <div class="flex items-start">
+              ${imageHtml}
+              <div class="flex-grow">
+                <div class="flex justify-between items-start mb-2">
+                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-gray-800'}">
+                    ${result.option}
+                  </span>
+                  <span class="text-sm text-gray-500 whitespace-nowrap">
+                    ${result.count} голосов (${result.percentage}%)
+                  </span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                  <div class="bg-blue-600 h-2 rounded-full" style="width: ${result.percentage}%"></div>
+                </div>
+                ${isUserChoice ? '<div class="text-xs text-blue-600">✓ Ваш выбор</div>' : ''}
+              </div>
+            </div>
+          `;
+          
+          optionsContainer.appendChild(resultDiv);
+        });
+        
+        if (isCompleted) {
+          optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
+        }
+
+        if (isCompleted && voting.Results) {
+          const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
+          let resultsHtml = '<h4 class="font-bold mb-2 mt-4">Итоги:</h4>';
+          Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
+            resultsHtml += `
+              <p>${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
+            `;
+          });
+          optionsContainer.innerHTML += resultsHtml;
+        }
+      }
+    }
+
+    function closeVotingModal() {
+      document.getElementById('votingModal').classList.add('hidden');
+      tg.BackButton.hide();
+      currentVotingRecord = null;
+    }
+
+    // Остальные функции (renderEventItem, showEventModal, и т.д.) остаются без изменений
     function renderEventItem(record) {
       const eventsContainer = document.getElementById('events');
       const event = record.fields || {};
@@ -654,8 +872,6 @@
       tg.BackButton.hide();
       currentEventRecord = null;
     }
-
-    // ==================== ФУНКЦИИ ДЛЯ РЕКЛАМЫ ====================
 
     function renderAdItem(record) {
       const eventsContainer = document.getElementById('events');
@@ -835,8 +1051,6 @@
         alert(`Ошибка сохранения рекламы: ${err.message}`);
       }
     });
-
-    // ==================== ФУНКЦИИ ДЛЯ ГОЛОСОВАНИЙ ====================
 
     async function loadVotings() {
       const votingsList = document.getElementById('votingsList');
@@ -1112,7 +1326,6 @@
       const longitude = document.getElementById('votingLongitude').value.trim();
       const eventId = document.getElementById('votingEventId').value;
       
-      // Валидация координат
       if (latitude !== '') {
         const latValue = parseFloat(latitude);
         if (isNaN(latValue) || latValue < -90 || latValue > 90) {
@@ -1170,9 +1383,7 @@
       
       if (latitude !== '') votingData.fields.Latitude = parseFloat(latitude);
       if (longitude !== '') votingData.fields.Longitude = parseFloat(longitude);
-      if (eventId) votingData.fields.EventID = eventId; // Предполагается, что EventID - текст, если связь, измените на массив
-      
-      console.log('Отправляемые данные голосования:', JSON.stringify(votingData, null, 2));
+      if (eventId) votingData.fields.EventID = eventId;
       
       try {
         const method = recordId ? 'PATCH' : 'POST';
@@ -1241,235 +1452,6 @@
       div.addEventListener('click', () => showVotingModal(record));
       eventsContainer.appendChild(div);
     }
-
-    async function showVotingModal(record) {
-      const modal = document.getElementById('votingModal');
-      const voting = record.fields || {};
-      currentVotingRecord = record;
-      
-      document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
-      document.getElementById('votingModalDescription').textContent = voting.Description || '';
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`);
-        if (response.ok) {
-          const status = await response.json();
-          
-          if (status.hasVoted || voting.Status === 'Completed') {
-            showVotingResults(voting, status.userVote);
-          } else {
-            showVotingOptions(voting);
-          }
-        } else {
-          throw new Error('Ошибка проверки статуса голосования');
-        }
-      } catch (err) {
-        console.error('Error checking vote status:', err);
-        showVotingOptions(voting);
-      }
-      
-      modal.classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeVotingModal);
-    }
-
-    function showVotingOptions(voting) {
-      const optionsContainer = document.getElementById('votingOptions');
-      optionsContainer.innerHTML = '<h4 class="font-bold mb-2">Выберите номинанта:</h4>';
-      
-      document.getElementById('getLocationBtn').style.display = 'block';
-      
-      if (voting.Options && voting.Options.split(',').length > 0) {
-        const optionsArray = voting.Options.split(',');
-        const optionImages = voting.OptionImages || [];
-        
-        optionsArray.forEach((option, index) => {
-          const optionDiv = document.createElement('div');
-          optionDiv.className = 'mb-3 p-2 border rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition voting-option';
-          optionDiv.onclick = () => castVote(index);
-          
-          let imageHtml = '';
-          if (optionImages[index] && optionImages[index].url) {
-            imageHtml = `
-              <div class="flex-shrink-0 mr-3">
-                <img src="${optionImages[index].url}" alt="${option}" 
-                     class="w-24 h-24 object-cover rounded-lg border">
-              </div>
-            `;
-          }
-          
-          optionDiv.innerHTML = `
-            <div class="flex items-center">
-              ${imageHtml}
-              <div class="flex-grow">
-                <span class="font-medium">${option}</span>
-              </div>
-              <div class="text-2xl">→</div>
-            </div>
-          `;
-          
-          optionsContainer.appendChild(optionDiv);
-        });
-      }
-    }
-
-    function showVotingResults(voting, userVote) {
-      const optionsContainer = document.getElementById('votingOptions');
-      const isCompleted = voting.Status === 'Completed';
-      
-      optionsContainer.innerHTML = isCompleted ? 
-        '<h4 class="font-bold mb-2">Финальные результаты:</h4>' : 
-        '<h4 class="font-bold mb-2">Текущие результаты:</h4>';
-      
-      document.getElementById('getLocationBtn').style.display = 'none';
-      
-      if (voting.Options && voting.Options.split(',').length > 0) {
-        const optionsArray = voting.Options.split(',');
-        const optionImages = voting.OptionImages || [];
-        
-        const results = {};
-        optionsArray.forEach((option, index) => {
-          results[index] = {
-            option: option,
-            count: 0,
-            percentage: 0,
-            image: optionImages[index] ? optionImages[index].url : null
-          };
-        });
-        
-        if (voting.Votes) {
-          const votes = typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes;
-          Object.values(votes).forEach(voteIndex => {
-            if (results[voteIndex]) {
-              results[voteIndex].count++;
-            }
-          });
-        }
-        
-        const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
-        Object.values(results).forEach(result => {
-          result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
-        });
-        
-        Object.values(results).forEach((result, index) => {
-          const isUserChoice = userVote === index;
-          
-          const resultDiv = document.createElement('div');
-          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-white voting-option';
-          
-          let imageHtml = '';
-          if (result.image) {
-            imageHtml = `
-              <div class="flex-shrink-0 mr-3">
-                <img src="${result.image}" alt="${result.option}" 
-                     class="w-24 h-24 object-cover rounded-lg border">
-              </div>
-            `;
-          }
-          
-          resultDiv.innerHTML = `
-            <div class="flex items-start">
-              ${imageHtml}
-              <div class="flex-grow">
-                <div class="flex justify-between items-start mb-2">
-                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-gray-800'}">
-                    ${result.option}
-                  </span>
-                  <span class="text-sm text-gray-500 whitespace-nowrap">
-                    ${result.count} голосов (${result.percentage}%)
-                  </span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <div class="bg-blue-600 h-2 rounded-full" style="width: ${result.percentage}%"></div>
-                </div>
-                ${isUserChoice ? '<div class="text-xs text-blue-600">✓ Ваш выбор</div>' : ''}
-              </div>
-            </div>
-          `;
-          
-          optionsContainer.appendChild(resultDiv);
-        });
-        
-        if (isCompleted) {
-          optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
-        }
-
-        // Отображение итогов, если голосование завершено
-        if (isCompleted && voting.Results) {
-          const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
-          let resultsHtml = '<h4 class="font-bold mb-2 mt-4">Итоги:</h4>';
-          Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
-            resultsHtml += `
-              <p>${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
-            `;
-          });
-          optionsContainer.innerHTML += resultsHtml;
-        }
-      }
-    }
-
-    async function castVote(optionIndex) {
-      if (!currentVotingRecord) return;
-      
-      if (!userLocation) {
-        alert('Сначала необходимо определить ваше местоположение');
-        return;
-      }
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id,
-            optionIndex: optionIndex,
-            userLat: userLocation.latitude,
-            userLon: userLocation.longitude
-          })
-        });
-        
-        if (response.ok) {
-          showVotingModal(currentVotingRecord);
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Ошибка при голосовании');
-        }
-      } catch (err) {
-        console.error('Vote error:', err);
-        alert('Ошибка при голосовании: ' + err.message);
-      }
-    }
-
-    document.getElementById('getLocationBtn').addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        alert('Геолокация не поддерживается вашим браузером');
-        return;
-      }
-      
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          userLocation = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          };
-          alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
-        },
-        (error) => {
-          alert('Не удалось определить ваше местоположение. Проверьте настройки геолокации.');
-          console.error('Geolocation error:', error);
-        }
-      );
-    });
-
-    function closeVotingModal() {
-      document.getElementById('votingModal').classList.add('hidden');
-      tg.BackButton.hide();
-      currentVotingRecord = null;
-    }
-
-    // ==================== АДМИН-ФУНКЦИИ ====================
 
     async function checkIsAdmin(userId) {
       try {
@@ -1679,11 +1661,8 @@
       }
     });
 
-    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
-
     initAdmin();
     renderEvents();
-
     addOption();
   </script>
 </body>
