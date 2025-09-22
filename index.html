@@ -360,6 +360,18 @@
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
+    // Применение темы Telegram
+    function applyTheme() {
+      const theme = tg.themeParams;
+      document.documentElement.style.setProperty('--bg-color', theme.bg_color || '#ffffff');
+      document.documentElement.style.setProperty('--text-color', theme.text_color || '#000000');
+      document.documentElement.style.setProperty('--hint-color', theme.hint_color || '#707579');
+      document.documentElement.style.setProperty('--link-color', theme.link_color || '#3390ec');
+      document.documentElement.style.setProperty('--button-color', theme.button_color || '#3390ec');
+      document.documentElement.style.setProperty('--button-text-color', theme.button_text_color || '#ffffff');
+      document.documentElement.style.setProperty('--secondary-bg-color', theme.secondary_bg_color || '#f4f4f5');
+    }
+
     function formatDate(dateStr) {
       if (!dateStr) return 'Без даты';
       const [year, month, day] = dateStr.split('-');
@@ -395,6 +407,7 @@
         let events = [];
         let ads = [];
 
+        // Собираем активные голосования (всегда первые)
         if (votingsData.records) {
           activeVotings = votingsData.records
             .filter(record => record.fields.Status !== 'Completed')
@@ -405,6 +418,7 @@
             }));
         }
 
+        // Собираем события и сортируем по дате (от ближайших к будущим)
         if (eventsData.records) {
           events = eventsData.records
             .map(record => ({
@@ -415,6 +429,7 @@
             .sort((a, b) => a.date - b.date);
         }
 
+        // Собираем рекламу
         if (adsData.records) {
           ads = adsData.records.map(record => ({
             type: 'ad',
@@ -423,7 +438,8 @@
           }));
         }
 
-        let allItems = [...activeVotings];
+        // Формируем итоговый список: голосования первые, затем события, реклама каждые 2 события
+        let allItems = [...activeVotings]; // Голосования всегда первые
 
         let adIndex = 0;
         events.forEach((event, index) => {
@@ -516,14 +532,27 @@
     }
 
     async function castVote(optionIndex) {
-      if (!currentVotingRecord) return;
+      if (!currentVotingRecord) {
+        alert('Ошибка: голосование не выбрано');
+        console.error('castVote: No currentVotingRecord');
+        return;
+      }
 
       if (!userLocation) {
         alert('Сначала необходимо определить ваше местоположение');
+        console.error('castVote: No userLocation');
         return;
       }
 
       try {
+        console.log('Attempting to cast vote:', {
+          votingId: currentVotingRecord.id,
+          userId: user.id,
+          optionIndex,
+          userLat: userLocation.latitude,
+          userLon: userLocation.longitude
+        });
+
         const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
           method: 'POST',
           headers: {
@@ -538,9 +567,12 @@
         });
 
         if (response.ok) {
+          console.log('Vote cast successfully');
+          alert('Ваш голос учтен!');
           showVotingModal(currentVotingRecord);
         } else {
           const error = await response.json();
+          console.error('Vote error:', error);
           alert(error.error || 'Ошибка при голосовании');
         }
       } catch (err) {
@@ -552,6 +584,7 @@
     document.getElementById('getLocationBtn').addEventListener('click', () => {
       if (!navigator.geolocation) {
         alert('Геолокация не поддерживается вашим браузером');
+        console.error('Geolocation not supported');
         return;
       }
 
@@ -561,6 +594,7 @@
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           };
+          console.log('Geolocation obtained:', userLocation);
           alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
           document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
           document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
@@ -569,8 +603,8 @@
           updateVoteButtons();
         },
         (error) => {
-          alert('Не удалось определить ваше местоположение. Проверьте настройки геолокации.');
           console.error('Geolocation error:', error);
+          alert('Не удалось определить ваше местоположение. Проверьте настройки геолокации.');
         }
       );
     });
@@ -712,7 +746,6 @@
       currentVotingRecord = null;
     }
 
-    // Остальные функции (renderEventItem, showEventModal, и т.д.) остаются без изменений
     function renderEventItem(record) {
       const eventsContainer = document.getElementById('events');
       const event = record.fields || {};
