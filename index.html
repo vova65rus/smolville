@@ -25,152 +25,190 @@
       --voting-completed-text: #006400;
       --voting-completed-border: #ccffcc;
     }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-color: #1a1a1a;
+        --text-color: #ffffff;
+        --hint-color: #8e8e93;
+        --secondary-bg-color: #2c2c2e;
+        --ad-bg-color: #4a3c00;
+        --ad-text-color: #ffd700;
+        --ad-border-color: #665200;
+        --voting-bg-color: #4a0000;
+        --voting-text-color: #ff6b6b;
+        --voting-border-color: #660000;
+        --voting-completed-bg: #004d00;
+        --voting-completed-text: #00ff00;
+        --voting-completed-border: #006600;
+      }
+    }
+
     body {
       background-color: var(--bg-color);
       color: var(--text-color);
       transition: background-color 0.3s ease, color 0.3s ease;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
+
     .event-card {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 8px;
-      backdrop-filter: blur(5px);
-      margin-bottom: 10px;
-      transition: background 0.3s ease;
+      background: var(--secondary-bg-color);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      transition: all 0.3s ease;
       border: 1px solid var(--hint-color);
     }
+
     .event-card:hover {
-      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
+
     .ad-card {
       background: var(--ad-bg-color);
-      border-radius: 8px;
-      margin-bottom: 10px;
+      border-radius: 12px;
+      margin-bottom: 12px;
       border: 2px solid var(--ad-border-color);
       color: var(--ad-text-color);
     }
-    .ad-card:hover {
-      background: #ffeaa7;
-      transform: scale(1.02);
-      transition: all 0.2s ease;
-    }
+
     .voting-card {
       background: var(--voting-bg-color);
-      border-radius: 8px;
-      margin-bottom: 10px;
+      border-radius: 12px;
+      margin-bottom: 12px;
       border: 2px solid var(--voting-border-color);
       color: var(--voting-text-color);
+      order: -1; /* Голосования всегда первые */
     }
-    .voting-card:hover {
-      background: #ffcccc;
-      transform: scale(1.02);
-      transition: all 0.2s ease;
-    }
+
     .voting-card.completed {
       background: var(--voting-completed-bg);
       border-color: var(--voting-completed-border);
       color: var(--voting-completed-text);
     }
-    .ad-badge {
+
+    .ad-badge, .voting-badge {
       position: absolute;
       top: 8px;
       right: 8px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .ad-badge {
       background: var(--ad-border-color);
       color: var(--ad-text-color);
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 10px;
-      font-weight: bold;
     }
+
     .voting-badge {
-      position: absolute;
-      top: 8px;
-      right: 8px;
       background: var(--voting-border-color);
       color: var(--voting-text-color);
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 10px;
-      font-weight: bold;
     }
-    .hidden {
-      display: none;
-    }
+
     .modal {
-      background: rgba(0, 0, 0, 0.85);
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(5px);
     }
+
     .modal-content {
       background: var(--secondary-bg-color);
       color: var(--text-color);
-      padding: 20px;
+      border-radius: 16px;
+      border: 1px solid var(--hint-color);
+    }
+
+    .tab {
+      background: var(--secondary-bg-color);
+      color: var(--text-color);
+      padding: 10px 16px;
       border-radius: 8px;
-      max-width: 90%;
-      max-height: 80%;
-      overflow-y: auto;
-      transition: background 0.3s ease, color 0.3s ease;
+      margin: 0 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
-    .fade-in {
-      animation: fadeIn 0.5s ease-in;
+
+    .tab:hover {
+      background: var(--hint-color);
+      color: var(--bg-color);
     }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+
+    .tab.active {
+      background: var(--button-color);
+      color: var(--button-text-color);
     }
+
     input, textarea, select {
       background: var(--bg-color);
       color: var(--text-color);
       border: 1px solid var(--hint-color);
-      transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+      border-radius: 8px;
+      padding: 12px;
+      width: 100%;
+      margin-bottom: 12px;
     }
+
     input::placeholder, textarea::placeholder {
       color: var(--hint-color);
     }
-    .tab {
-      background: var(--secondary-bg-color);
-      color: var(--text-color);
-      padding: 8px 16px;
-      border-radius: 4px 4px 0 0;
+
+    button {
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      border: none;
       cursor: pointer;
-      transition: background 0.3s ease;
     }
-    .tab:hover {
+
+    .vote-button {
+      background: var(--button-color);
+      color: var(--button-text-color);
+    }
+
+    .vote-button:hover {
+      opacity: 0.9;
+    }
+
+    .vote-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .results-bar {
       background: var(--hint-color);
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 8px 0;
     }
-    .tab.active {
-      background: var(--bg-color);
-      font-weight: bold;
-      color: var(--text-color);
+
+    .results-fill {
+      background: var(--button-color);
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
     }
-    .tab-content {
-      display: none;
-    }
-    .tab-content.active {
-      display: block;
-    }
+
     body {
       padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
     }
-    .voting-option {
-      color: var(--text-color);
+
+    .hidden {
+      display: none;
     }
-    .vote-button {
-      pointer-events: none;
-      opacity: 0.5;
+
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
     }
-    .vote-button.enabled {
-      pointer-events: auto;
-      opacity: 1;
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
   </style>
 </head>
@@ -180,29 +218,29 @@
       <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
     </a>
     <h1 class="text-2xl font-bold text-center mb-4">Автособытия Сахалина</h1>
-    <div id="events" class="grid grid-cols-1 gap-4"></div>
-    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition" onclick="showAdminModal()">Админ</button>
+    <div id="events" class="grid grid-cols-1 gap-3"></div>
+    <button id="adminBtn" class="hidden fixed bottom-6 right-6 bg-[var(--button-color)] text-[var(--button-text-color)] px-6 py-3 rounded-full shadow-lg transition-all hover:scale-105" onclick="showAdminModal()">Админ</button>
   </div>
 
   <!-- Модальное окно события -->
   <div id="eventModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="modalTitle" class="text-lg font-bold"></h2>
-      <p id="modalDate"></p>
-      <p id="modalLocation"></p>
-      <p id="modalDescription"></p>
-      <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
-      <div id="modalMapButtonContainer" class="hidden mt-3">
-        <button id="modalMapButton" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">
+    <div class="modal-content p-6 max-w-md">
+      <h2 id="modalTitle" class="text-lg font-bold mb-2"></h2>
+      <p id="modalDate" class="text-sm text-[var(--hint-color)] mb-1"></p>
+      <p id="modalLocation" class="text-sm text-[var(--hint-color)] mb-3"></p>
+      <p id="modalDescription" class="mb-4"></p>
+      <img id="modalImage" class="w-full h-40 object-cover rounded-lg mb-4" loading="lazy">
+      <div id="modalMapButtonContainer" class="hidden mb-4">
+        <button id="modalMapButton" class="bg-[var(--button-color)] text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">
           На карте
         </button>
       </div>
-      <div class="mt-4 pt-3 border-t">
+      <div class="pt-4 border-t border-[var(--hint-color)]">
         <div class="flex items-center justify-between">
           <span class="text-sm font-medium">
             Идут: <span id="attendeesCount">0</span> человек
           </span>
-          <button id="attendButton" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
+          <button id="attendButton" class="bg-green-600 text-white px-4 py-2 rounded-lg">
             Я пойду!
           </button>
         </div>
@@ -212,11 +250,11 @@
 
   <!-- Модальное окно рекламы -->
   <div id="adModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="adModalTitle" class="text-lg font-bold"></h2>
-      <p id="adModalDescription"></p>
-      <img id="adModalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
-      <button id="adModalButton" class="bg-[var(--ad-border-color)] hover:opacity-90 text-[var(--ad-text-color)] px-4 py-2 rounded-lg transition w-full mt-3">
+    <div class="modal-content p-6 max-w-md">
+      <h2 id="adModalTitle" class="text-lg font-bold mb-2"></h2>
+      <p id="adModalDescription" class="mb-4"></p>
+      <img id="adModalImage" class="w-full h-40 object-cover rounded-lg mb-4" loading="lazy">
+      <button id="adModalButton" class="bg-[var(--ad-border-color)] text-[var(--ad-text-color)] px-4 py-2 rounded-lg w-full">
         Перейти
       </button>
     </div>
@@ -224,13 +262,13 @@
 
   <!-- Модальное окно голосования -->
   <div id="votingModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="votingModalTitle" class="text-lg font-bold"></h2>
-      <p id="votingModalDescription"></p>
+    <div class="modal-content p-6 max-w-md">
+      <h2 id="votingModalTitle" class="text-lg font-bold mb-2"></h2>
+      <p id="votingModalDescription" class="mb-4"></p>
       <div id="votingOptions" class="my-4"></div>
-      <div class="mt-4 pt-3 border-t">
-        <p class="text-sm text-[var(--hint-color)]">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
-        <button id="getLocationBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3">
+      <div class="pt-4 border-t border-[var(--hint-color)]">
+        <p class="text-sm text-[var(--hint-color)] mb-3">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
+        <button id="getLocationBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg w-full">
           Определить мое местоположение
         </button>
       </div>
@@ -239,9 +277,13 @@
 
   <!-- Админ-панель -->
   <div id="adminModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 class="text-lg font-bold mb-4">Админ-панель</h2>
-      <div class="flex mb-4">
+    <div class="modal-content p-6 max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-bold">Админ-панель</h2>
+        <button onclick="closeAdminModal()" class="text-2xl">&times;</button>
+      </div>
+      
+      <div class="flex flex-wrap gap-2 mb-6">
         <div class="tab active" onclick="showTab('tab-list')">События</div>
         <div class="tab" onclick="showTab('tab-form')">Добавить событие</div>
         <div class="tab" onclick="showTab('tab-ads-list')">Реклама</div>
@@ -249,14 +291,16 @@
         <div class="tab" onclick="showTab('tab-votings-list')">Голосования</div>
         <div class="tab" onclick="showTab('tab-voting-form')">Добавить голосование</div>
       </div>
+
       <!-- Вкладка списка событий -->
       <div id="tab-list" class="tab-content active">
-        <h3 class="text-md font-bold mb-2">Список событий</h3>
-        <div id="eventList" class="mb-4"></div>
+        <h3 class="text-lg font-semibold mb-4">Список событий</h3>
+        <div id="eventList" class="space-y-3"></div>
       </div>
+
       <!-- Вкладка формы события -->
       <div id="tab-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Добавить/Редактировать событие</h3>
+        <h3 class="text-lg font-semibold mb-4">Добавить/Редактировать событие</h3>
         <form id="eventForm">
           <input type="hidden" id="eventRecordId">
           <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
@@ -271,18 +315,20 @@
           <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
           <input type="text" id="eventMapLink" placeholder="Ссылка на карту (2GIS)" class="border p-2 w-full mb-2">
           <input type="file" id="eventImage" accept="image/*" class="mb-2">
-          <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Сохранить событие</button>
+          <button type="submit" class="bg-[var(--button-color)] text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">Сохранить событие</button>
         </form>
       </div>
+
       <!-- Вкладка списка рекламы -->
       <div id="tab-ads-list" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Список рекламных блоков</h3>
-        <div id="adsList" class="mb-4"></div>
-        <button onclick="loadAds()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Обновить список</button>
+        <h3 class="text-lg font-semibold mb-4">Список рекламных блоков</h3>
+        <div id="adsList" class="space-y-3 mb-4"></div>
+        <button onclick="loadAds()" class="bg-[var(--button-color)] text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">Обновить список</button>
       </div>
+
       <!-- Вкладка формы рекламы -->
       <div id="tab-ad-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Добавить/Редактировать рекламу</h3>
+        <h3 class="text-lg font-semibold mb-4">Добавить/Редактировать рекламу</h3>
         <form id="adForm">
           <input type="hidden" id="adRecordId">
           <input type="text" id="adTitle" placeholder="Заголовок рекламы" class="border p-2 w-full mb-2" required>
@@ -290,20 +336,22 @@
           <input type="url" id="adUrl" placeholder="Ссылка (URL)" class="border p-2 w-full mb-2">
           <input type="file" id="adImage" accept="image/*" class="mb-2">
           <div class="flex space-x-2">
-            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition flex-1">Сохранить рекламу</button>
-            <button type="button" onclick="clearAdForm()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">Очистить</button>
+            <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg flex-1">Сохранить рекламу</button>
+            <button type="button" onclick="clearAdForm()" class="bg-gray-600 text-white px-4 py-2 rounded-lg">Очистить</button>
           </div>
         </form>
       </div>
+
       <!-- Вкладка списка голосований -->
       <div id="tab-votings-list" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Список голосований</h3>
-        <div id="votingsList" class="mb-4"></div>
-        <button onclick="loadVotings()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition">Обновить список</button>
+        <h3 class="text-lg font-semibold mb-4">Список голосований</h3>
+        <div id="votingsList" class="space-y-3 mb-4"></div>
+        <button onclick="loadVotings()" class="bg-[var(--button-color)] text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">Обновить список</button>
       </div>
+
       <!-- Вкладка формы голосования -->
       <div id="tab-voting-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Добавить/Редактировать голосование</h3>
+        <h3 class="text-lg font-semibold mb-4">Добавить/Редактировать голосование</h3>
         <form id="votingForm">
           <input type="hidden" id="votingRecordId">
           <input type="text" id="votingTitle" placeholder="Название голосования" class="border p-2 w-full mb-2" required>
@@ -331,8 +379,8 @@
           <input type="number" id="votingLatitude" placeholder="Широта места голосования" step="any" class="border p-2 w-full mb-2">
           <input type="number" id="votingLongitude" placeholder="Долгота места голосования" step="any" class="border p-2 w-full mb-2">
           <div class="flex space-x-2">
-            <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition flex-1">Сохранить голосование</button>
-            <button type="button" id="completeVotingBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition hidden">Завершить</button>
+            <button type="submit" class="bg-[var(--button-color)] text-[var(--button-text-color)] px-4 py-2 rounded-lg flex-1">Сохранить голосование</button>
+            <button type="button" id="completeVotingBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hidden">Завершить</button>
           </div>
         </form>
       </div>
@@ -363,13 +411,13 @@
     // Применение темы Telegram
     function applyTheme() {
       const theme = tg.themeParams;
-      document.documentElement.style.setProperty('--bg-color', theme.bg_color || '#ffffff');
-      document.documentElement.style.setProperty('--text-color', theme.text_color || '#000000');
-      document.documentElement.style.setProperty('--hint-color', theme.hint_color || '#707579');
-      document.documentElement.style.setProperty('--link-color', theme.link_color || '#3390ec');
-      document.documentElement.style.setProperty('--button-color', theme.button_color || '#3390ec');
-      document.documentElement.style.setProperty('--button-text-color', theme.button_text_color || '#ffffff');
-      document.documentElement.style.setProperty('--secondary-bg-color', theme.secondary_bg_color || '#f4f4f5');
+      if (theme.bg_color) document.documentElement.style.setProperty('--bg-color', theme.bg_color);
+      if (theme.text_color) document.documentElement.style.setProperty('--text-color', theme.text_color);
+      if (theme.hint_color) document.documentElement.style.setProperty('--hint-color', theme.hint_color);
+      if (theme.link_color) document.documentElement.style.setProperty('--link-color', theme.link_color);
+      if (theme.button_color) document.documentElement.style.setProperty('--button-color', theme.button_color);
+      if (theme.button_text_color) document.documentElement.style.setProperty('--button-text-color', theme.button_text_color);
+      if (theme.secondary_bg_color) document.documentElement.style.setProperty('--secondary-bg-color', theme.secondary_bg_color);
     }
 
     function formatDate(dateStr) {
@@ -378,9 +426,10 @@
       return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
     }
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Голосования всегда первые
     async function renderEvents() {
       const eventsContainer = document.getElementById('events');
-      eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
+      eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)] py-8">Загрузка...</p>';
 
       try {
         const [eventsResponse, adsResponse, votingsResponse] = await Promise.all([
@@ -403,70 +452,41 @@
 
         eventsContainer.innerHTML = '';
 
-        let activeVotings = [];
-        let events = [];
-        let ads = [];
-
-        // Собираем активные голосования (всегда первые)
+        // 1. Сначала отображаем голосования (всегда первые)
         if (votingsData.records) {
-          activeVotings = votingsData.records
-            .filter(record => record.fields.Status !== 'Completed')
-            .map(record => ({
-              type: 'voting',
-              data: record,
-              date: new Date(record.createdTime || Date.now())
-            }));
+          votingsData.records.forEach(record => {
+            renderVotingItem(record);
+          });
         }
 
-        // Собираем события и сортируем по дате (от ближайших к будущим)
+        // 2. Затем события и реклама
+        let eventIndex = 0;
         if (eventsData.records) {
-          events = eventsData.records
-            .map(record => ({
-              type: 'event',
-              data: record,
-              date: new Date(record.fields.Date || record.createdTime || Date.now())
-            }))
-            .sort((a, b) => a.date - b.date);
+          eventsData.records.forEach((record, index) => {
+            renderEventItem(record);
+            eventIndex++;
+            
+            // Вставляем рекламу каждые 2 события
+            if (eventIndex % 2 === 0 && adsData.records && adsData.records[eventIndex/2 - 1]) {
+              renderAdItem(adsData.records[eventIndex/2 - 1]);
+            }
+          });
         }
 
-        // Собираем рекламу
+        // 3. Добавляем оставшуюся рекламу
         if (adsData.records) {
-          ads = adsData.records.map(record => ({
-            type: 'ad',
-            data: record,
-            date: new Date(record.createdTime || Date.now())
-          }));
-        }
-
-        // Формируем итоговый список: голосования первые, затем события, реклама каждые 2 события
-        let allItems = [...activeVotings]; // Голосования всегда первые
-
-        let adIndex = 0;
-        events.forEach((event, index) => {
-          allItems.push(event);
-          if ((index + 1) % 2 === 0 && adIndex < ads.length) {
-            allItems.push(ads[adIndex]);
-            adIndex++;
+          const remainingAds = Math.max(0, adsData.records.length - Math.floor(eventIndex/2));
+          for (let i = 0; i < remainingAds; i++) {
+            renderAdItem(adsData.records[Math.floor(eventIndex/2) + i]);
           }
-        });
-
-        while (adIndex < ads.length) {
-          allItems.push(ads[adIndex]);
-          adIndex++;
         }
 
-        allItems.forEach(item => {
-          if (item.type === 'event') renderEventItem(item.data);
-          else if (item.type === 'ad') renderAdItem(item.data);
-          else if (item.type === 'voting') renderVotingItem(item.data);
-        });
-
-        if (allItems.length === 0) {
-          eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
+        if (eventsContainer.children.length === 0) {
+          eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)] py-8">Мероприятия не найдены</p>';
         }
       } catch (err) {
         console.error('Render events error:', err);
-        eventsContainer.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
+        eventsContainer.innerHTML = `<p class="text-center text-[var(--hint-color)] py-8">Ошибка: ${err.message}</p>`;
       }
     }
 
@@ -531,28 +551,19 @@
       });
     }
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Правильная обработка голосов
     async function castVote(optionIndex) {
       if (!currentVotingRecord) {
         alert('Ошибка: голосование не выбрано');
-        console.error('castVote: No currentVotingRecord');
         return;
       }
 
       if (!userLocation) {
         alert('Сначала необходимо определить ваше местоположение');
-        console.error('castVote: No userLocation');
         return;
       }
 
       try {
-        console.log('Attempting to cast vote:', {
-          votingId: currentVotingRecord.id,
-          userId: user.id,
-          optionIndex,
-          userLat: userLocation.latitude,
-          userLon: userLocation.longitude
-        });
-
         const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
           method: 'POST',
           headers: {
@@ -567,12 +578,10 @@
         });
 
         if (response.ok) {
-          console.log('Vote cast successfully');
           alert('Ваш голос учтен!');
           showVotingModal(currentVotingRecord);
         } else {
           const error = await response.json();
-          console.error('Vote error:', error);
           alert(error.error || 'Ошибка при голосовании');
         }
       } catch (err) {
@@ -584,7 +593,6 @@
     document.getElementById('getLocationBtn').addEventListener('click', () => {
       if (!navigator.geolocation) {
         alert('Геолокация не поддерживается вашим браузером');
-        console.error('Geolocation not supported');
         return;
       }
 
@@ -594,7 +602,6 @@
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           };
-          console.log('Geolocation obtained:', userLocation);
           alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
           document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
           document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
@@ -609,6 +616,7 @@
       );
     });
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Правильное отображение результатов
     function showVotingModal(record) {
       const modal = document.getElementById('votingModal');
       const voting = record.fields || {};
@@ -617,29 +625,22 @@
       document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
       document.getElementById('votingModalDescription').textContent = voting.Description || '';
 
-      try {
-        fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
-          .then(response => {
-            if (response.ok) {
-              return response.json();
-            }
-            throw new Error('Ошибка проверки статуса голосования');
-          })
-          .then(status => {
-            if (status.hasVoted || voting.Status === 'Completed') {
-              showVotingResults(voting, status.userVote);
-            } else {
-              showVotingOptions(voting);
-            }
-          })
-          .catch(err => {
-            console.error('Error checking vote status:', err);
+      fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
+        .then(response => {
+          if (response.ok) return response.json();
+          throw new Error('Ошибка проверки статуса голосования');
+        })
+        .then(status => {
+          if (status.hasVoted || voting.Status === 'Completed') {
+            showVotingResults(voting, status.userVote);
+          } else {
             showVotingOptions(voting);
-          });
-      } catch (err) {
-        console.error('Error in showVotingModal:', err);
-        showVotingOptions(voting);
-      }
+          }
+        })
+        .catch(err => {
+          console.error('Error checking vote status:', err);
+          showVotingOptions(voting);
+        });
 
       modal.classList.remove('hidden');
       tg.BackButton.show();
@@ -656,9 +657,22 @@
       
       document.getElementById('getLocationBtn').style.display = 'none';
       
-      if (voting.Options && voting.Options.split(',').length > 0) {
+      if (voting.Options) {
         const optionsArray = voting.Options.split(',');
         const optionImages = voting.OptionImages || [];
+        
+        // ИСПРАВЛЕНИЕ: Правильный парсинг голосов
+        let votes = {};
+        try {
+          if (typeof voting.Votes === 'string' && voting.Votes.trim() !== '') {
+            votes = JSON.parse(voting.Votes);
+          } else if (typeof voting.Votes === 'object') {
+            votes = voting.Votes;
+          }
+        } catch (e) {
+          console.error('Error parsing votes:', e);
+          votes = {};
+        }
         
         const results = {};
         optionsArray.forEach((option, index) => {
@@ -670,14 +684,12 @@
           };
         });
         
-        if (voting.Votes) {
-          const votes = typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes;
-          Object.values(votes).forEach(voteIndex => {
-            if (results[voteIndex]) {
-              results[voteIndex].count++;
-            }
-          });
-        }
+        // Подсчет голосов
+        Object.values(votes).forEach(voteIndex => {
+          if (results[voteIndex]) {
+            results[voteIndex].count++;
+          }
+        });
         
         const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
         Object.values(results).forEach(result => {
@@ -722,21 +734,6 @@
           
           optionsContainer.appendChild(resultDiv);
         });
-        
-        if (isCompleted) {
-          optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
-        }
-
-        if (isCompleted && voting.Results) {
-          const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
-          let resultsHtml = '<h4 class="font-bold mb-2 mt-4">Итоги:</h4>';
-          Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
-            resultsHtml += `
-              <p>${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
-            `;
-          });
-          optionsContainer.innerHTML += resultsHtml;
-        }
       }
     }
 
@@ -752,13 +749,13 @@
       const attendeesCount = event.AttendeesCount || 0;
       
       const div = document.createElement('div');
-      div.className = 'event-card p-2 fade-in';
+      div.className = 'event-card p-4 fade-in';
       div.innerHTML = `
         <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
         <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
         <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
         <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
-        <img src="${event.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+        <img src="${event.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-2" loading="lazy">
       `;
       div.addEventListener('click', () => showEventModal(record));
       eventsContainer.appendChild(div);
@@ -775,11 +772,8 @@
         if (response.ok) {
           const status = await response.json();
           isUserAttending = status.isAttending;
-        } else {
-          isUserAttending = false;
         }
       } catch (err) {
-        console.error('Error checking attend status:', err);
         isUserAttending = false;
       }
       
@@ -803,11 +797,11 @@
       const attendButton = document.getElementById('attendButton');
       if (isUserAttending) {
         attendButton.textContent = 'Не пойду';
-        attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+        attendButton.className = 'bg-red-600 text-white px-4 py-2 rounded-lg';
         attendButton.onclick = () => unattendEvent();
       } else {
         attendButton.textContent = 'Я пойду!';
-        attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+        attendButton.className = 'bg-green-600 text-white px-4 py-2 rounded-lg';
         attendButton.onclick = () => attendEvent();
       }
       
@@ -836,29 +830,24 @@
           isUserAttending = true;
           
           document.getElementById('attendeesCount').textContent = result.count;
-          
           const attendButton = document.getElementById('attendButton');
           attendButton.textContent = 'Не пойду';
-          attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+          attendButton.className = 'bg-red-600 text-white px-4 py-2 rounded-lg';
           attendButton.onclick = () => unattendEvent();
           
           alert('Отлично! Вы идете на мероприятие!');
         } else {
           const error = await response.json();
           if (error.error === 'User already attending') {
-            alert('Вы уже записаны на это мероприятие!');
             isUserAttending = true;
             const attendButton = document.getElementById('attendButton');
             attendButton.textContent = 'Не пойду';
-            attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+            attendButton.className = 'bg-red-600 text-white px-4 py-2 rounded-lg';
             attendButton.onclick = () => unattendEvent();
-          } else {
-            throw new Error(error.error || 'Ошибка при записи');
           }
         }
       } catch (err) {
-        console.error('Attend error:', err);
-        alert('Ошибка при записи на мероприятие: ' + err.message);
+        alert('Ошибка при записи на мероприятие');
       }
     }
 
@@ -884,19 +873,13 @@
           isUserAttending = false;
           
           document.getElementById('attendeesCount').textContent = result.count;
-          
           const attendButton = document.getElementById('attendButton');
           attendButton.textContent = 'Я пойду!';
-          attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+          attendButton.className = 'bg-green-600 text-white px-4 py-2 rounded-lg';
           attendButton.onclick = () => attendEvent();
-          
-          alert('Вы больше не идете на мероприятие');
-        } else {
-          throw new Error('Ошибка при отмене записи');
         }
       } catch (err) {
-        console.error('Unattend error:', err);
-        alert('Ошибка при отмене записи: ' + err.message);
+        alert('Ошибка при отмене записи');
       }
     }
 
@@ -911,12 +894,12 @@
       const ad = record.fields || {};
       
       const div = document.createElement('div');
-      div.className = 'ad-card p-2 fade-in relative';
+      div.className = 'ad-card p-4 fade-in relative';
       div.innerHTML = `
         <div class="ad-badge">Реклама</div>
         <h3 class="text-sm font-bold">${ad.Title || 'Реклама'}</h3>
         <p class="text-xs">${ad.Description || 'Специальное предложение'}</p>
-        <img src="${ad.IMG?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+        <img src="${ad.IMG?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-2" loading="lazy">
       `;
       div.addEventListener('click', () => showAdModal(record));
       eventsContainer.appendChild(div);
@@ -962,20 +945,14 @@
         if (data.records && data.records.length > 0) {
           data.records.forEach(record => {
             const ad = record.fields || {};
-            const safeTitle = ad.Title ? ad.Title.replace(/'/g, "\\'") : '';
-            const safeDescription = ad.Description ? ad.Description.replace(/'/g, "\\'") : '';
-            const safeUrl = ad.URL ? ad.URL.replace(/'/g, "\\'") : '';
-            const safeImageUrl = ad.IMG?.[0]?.url ? ad.IMG[0].url.replace(/'/g, "\\'") : '';
-            
             const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
+            div.className = 'p-3 border-b border-[var(--hint-color)]';
             div.innerHTML = `
               <p class="text-sm font-bold">${ad.Title || 'Без названия'}</p>
               <p class="text-xs">${ad.Description || 'Без описания'}</p>
-              <p class="text-xs text-[var(--hint-color)]">URL: ${ad.URL || 'Не указан'}</p>
               <div class="flex space-x-2 mt-2">
-                <button onclick="editAd('${record.id}', '${safeTitle}', '${safeDescription}', '${safeUrl}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
-                <button onclick="deleteAd('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
+                <button onclick="editAd('${record.id}', '${ad.Title}', '${ad.Description}', '${ad.URL}', '${ad.IMG?.[0]?.url}')" class="bg-yellow-600 text-white px-3 py-1 rounded text-xs">Редактировать</button>
+                <button onclick="deleteAd('${record.id}')" class="bg-red-600 text-white px-3 py-1 rounded text-xs">Удалить</button>
               </div>
             `;
             adsList.appendChild(div);
@@ -993,7 +970,6 @@
       document.getElementById('adTitle').value = title || '';
       document.getElementById('adDescription').value = description || '';
       document.getElementById('adUrl').value = url || '';
-      alert('Текущее изображение: ' + (imageUrl || 'отсутствует'));
       showTab('tab-ad-form');
     }
 
@@ -1027,11 +1003,6 @@
       const description = document.getElementById('adDescription').value;
       const url = document.getElementById('adUrl').value;
 
-      if (!title) {
-        alert('Заголовок рекламы обязателен для заполнения');
-        return;
-      }
-
       const adData = {
         fields: {
           Title: title,
@@ -1051,12 +1022,10 @@
           });
           const uploadData = await uploadResponse.json();
           if (uploadData.url) {
-            adData.fields.IMG = [{ url: uploadData.url, filename: `ad_image_${Date.now()}.jpg` }];
-          } else {
-            throw new Error('Ошибка загрузки изображения');
+            adData.fields.IMG = [{ url: uploadData.url }];
           }
         } catch (err) {
-          alert(`Ошибка загрузки изображения: ${err.message}`);
+          alert('Ошибка загрузки изображения');
           return;
         }
       }
@@ -1070,18 +1039,14 @@
           body: JSON.stringify(adData)
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения рекламы');
+        if (response.ok) {
+          alert('Рекламный блок сохранен');
+          clearAdForm();
+          loadAds();
+          renderEvents();
         }
-
-        alert('Рекламный блок сохранен');
-        clearAdForm();
-        loadAds();
-        renderEvents();
       } catch (err) {
-        console.error('Ошибка сохранения рекламы:', err);
-        alert(`Ошибка сохранения рекламы: ${err.message}`);
+        alert('Ошибка сохранения рекламы');
       }
     });
 
@@ -1091,10 +1056,7 @@
       
       try {
         const response = await fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки голосований');
-        }
+        if (!response.ok) throw new Error('Ошибка загрузки голосований');
         
         const data = await response.json();
         votingsList.innerHTML = '';
@@ -1102,26 +1064,21 @@
         if (data.records && data.records.length > 0) {
           data.records.forEach(record => {
             const voting = record.fields || {};
-            const safeTitle = voting.Title ? voting.Title.replace(/'/g, "\\'") : '';
-            const safeDescription = voting.Description ? voting.Description.replace(/'/g, "\\'") : '';
-            const options = voting.Options ? voting.Options.split(',') : [];
             const status = voting.Status || 'Active';
             
             const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
+            div.className = 'p-3 border-b border-[var(--hint-color)]';
             div.innerHTML = `
               <p class="text-sm font-bold">${voting.Title || 'Без названия'} 
                 <span class="text-xs ${status === 'Completed' ? 'text-green-600' : 'text-red-600'}">
                   (${status === 'Completed' ? 'Завершено' : 'Активно'})
                 </span>
               </p>
-              ${voting.EventID ? `<p class="text-xs">Мероприятие: ${voting.EventID}</p>` : ''}
-              <p class="text-xs">Номинантов: ${options.length}</p>
-              <p class="text-xs text-gray-500">Проголосовало: ${voting.VotedUserIDs ? voting.VotedUserIDs.split(',').length : 0} человек</p>
+              <p class="text-xs">Номинантов: ${voting.Options ? voting.Options.split(',').length : 0}</p>
               <div class="flex space-x-2 mt-2">
-                <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || ''}, ${voting.Longitude || ''}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}', '${JSON.stringify(voting.OptionImages || [])}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
-                ${status === 'Active' ? `<button onclick="completeVoting('${record.id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs transition">Завершить</button>` : ''}
-                <button onclick="deleteVoting('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
+                <button onclick="editVoting('${record.id}', '${voting.Title}', '${voting.Description}', ${voting.Latitude || ''}, ${voting.Longitude || ''}, '${voting.Options}', '${voting.EventID || ''}', '${status}')" class="bg-yellow-600 text-white px-3 py-1 rounded text-xs">Редактировать</button>
+                ${status === 'Active' ? `<button onclick="completeVoting('${record.id}')" class="bg-green-600 text-white px-3 py-1 rounded text-xs">Завершить</button>` : ''}
+                <button onclick="deleteVoting('${record.id}')" class="bg-red-600 text-white px-3 py-1 rounded text-xs">Удалить</button>
               </div>
             `;
             votingsList.appendChild(div);
@@ -1181,11 +1138,6 @@
         <img class="option-preview mt-2 w-20 h-20 object-cover rounded hidden">
       `;
       container.appendChild(newOption);
-      
-      const fileInput = newOption.querySelector('.option-image');
-      fileInput.addEventListener('change', function(e) {
-        handleImageUpload(e, this);
-      });
     }
 
     function triggerImageUpload(button) {
@@ -1193,87 +1145,21 @@
       fileInput.click();
     }
 
-    async function handleImageUpload(event, fileInput) {
-      const file = event.target.files[0];
-      if (!file) return;
-      
-      const container = fileInput.closest('.option-item');
-      const imageStatus = container.querySelector('.image-status');
-      const preview = container.querySelector('.option-preview');
-      const uploadBtn = container.querySelector('button');
-      const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
-      
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        preview.src = e.target.result;
-        preview.classList.remove('hidden');
-      };
-      reader.readAsDataURL(file);
-      
-      uploadBtn.textContent = '⏳ Загружаем...';
-      uploadBtn.disabled = true;
-      imageStatus.textContent = 'Загрузка...';
-      
-      try {
-        const formData = new FormData();
-        formData.append('image', file);
-        
-        const response = await fetch(`${BACKEND_URL}/api/votings/upload-option-image`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          optionImages[optionIndex] = data.url;
-          
-          imageStatus.textContent = 'Фото загружено';
-          uploadBtn.textContent = '✅ Фото загружено';
-          uploadBtn.classList.remove('bg-blue-500');
-          uploadBtn.classList.add('bg-green-500');
-        } else {
-          throw new Error('Ошибка загрузки');
-        }
-      } catch (error) {
-        console.error('Image upload error:', error);
-        imageStatus.textContent = 'Ошибка загрузки';
-        uploadBtn.textContent = '📷 Попробовать снова';
-        delete optionImages[optionIndex];
-      } finally {
-        uploadBtn.disabled = false;
-      }
-    }
-
     function removeOption(button) {
       const container = button.closest('.option-item');
-      const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
-      
-      delete optionImages[optionIndex];
-      
       if (document.querySelectorAll('.option-item').length > 1) {
         container.remove();
-        
-        const newOptionImages = {};
-        document.querySelectorAll('.option-item').forEach((item, newIndex) => {
-          const oldIndex = Array.from(item.parentElement.children).indexOf(item);
-          if (optionImages[oldIndex]) {
-            newOptionImages[newIndex] = optionImages[oldIndex];
-          }
-        });
-        optionImages = newOptionImages;
       }
     }
 
-    function editVoting(recordId, title, description, lat, lon, options, eventId, status, optionImagesJson) {
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Редактирование голосований
+    function editVoting(recordId, title, description, lat, lon, options, eventId, status) {
       document.getElementById('votingRecordId').value = recordId;
       document.getElementById('votingTitle').value = title || '';
       document.getElementById('votingDescription').value = description || '';
       document.getElementById('votingLatitude').value = lat || '';
       document.getElementById('votingLongitude').value = lon || '';
       document.getElementById('votingEventId').value = eventId || '';
-      
-      optionImages = {};
       
       const completeBtn = document.getElementById('completeVotingBtn');
       if (status === 'Active') {
@@ -1286,27 +1172,14 @@
       const optionsContainer = document.getElementById('votingOptionsContainer');
       optionsContainer.innerHTML = '';
       
-      try {
-        const optionsArray = typeof options === 'string' ? JSON.parse(options) : options;
-        const imagesArray = typeof optionImagesJson === 'string' ? JSON.parse(optionImagesJson) : [];
-        if (optionsArray && optionsArray.length > 0) {
-          optionsArray.forEach((option, index) => {
-            addOption();
-            const items = optionsContainer.querySelectorAll('.option-item');
-            const currentItem = items[items.length - 1];
-            currentItem.querySelector('.option-name').value = option;
-            if (imagesArray[index] && imagesArray[index].url) {
-              optionImages[index] = imagesArray[index].url;
-              currentItem.querySelector('.option-preview').src = imagesArray[index].url;
-              currentItem.querySelector('.option-preview').classList.remove('hidden');
-              currentItem.querySelector('.image-status').textContent = 'Фото загружено';
-            }
-          });
-        } else {
+      if (options) {
+        options.split(',').forEach((option) => {
           addOption();
-        }
-      } catch (e) {
-        console.error('Error editing voting:', e);
+          const items = optionsContainer.querySelectorAll('.option-item');
+          const lastItem = items[items.length - 1];
+          lastItem.querySelector('.option-name').value = option;
+        });
+      } else {
         addOption();
       }
       
@@ -1314,7 +1187,7 @@
     }
 
     async function completeVoting(recordId) {
-      if (!confirm('Завершить голосование? После этого нельзя будет голосовать.')) return;
+      if (!confirm('Завершить голосование?')) return;
       
       try {
         const response = await fetch(`${BACKEND_URL}/api/votings/${recordId}/complete`, {
@@ -1322,15 +1195,11 @@
         });
         
         if (response.ok) {
-          alert('Голосование завершено! Результаты подсчитаны.');
+          alert('Голосование завершено!');
           loadVotings();
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Ошибка при завершении голосования');
         }
       } catch (err) {
-        console.error('Complete voting error:', err);
-        alert('Ошибка при завершении голосования: ' + err.message);
+        alert('Ошибка при завершении голосования');
       }
     }
 
@@ -1349,129 +1218,73 @@
       }
     }
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ: Сохранение голосования
     document.getElementById('votingForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const recordId = document.getElementById('votingRecordId').value;
       const title = document.getElementById('votingTitle').value;
       const description = document.getElementById('votingDescription').value;
-      const latitude = document.getElementById('votingLatitude').value.trim();
-      const longitude = document.getElementById('votingLongitude').value.trim();
-      const eventId = document.getElementById('votingEventId').value;
-      
-      if (latitude !== '') {
-        const latValue = parseFloat(latitude);
-        if (isNaN(latValue) || latValue < -90 || latValue > 90) {
-          alert('Широта должна быть числом от -90 до 90');
-          return;
-        }
-      }
-      if (longitude !== '') {
-        const lonValue = parseFloat(longitude);
-        if (isNaN(lonValue) || lonValue < -180 || lonValue > 180) {
-          alert('Долгота должна быть числом от -180 до 180');
-          return;
-        }
-      }
       
       const options = [];
-      const optionImageUrls = [];
-      
-      document.querySelectorAll('.option-item').forEach((item, index) => {
-        const nameInput = item.querySelector('.option-name');
-        
-        if (nameInput.value.trim()) {
-          options.push(nameInput.value.trim());
-          
-          if (optionImages[index]) {
-            optionImageUrls.push({ 
-              url: optionImages[index],
-              filename: `option_image_${index}_${Date.now()}.jpg`
-            });
-          } else {
-            optionImageUrls.push(null);
-          }
+      document.querySelectorAll('.option-name').forEach(input => {
+        if (input.value.trim()) {
+          options.push(input.value.trim());
         }
       });
-      
+
       if (options.length < 2) {
-        alert('Добавьте хотя бы два номинанта');
+        alert('Добавьте хотя бы два варианта ответа');
         return;
       }
-      
+
+      // ИСПРАВЛЕНИЕ: Правильная инициализация Votes
       const votingData = {
         fields: {
           Title: title,
-          Description: description || '',
+          Description: description,
           Options: options.join(','),
-          Votes: JSON.stringify({}),
-          VotedUserIDs: '',
-          Status: 'Active'
+          Votes: "{}", // Всегда строка с пустым объектом
+          VotedUserIDs: "",
+          Status: "Active"
         }
       };
-      
-      if (optionImageUrls.some(img => img !== null)) {
-        votingData.fields.OptionImages = optionImageUrls.filter(img => img !== null);
-      }
-      
-      if (latitude !== '') votingData.fields.Latitude = parseFloat(latitude);
-      if (longitude !== '') votingData.fields.Longitude = parseFloat(longitude);
-      if (eventId) votingData.fields.EventID = eventId;
-      
+
       try {
         const method = recordId ? 'PATCH' : 'POST';
         const url = recordId ? `${BACKEND_URL}/api/votings/${recordId}` : `${BACKEND_URL}/api/votings`;
+        
         const response = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(votingData)
         });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения голосования');
+
+        if (response.ok) {
+          alert('Голосование сохранено');
+          loadVotings();
+          renderEvents();
+          showTab('tab-votings-list');
         }
-        
-        alert('Голосование сохранено');
-        
-        document.getElementById('votingForm').reset();
-        document.getElementById('votingRecordId').value = '';
-        document.getElementById('votingOptionsContainer').innerHTML = '';
-        optionImages = {};
-        addOption();
-        
-        loadVotings();
-        renderEvents();
-        showTab('tab-votings-list');
       } catch (err) {
-        console.error('Voting save error:', err);
-        alert(`Ошибка сохранения: ${err.message}`);
+        alert('Ошибка сохранения голосования');
       }
     });
 
     async function getEventTitleById(eventId) {
-      if (!eventsData) {
-        await loadEventsForVoting();
-      }
+      if (!eventsData) await loadEventsForVoting();
       const eventRecord = eventsData.records.find(record => record.fields.ID === eventId);
       return eventRecord ? eventRecord.fields.Title : eventId;
     }
 
-    async function renderVotingItem(record) {
+    function renderVotingItem(record) {
       const eventsContainer = document.getElementById('events');
       const voting = record.fields || {};
       const isCompleted = voting.Status === 'Completed';
-      const eventTitle = voting.EventID ? await getEventTitleById(voting.EventID) : '';
+      const eventTitle = voting.EventID ? getEventTitleById(voting.EventID) : '';
       
       const div = document.createElement('div');
-      div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
-      
-      if (isCompleted) {
-        div.style.background = 'var(--voting-completed-bg)';
-        div.style.borderColor = 'var(--voting-completed-border)';
-        div.style.color = 'var(--voting-completed-text)';
-      }
-      
+      div.className = `voting-card p-4 fade-in relative ${isCompleted ? 'completed' : ''}`;
       div.innerHTML = `
         <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
         <h3 class="text-sm font-bold">${voting.Title || 'Без названия'}</h3>
@@ -1492,7 +1305,6 @@
         const data = await response.json();
         return data.isAdmin;
       } catch (err) {
-        console.error('Error checking admin:', err);
         return false;
       }
     }
@@ -1500,15 +1312,10 @@
     async function initAdmin() {
       try {
         const isAdmin = await checkIsAdmin(user.id);
-        console.log('Is Admin:', isAdmin);
         if (isAdmin) {
           document.getElementById('adminBtn').classList.remove('hidden');
-        } else {
-          console.log('Admin panel hidden - not admin');
-          document.getElementById('adminBtn').classList.add('hidden');
         }
       } catch (err) {
-        console.error('Admin init error:', err);
         document.getElementById('adminBtn').classList.add('hidden');
       }
     }
@@ -1533,31 +1340,21 @@
       eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
       try {
         const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки ивентов');
-        }
+        if (!response.ok) throw new Error('Ошибка загрузки ивентов');
         
         const data = await response.json();
         eventList.innerHTML = '';
         
         if (data.records && data.records.length > 0) {
-          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
           data.records.forEach(record => {
             const event = record.fields || {};
-            const safeTitle = event.Title ? event.Title.replace(/'/g, "\\'") : '';
-            const safeLocation = event.Location ? event.Location.replace(/'/g, "\\'") : '';
-            const safeDescription = event.Description ? event.Description.replace(/'/g, "\\'") : '';
-            const safeMapLink = event.MapLink ? event.MapLink.replace(/'/g, "\\'") : '';
-            const safeImageUrl = event.Image?.[0]?.url ? event.Image[0].url.replace(/'/g, "\\'") : '';
-            
             const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)]';
+            div.className = 'p-3 border-b border-[var(--hint-color)]';
             div.innerHTML = `
               <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
               <p class="text-xs">Идут: ${event.AttendeesCount || 0} человек</p>
-              <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
-              <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
+              <button onclick="editEvent('${record.id}', '${event.ID}', '${event.Title}', '${event.Type}', '${event.Date}', '${event.Location}', '${event.Description}', '${event.MapLink}', '${event.Image?.[0]?.url}')" class="bg-yellow-600 text-white px-2 py-1 rounded mr-2 text-xs">Редактировать</button>
+              <button onclick="deleteEvent('${record.id}')" class="bg-red-600 text-white px-2 py-1 rounded text-xs">Удалить</button>
             `;
             eventList.appendChild(div);
           });
@@ -1605,7 +1402,6 @@
       document.getElementById('eventLocation').value = location;
       document.getElementById('eventDescription').value = description;
       document.getElementById('eventMapLink').value = mapLink || '';
-      alert('Текущее изображение: ' + imageUrl);
       showTab('tab-form');
     }
 
@@ -1657,15 +1453,10 @@
           });
           const uploadData = await uploadResponse.json();
           if (uploadData.url) {
-            eventData.fields.Image = [{ 
-              url: uploadData.url,
-              filename: `event_image_${Date.now()}.jpg`
-            }];
-          } else {
-            throw new Error('Ошибка загрузки изображения');
+            eventData.fields.Image = [{ url: uploadData.url }];
           }
         } catch (err) {
-          alert(`Ошибка загрузки изображения: ${err.message}`);
+          alert('Ошибка загрузки изображения');
           return;
         }
       }
@@ -1679,24 +1470,51 @@
           body: JSON.stringify(eventData)
         });
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения события');
+        if (response.ok) {
+          alert('Событие сохранено');
+          clearForm();
+          renderAdminEvents();
+          renderEvents();
+          showTab('tab-list');
         }
-        
-        alert('Событие сохранено');
-        clearForm();
-        renderAdminEvents();
-        renderEvents();
-        showTab('tab-list');
       } catch (err) {
-        alert(`Ошибка сохранения: ${err.message}`);
+        alert('Ошибка сохранения события');
       }
     });
 
+    // Инициализация
+    applyTheme();
     initAdmin();
     renderEvents();
     addOption();
+
+    // Обработчики событий
+    document.getElementById('getLocationBtn').addEventListener('click', function() {
+      if (!navigator.geolocation) {
+        alert('Геолокация не поддерживается вашим браузером');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          userLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
+          document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
+          document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
+          document.getElementById('getLocationBtn').classList.add('bg-green-600', 'hover:bg-green-700');
+          document.getElementById('getLocationBtn').disabled = true;
+          updateVoteButtons();
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+          alert('Не удалось определить ваше местоположение. Проверьте настройки геолокации.');
+        }
+      );
+    });
+
   </script>
 </body>
 </html>
