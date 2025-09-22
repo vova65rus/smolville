@@ -161,6 +161,9 @@
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
     }
+    .voting-option {
+      color: var(--text-color); /* Убедимся, что текст видим */
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -362,6 +365,8 @@
     let userLocation = null;
     let optionImages = {};
 
+    let eventsData = null; // Для кэширования событий
+
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     console.log('User ID:', user.id);
 
@@ -406,7 +411,7 @@
           throw new Error(errorData.error || 'Ошибка загрузки событий');
         }
 
-        const eventsData = await eventsResponse.json();
+        eventsData = await eventsResponse.json();
         let adsData = { records: [] };
         let votingsData = { records: [] };
 
@@ -867,7 +872,7 @@
               <p class="text-xs">Номинантов: ${options.length}</p>
               <p class="text-xs text-gray-500">Проголосовало: ${voting.VotedUserIDs ? voting.VotedUserIDs.split(',').length : 0} человек</p>
               <div class="flex space-x-2 mt-2">
-                <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || 0}, ${voting.Longitude || 0}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
+                <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || ''}, ${voting.Longitude || ''}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}', '${JSON.stringify(voting.OptionImages || [])}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
                 ${status === 'Active' ? `<button onclick="completeVoting('${record.id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs transition">Завершить</button>` : ''}
                 <button onclick="deleteVoting('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
               </div>
@@ -886,15 +891,15 @@
       try {
         const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (response.ok) {
-          const data = await response.json();
+          eventsData = await response.json();
           const select = document.getElementById('votingEventId');
           
           while (select.options.length > 1) {
             select.remove(1);
           }
           
-          if (data.records && data.records.length > 0) {
-            data.records.forEach(record => {
+          if (eventsData.records && eventsData.records.length > 0) {
+            eventsData.records.forEach(record => {
               const event = record.fields || {};
               if (event.Title && event.ID) {
                 const option = document.createElement('option');
@@ -1013,7 +1018,7 @@
       }
     }
 
-    function editVoting(recordId, title, description, lat, lon, options, eventId, status) {
+    function editVoting(recordId, title, description, lat, lon, options, eventId, status, optionImagesJson) {
       document.getElementById('votingRecordId').value = recordId;
       document.getElementById('votingTitle').value = title || '';
       document.getElementById('votingDescription').value = description || '';
@@ -1036,17 +1041,25 @@
       
       try {
         const optionsArray = typeof options === 'string' ? JSON.parse(options) : options;
+        const imagesArray = typeof optionImagesJson === 'string' ? JSON.parse(optionImagesJson) : [];
         if (optionsArray && optionsArray.length > 0) {
           optionsArray.forEach((option, index) => {
             addOption();
             const items = optionsContainer.querySelectorAll('.option-item');
             const currentItem = items[items.length - 1];
             currentItem.querySelector('.option-name').value = option;
+            if (imagesArray[index] && imagesArray[index].url) {
+              optionImages[index] = imagesArray[index].url;
+              currentItem.querySelector('.option-preview').src = imagesArray[index].url;
+              currentItem.querySelector('.option-preview').classList.remove('hidden');
+              currentItem.querySelector('.image-status').textContent = 'Фото загружено';
+            }
           });
         } else {
           addOption();
         }
       } catch (e) {
+        console.error('Error editing voting:', e);
         addOption();
       }
       
@@ -1095,18 +1108,24 @@
       const recordId = document.getElementById('votingRecordId').value;
       const title = document.getElementById('votingTitle').value;
       const description = document.getElementById('votingDescription').value;
-      const latitude = document.getElementById('votingLatitude').value;
-      const longitude = document.getElementById('votingLongitude').value;
+      const latitude = document.getElementById('votingLatitude').value.trim();
+      const longitude = document.getElementById('votingLongitude').value.trim();
       const eventId = document.getElementById('votingEventId').value;
       
       // Валидация координат
-      if (latitude && (isNaN(latitude) || latitude < -90 || latitude > 90)) {
-        alert('Широта должна быть числом от -90 до 90');
-        return;
+      if (latitude !== '') {
+        const latValue = parseFloat(latitude);
+        if (isNaN(latValue) || latValue < -90 || latValue > 90) {
+          alert('Широта должна быть числом от -90 до 90');
+          return;
+        }
       }
-      if (longitude && (isNaN(longitude) || longitude < -180 || longitude > 180)) {
-        alert('Долгота должна быть числом от -180 до 180');
-        return;
+      if (longitude !== '') {
+        const lonValue = parseFloat(longitude);
+        if (isNaN(lonValue) || lonValue < -180 || lonValue > 180) {
+          alert('Долгота должна быть числом от -180 до 180');
+          return;
+        }
       }
       
       const options = [];
@@ -1149,8 +1168,8 @@
         votingData.fields.OptionImages = optionImageUrls.filter(img => img !== null);
       }
       
-      if (latitude) votingData.fields.Latitude = parseFloat(latitude);
-      if (longitude) votingData.fields.Longitude = parseFloat(longitude);
+      if (latitude !== '') votingData.fields.Latitude = parseFloat(latitude);
+      if (longitude !== '') votingData.fields.Longitude = parseFloat(longitude);
       if (eventId) votingData.fields.EventID = eventId; // Предполагается, что EventID - текст, если связь, измените на массив
       
       console.log('Отправляемые данные голосования:', JSON.stringify(votingData, null, 2));
@@ -1186,10 +1205,19 @@
       }
     });
 
-    function renderVotingItem(record) {
+    async function getEventTitleById(eventId) {
+      if (!eventsData) {
+        await loadEventsForVoting();
+      }
+      const eventRecord = eventsData.records.find(record => record.fields.ID === eventId);
+      return eventRecord ? eventRecord.fields.Title : eventId;
+    }
+
+    async function renderVotingItem(record) {
       const eventsContainer = document.getElementById('events');
       const voting = record.fields || {};
       const isCompleted = voting.Status === 'Completed';
+      const eventTitle = voting.EventID ? await getEventTitleById(voting.EventID) : '';
       
       const div = document.createElement('div');
       div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
@@ -1204,7 +1232,7 @@
         <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
         <h3 class="text-sm font-bold">${voting.Title || 'Без названия'}</h3>
         <p class="text-xs">${voting.Description || ''}</p>
-        ${voting.EventID ? `<p class="text-xs text-gray-500">Для мероприятия: ${voting.EventID}</p>` : ''}
+        ${voting.EventID ? `<p class="text-xs text-gray-500">Для мероприятия: ${eventTitle}</p>` : ''}
         <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'} mt-1">
           ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
         </p>
@@ -1257,7 +1285,7 @@
         
         optionsArray.forEach((option, index) => {
           const optionDiv = document.createElement('div');
-          optionDiv.className = 'mb-3 p-2 border rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition';
+          optionDiv.className = 'mb-3 p-2 border rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition voting-option';
           optionDiv.onclick = () => castVote(index);
           
           let imageHtml = '';
@@ -1265,7 +1293,7 @@
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
                 <img src="${optionImages[index].url}" alt="${option}" 
-                     class="w-16 h-16 object-cover rounded-lg border">
+                     class="w-24 h-24 object-cover rounded-lg border">
               </div>
             `;
           }
@@ -1327,14 +1355,14 @@
           const isUserChoice = userVote === index;
           
           const resultDiv = document.createElement('div');
-          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-white';
+          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-white voting-option';
           
           let imageHtml = '';
           if (result.image) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
                 <img src="${result.image}" alt="${result.option}" 
-                     class="w-16 h-16 object-cover rounded-lg border">
+                     class="w-24 h-24 object-cover rounded-lg border">
               </div>
             `;
           }
@@ -1364,6 +1392,18 @@
         
         if (isCompleted) {
           optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
+        }
+
+        // Отображение итогов, если голосование завершено
+        if (isCompleted && voting.Results) {
+          const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
+          let resultsHtml = '<h4 class="font-bold mb-2 mt-4">Итоги:</h4>';
+          Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
+            resultsHtml += `
+              <p>${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
+            `;
+          });
+          optionsContainer.innerHTML += resultsHtml;
         }
       }
     }
