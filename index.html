@@ -172,6 +172,21 @@
       pointer-events: auto;
       opacity: 1;
     }
+    .results-image {
+      max-width: 100%;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+    .download-btn {
+      background: #4CAF50;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 4px;
+      text-decoration: none;
+      display: inline-block;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -228,6 +243,14 @@
       <h2 id="votingModalTitle" class="text-lg font-bold"></h2>
       <p id="votingModalDescription"></p>
       <div id="votingOptions" class="my-4"></div>
+      <div id="votingResultsImageContainer" class="hidden">
+        <h3 class="font-bold mb-2">Изображение с результатами:</h3>
+        <img id="votingResultsImage" class="results-image" loading="lazy">
+        <button id="downloadResultsBtn" class="download-btn">Скачать изображение</button>
+        <button id="generateResultsBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition mt-2">
+          Сгенерировать новое изображение
+        </button>
+      </div>
       <div class="mt-4 pt-3 border-t">
         <p class="text-sm text-[var(--hint-color)]">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
         <button id="getLocationBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3">
@@ -333,6 +356,7 @@
           <div class="flex space-x-2">
             <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition flex-1">Сохранить голосование</button>
             <button type="button" id="completeVotingBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition hidden">Завершить</button>
+            <button type="button" id="generateImageBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition hidden">Сгенерировать изображение</button>
           </div>
         </form>
       </div>
@@ -356,6 +380,7 @@
     let userLocation = null;
     let optionImages = {};
     let eventsData = null;
+    let currentResultsImageUrl = null;
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -475,6 +500,7 @@
       optionsContainer.innerHTML = '<h4 class="font-bold mb-2">Выберите номинанта:</h4>';
 
       document.getElementById('getLocationBtn').style.display = 'block';
+      document.getElementById('votingResultsImageContainer').classList.add('hidden');
 
       if (voting.Options && voting.Options.split(',').length > 0) {
         const optionsArray = voting.Options.split(',');
@@ -627,7 +653,7 @@
           })
           .then(status => {
             if (status.hasVoted || voting.Status === 'Completed') {
-              showVotingResults(voting, status.userVote);
+              showVotingResults(voting, status.userVote, record.id);
             } else {
               showVotingOptions(voting);
             }
@@ -646,7 +672,7 @@
       tg.BackButton.onClick(closeVotingModal);
     }
 
-    function showVotingResults(voting, userVote) {
+    async function showVotingResults(voting, userVote, votingId) {
       const optionsContainer = document.getElementById('votingOptions');
       const isCompleted = voting.Status === 'Completed';
       
@@ -725,6 +751,13 @@
         
         if (isCompleted) {
           optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
+          
+          // Показываем кнопку для генерации изображения
+          const generateButton = document.createElement('button');
+          generateButton.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3';
+          generateButton.textContent = 'Сгенерировать изображение с результатами';
+          generateButton.onclick = () => generateResultsImage(votingId);
+          optionsContainer.appendChild(generateButton);
         }
 
         if (isCompleted && voting.Results) {
@@ -740,10 +773,57 @@
       }
     }
 
+    async function generateResultsImage(votingId) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/votings/${votingId}/generate-results`, {
+          method: 'POST'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            currentResultsImageUrl = data.imageUrl;
+            
+            // Показываем изображение
+            const imageContainer = document.getElementById('votingResultsImageContainer');
+            const resultsImage = document.getElementById('votingResultsImage');
+            const downloadBtn = document.getElementById('downloadResultsBtn');
+            const generateBtn = document.getElementById('generateResultsBtn');
+            
+            resultsImage.src = data.imageUrl;
+            imageContainer.classList.remove('hidden');
+            
+            // Настраиваем кнопку скачивания
+            downloadBtn.onclick = () => {
+              const link = document.createElement('a');
+              link.href = data.imageUrl;
+              link.download = `results_${votingId}_${Date.now()}.jpg`;
+              link.click();
+            };
+            
+            // Настраиваем кнопку генерации нового изображения
+            generateBtn.onclick = () => generateResultsImage(votingId);
+            
+            alert('Изображение с результатами успешно сгенерировано!');
+          } else {
+            alert('Ошибка при генерации изображения: ' + data.error);
+          }
+        } else {
+          const error = await response.json();
+          alert('Ошибка при генерации изображения: ' + error.error);
+        }
+      } catch (err) {
+        console.error('Generate results image error:', err);
+        alert('Ошибка при генерации изображения: ' + err.message);
+      }
+    }
+
     function closeVotingModal() {
       document.getElementById('votingModal').classList.add('hidden');
+      document.getElementById('votingResultsImageContainer').classList.add('hidden');
       tg.BackButton.hide();
       currentVotingRecord = null;
+      currentResultsImageUrl = null;
     }
 
     function renderEventItem(record) {
@@ -1121,6 +1201,7 @@
               <div class="flex space-x-2 mt-2">
                 <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || ''}, ${voting.Longitude || ''}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}', '${JSON.stringify(voting.OptionImages || [])}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
                 ${status === 'Active' ? `<button onclick="completeVoting('${record.id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs transition">Завершить</button>` : ''}
+                <button onclick="generateResultsImageAdmin('${record.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition">Ген. изображение</button>
                 <button onclick="deleteVoting('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
               </div>
             `;
@@ -1131,6 +1212,31 @@
         }
       } catch (err) {
         votingsList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
+      }
+    }
+
+    async function generateResultsImageAdmin(votingId) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/votings/${votingId}/generate-results`, {
+          method: 'POST'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            // Открываем изображение в новой вкладке
+            window.open(data.imageUrl, '_blank');
+            alert('Изображение с результатами успешно сгенерировано!');
+          } else {
+            alert('Ошибка при генерации изображения: ' + data.error);
+          }
+        } else {
+          const error = await response.json();
+          alert('Ошибка при генерации изображения: ' + error.error);
+        }
+      } catch (err) {
+        console.error('Generate results image error:', err);
+        alert('Ошибка при генерации изображения: ' + err.message);
       }
     }
 
@@ -1276,11 +1382,16 @@
       optionImages = {};
       
       const completeBtn = document.getElementById('completeVotingBtn');
+      const generateImageBtn = document.getElementById('generateImageBtn');
+      
       if (status === 'Active') {
         completeBtn.classList.remove('hidden');
         completeBtn.onclick = () => completeVoting(recordId);
+        generateImageBtn.classList.add('hidden');
       } else {
         completeBtn.classList.add('hidden');
+        generateImageBtn.classList.remove('hidden');
+        generateImageBtn.onclick = () => generateResultsImageAdmin(recordId);
       }
       
       const optionsContainer = document.getElementById('votingOptionsContainer');
@@ -1694,6 +1805,7 @@
       }
     });
 
+    applyTheme();
     initAdmin();
     renderEvents();
     addOption();
