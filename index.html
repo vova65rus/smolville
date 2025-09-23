@@ -481,9 +481,9 @@
         }
 
         allItems.forEach(item => {
-          if (item.type === 'event') renderEventItem(item.data);
+          if (item.type === 'voting') renderVotingItem(item.data);
           else if (item.type === 'ad') renderAdItem(item.data);
-          else if (item.type === 'voting') renderVotingItem(item.data);
+          else if (item.type === 'event') renderEventItem(item.data);
         });
 
         if (allItems.length === 0) {
