@@ -418,32 +418,42 @@ app.post('/api/votings/:id/complete', async (req, res) => {
     }
 
     // Подсчитываем финальные результаты
-    const votes = voting.fields.Votes ? JSON.parse(voting.fields.Votes) : {};
-    const results = {};
+    const votes = voting.fields.Votes ? 
+      (typeof voting.fields.Votes === 'string' ? JSON.parse(voting.fields.Votes) : voting.fields.Votes) 
+      : {};
+    
+    const results = [];
     
     if (voting.fields.Options) {
       const options = voting.fields.Options.split(',');
+      
+      // Считаем голоса для каждого варианта
+      const voteCounts = {};
       options.forEach((option, index) => {
-        results[index] = {
+        voteCounts[index] = 0;
+      });
+      
+      Object.values(votes).forEach(voteIndex => {
+        if (voteCounts[voteIndex] !== undefined) {
+          voteCounts[voteIndex]++;
+        }
+      });
+
+      // Считаем проценты
+      const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
+      
+      // Создаем массив результатов
+      options.forEach((option, index) => {
+        const count = voteCounts[index] || 0;
+        const percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        
+        results.push({
           option: option,
-          count: 0,
-          percentage: 0
-        };
+          count: count,
+          percentage: percentage
+        });
       });
     }
-
-    // Считаем голоса
-    Object.values(votes).forEach(voteIndex => {
-      if (results[voteIndex] !== undefined) {
-        results[voteIndex].count++;
-      }
-    });
-
-    // Считаем проценты
-    const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
-    Object.values(results).forEach(result => {
-      result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
-    });
 
     // Обновляем голосование
     const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
@@ -484,32 +494,63 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       return res.status(400).json({ error: 'Результаты голосования недоступны' });
     }
 
-    const results = JSON.parse(voting.fields.Results);
+    // Исправление: правильно парсим результаты
+    let results;
+    try {
+      results = typeof voting.fields.Results === 'string' 
+        ? JSON.parse(voting.fields.Results) 
+        : voting.fields.Results;
+    } catch (parseError) {
+      console.error('Error parsing results:', parseError);
+      return res.status(400).json({ error: 'Неверный формат результатов голосования' });
+    }
+
+    // Преобразуем объект результатов в массив
+    let resultsArray = [];
+    if (Array.isArray(results)) {
+      resultsArray = results;
+    } else if (typeof results === 'object' && results !== null) {
+      // Если results - объект, преобразуем в массив
+      resultsArray = Object.values(results);
+    } else {
+      return res.status(400).json({ error: 'Неверный формат результатов' });
+    }
+
     const title = voting.fields.Title || 'Результаты голосования';
     const description = voting.fields.Description || '';
+    
+    // Исправление: правильно обрабатываем Attachment поле OptionImages
     const optionImages = voting.fields.OptionImages || [];
+    console.log('OptionImages from Airtable:', JSON.stringify(optionImages, null, 2));
 
     // Генерируем SVG
     let height = 600; // Базовая высота
     const hasImages = optionImages.length > 0;
-    if (hasImages) height += optionImages.length * 110; // Увеличиваем высоту для изображений
+    if (hasImages) height += resultsArray.length * 110;
 
     let svg = `
       <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <style>
+          .title { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #000; }
+          .description { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+          .option { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #000; }
+          .stats { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+        </style>
         <rect width="800" height="${height}" fill="#ffffff"/>
-        <text x="400" y="50" font-family="Arial" font-size="24" font-weight="bold" fill="#000" text-anchor="middle">${title}</text>
-        <text x="400" y="80" font-family="Arial" font-size="16" fill="#666" text-anchor="middle">${description}</text>
+        <text x="400" y="50" class="title" text-anchor="middle">${title}</text>
+        <text x="400" y="80" class="description" text-anchor="middle">${description}</text>
     `;
 
     let y = 120;
-    results.forEach((result, index) => {
+    resultsArray.forEach((result, index) => {
       const barWidth = (result.percentage / 100) * 400;
       const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
+      
       svg += `
-        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0"/>
-        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}"/>
-        <text x="20" y="${y + 25}" font-family="Arial" font-size="16" font-weight="bold" fill="#000">${result.option}</text>
-        <text x="520" y="${y + 25}" font-family="Arial" font-size="16" fill="#666" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
+        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0" rx="5"/>
+        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="5"/>
+        <text x="20" y="${y + 25}" class="option">${result.option}</text>
+        <text x="520" y="${y + 25}" class="stats" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
       `;
       y += 50;
     });
@@ -517,33 +558,62 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     // Добавляем изображения номинантов, если они есть
     if (hasImages) {
       y += 20;
-      svg += `<text x="400" y="${y}" font-family="Arial" font-size="16" font-style="italic" fill="#000" text-anchor="middle">Изображения номинантов</text>`;
+      svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
       y += 30;
-      for (let i = 0; i < results.length; i++) {
-        if (optionImages[i] && optionImages[i].url) {
-          svg += `<image x="${100 + (i % 3) * 200}" y="${y + Math.floor(i / 3) * 110}" width="150" height="100" href="${optionImages[i].url}"/>`;
+      
+      resultsArray.forEach((result, index) => {
+        // Исправление: правильно обрабатываем Attachment
+        let imageUrl = null;
+        if (optionImages[index]) {
+          // Для Attachment поля в Airtable
+          if (typeof optionImages[index] === 'object' && optionImages[index].url) {
+            imageUrl = optionImages[index].url;
+          } else if (Array.isArray(optionImages) && optionImages[index] && optionImages[index].url) {
+            imageUrl = optionImages[index].url;
+          }
         }
-      }
+        
+        if (imageUrl) {
+          const col = index % 3;
+          const row = Math.floor(index / 3);
+          svg += `<image x="${100 + col * 200}" y="${y + row * 110}" width="150" height="100" href="${imageUrl}" preserveAspectRatio="xMidYMid meet"/>`;
+        }
+      });
     }
 
     svg += `</svg>`;
 
     // Конвертируем SVG в JPG
     const svgBuffer = Buffer.from(svg);
-    const imageBuffer = await sharp(svgBuffer, { density: 300 })
-      .jpeg({ quality: 80 })
+    const imageBuffer = await sharp(svgBuffer)
+      .resize(800, height, {
+        fit: 'fill',
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      })
+      .jpeg({ 
+        quality: 90,
+        chromaSubsampling: '4:4:4'
+      })
       .toBuffer();
 
     // Загружаем на ImgBB
     const formData = new FormData();
-    formData.append('image', imageBuffer, { filename: 'results.jpg' });
+    formData.append('image', imageBuffer, { 
+      filename: `voting_results_${id}_${Date.now()}.jpg`,
+      contentType: 'image/jpeg'
+    });
+    
     const imgbbResponse = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
       headers: formData.getHeaders()
     });
 
     if (imgbbResponse.data.success) {
       console.log('Image uploaded to ImgBB:', imgbbResponse.data.data.url);
-      res.json({ success: true, imageUrl: imgbbResponse.data.data.url });
+      res.json({ 
+        success: true, 
+        imageUrl: imgbbResponse.data.data.url,
+        imageId: imgbbResponse.data.data.id
+      });
     } else {
       console.error('ImgBB upload failed:', imgbbResponse.data);
       res.status(500).json({ error: 'Failed to upload image to ImgBB' });
@@ -575,7 +645,11 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     fs.unlinkSync(filePath);
     
     if (response.data.success) {
-      res.json({ url: response.data.data.url });
+      // Для Attachment поля возвращаем объект с url
+      res.json({ 
+        url: response.data.data.url,
+        filename: response.data.data.image.filename || `option_image_${Date.now()}.jpg`
+      });
     } else {
       res.status(500).json({ error: 'ImgBB upload failed' });
     }
