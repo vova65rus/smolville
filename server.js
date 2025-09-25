@@ -544,4 +544,847 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     if (hasImages) height += Math.ceil(resultsArray.length / 3) * 110;
 
     let svg = `
-      <svg width="800" height="${height
+      <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <style>
+          .title { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #000; }
+          .description { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+          .option { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #000; }
+          .stats { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+        </style>
+        <rect width="800" height="${height}" fill="#ffffff"/>
+        <text x="400" y="50" class="title" text-anchor="middle">${title}</text>
+        <text x="400" y="80" class="description" text-anchor="middle">${description}</text>
+    `;
+
+    let y = 120;
+    resultsArray.forEach((result, index) => {
+      const barWidth = (result.percentage / 100) * 400;
+      const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
+
+      svg += `
+        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0" rx="5"/>
+        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="5"/>
+        <text x="20" y="${y + 25}" class="option">${result.option}</text>
+        <text x="520" y="${y + 25}" class="stats" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
+      `;
+      y += 50;
+    });
+
+    // Добавляем изображения номинантов, если они есть
+    if (hasImages) {
+      y += 20;
+      svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
+      y += 30;
+
+      resultsArray.forEach((result, index) => {
+        let imageUrl = null;
+        if (optionImages[index]) {
+          if (typeof optionImages[index] === 'object' && optionImages[index].url) {
+            imageUrl = optionImages[index].url;
+          } else if (Array.isArray(optionImages) && optionImages[index] && optionImages[index].url) {
+            imageUrl = optionImages[index].url;
+          }
+        }
+
+        if (imageUrl) {
+          const col = index % 3;
+          const row = Math.floor(index / 3);
+          svg += `<image x="${100 + col * 200}" y="${y + row * 110}" width="150" height="100" href="${imageUrl}" preserveAspectRatio="xMidYMid meet"/>`;
+        }
+      });
+    }
+
+    svg += `</svg>`;
+
+    // Конвертируем SVG в JPG
+    const svgBuffer = Buffer.from(svg);
+    const imageBuffer = await sharp(svgBuffer)
+      .resize(800, height, {
+        fit: 'fill',
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
+      })
+      .jpeg({
+        quality: 90,
+        chromaSubsampling: '4:4:4',
+      })
+      .toBuffer();
+
+    // Проверяем размер файла
+    if (imageBuffer.length > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Размер сгенерированного изображения превышает лимит 10 МБ' });
+    }
+
+    // Загружаем на ImageBan.ru
+    const formData = new FormData();
+    formData.append('image', imageBuffer, {
+      filename: `voting_results_${id}_${Date.now()}.jpg`,
+      contentType: 'image/jpeg',
+    });
+
+    const authHeader = IMAGEBAN_SECRET_KEY
+      ? `Bearer ${IMAGEBAN_SECRET_KEY}`
+      : `TOKEN ${IMAGEBAN_CLIENT_ID}`;
+    const headers = {
+      ...formData.getHeaders(),
+      Authorization: authHeader,
+    };
+
+    console.log('Отправка запроса к ImageBan.ru для результатов:', { authType: IMAGEBAN_SECRET_KEY ? 'Bearer' : 'TOKEN', fileSize: imageBuffer.length });
+
+    const imagebanResponse = await axios.post('https://api.imageban.ru/v1', formData, { headers });
+
+    // Логируем полный ответ для диагностики
+    console.log('Полный ответ от ImageBan.ru:', JSON.stringify(imagebanResponse.data, null, 2));
+
+    // Проверяем успешность ответа
+    if (!imagebanResponse.data || typeof imagebanResponse.data !== 'object') {
+      console.error('Ответ от ImageBan не является объектом:', imagebanResponse.data);
+      return res.status(500).json({ error: 'Неверный формат ответа от ImageBan.ru' });
+    }
+
+    if (!imagebanResponse.data.success) {
+      console.error('ImageBan вернул success: false:', imagebanResponse.data.error);
+      return res.status(500).json({
+        error: imagebanResponse.data.error?.message || 'Ошибка загрузки на ImageBan',
+        code: imagebanResponse.data.error?.code || 'Unknown',
+      });
+    }
+
+    if (!imagebanResponse.data.data || !Array.isArray(imagebanResponse.data.data) || imagebanResponse.data.data.length === 0) {
+      console.error('Пустой или неверный data в ответе ImageBan:', imagebanResponse.data.data);
+      return res.status(500).json({
+        error: 'ImageBan вернул пустой результат загрузки (data пустой)',
+        code: 'EmptyData',
+      });
+    }
+
+    const imageData = imagebanResponse.data.data[0];
+    if (!imageData || typeof imageData !== 'object') {
+      console.error('Первый элемент data не является объектом:', imageData);
+      return res.status(500).json({ error: 'Неверная структура данных изображения от ImageBan' });
+    }
+
+    // Проверяем наличие link, fallback на short_link или генерацию
+    let imageUrl = imageData.link;
+    if (!imageUrl) {
+      console.warn('Поле link отсутствует, используем short_link или fallback');
+      imageUrl = imageData.short_link || `https://i${Math.floor(Math.random() * 10)}.imageban.ru/out/2025/09/25/${imageData.id || 'unknown'}.jpg`;
+    }
+
+    console.log('Успешная загрузка: URL =', imageUrl, ', ID =', imageData.id);
+
+    // Сохраняем URL изображения в Airtable
+    try {
+      const updateResponse = await axios.patch(
+        `${VOTINGS_URL}/${id}`,
+        {
+          fields: {
+            ResultsImage: imageUrl,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      console.log('ResultsImage успешно сохранен в Airtable:', updateResponse.data);
+    } catch (updateError) {
+      console.error('Ошибка сохранения ResultsImage в Airtable:', updateError.message);
+    }
+
+    res.json({
+      success: true,
+      imageUrl: imageUrl,
+      imageId: imageData.id,
+    });
+  } catch (error) {
+    console.error('Ошибка генерации изображения результатов:', error.message);
+    if (error.response) {
+      console.error('Статус ответа:', error.response.status);
+      console.error('Полный ответ в ошибке:', JSON.stringify(error.response.data, null, 2));
+    }
+    // Специфическая обработка ошибок ImageBan
+    let status = 500;
+    let errorMessage = error.response?.data?.error?.message || error.message;
+    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
+
+    if (['100', '105', '110'].includes(errorCode)) {
+      status = 401;
+      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
+    } else if (['108', '109'].includes(errorCode)) {
+      status = 429;
+      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
+    } else if (errorCode === '101') {
+      status = 400;
+      errorMessage = 'Размер изображения превышает 10 МБ';
+    } else if (errorCode === '103') {
+      status = 400;
+      errorMessage = 'Неверный тип изображения';
+    }
+
+    res.status(status).json({
+      error: errorMessage,
+      code: errorCode,
+    });
+  }
+});
+
+// Тестовый эндпоинт для проверки сохранения ResultsImage
+app.post('/api/votings/:id/test-save', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const testUrl = 'https://via.placeholder.com/600x400/0000FF/FFFFFF?text=Test+Image';
+
+    const updateResponse = await axios.patch(
+      `${VOTINGS_URL}/${id}`,
+      {
+        fields: {
+          ResultsImage: testUrl,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    console.log('Ответ тестового сохранения:', updateResponse.data);
+    res.json({ success: true, data: updateResponse.data });
+  } catch (error) {
+    console.error('Ошибка тестового сохранения:', error.message);
+    if (error.response) {
+      console.error('Ответ Airtable:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Упрощенная версия для тестирования
+app.post('/api/votings/:id/generate-results-simple', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Просто возвращаем тестовое изображение
+    const testImageUrl = 'https://via.placeholder.com/800x600/007bff/ffffff?text=Results+Placeholder';
+
+    // Сохраняем в Airtable
+    await axios.patch(
+      `${VOTINGS_URL}/${id}`,
+      {
+        fields: {
+          ResultsImage: testImageUrl,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      imageUrl: testImageUrl,
+      message: 'Тестовое изображение успешно сохранено',
+    });
+  } catch (error) {
+    console.error('Ошибка упрощенной генерации:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API для загрузки изображений номинантов
+app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
+  let filePath; // Объявляем filePath вне try
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл изображения не загружен' });
+    }
+
+    filePath = req.file.path;
+    // Проверяем размер файла (лимит ImageBan.ru: 10 МБ)
+    const stats = fs.statSync(filePath);
+    const fileSize = stats.size;
+    if (fileSize > 10 * 1024 * 1024) {
+      fs.unlinkSync(filePath);
+      filePath = null;
+      return res.status(400).json({ error: 'Размер изображения превышает лимит 10 МБ' });
+    }
+
+    // Проверяем формат файла
+    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!allowedFormats.includes(req.file.mimetype)) {
+      fs.unlinkSync(filePath);
+      filePath = null;
+      return res.status(400).json({ error: 'Неподдерживаемый формат изображения. Используйте JPEG, JPG, PNG или GIF' });
+    }
+
+    const formData = new FormData();
+    formData.append('image', fs.createReadStream(filePath));
+    // Опционально: добавляем имя или альбом
+    if (req.body.name) {
+      formData.append('name', req.body.name);
+    }
+    if (req.body.album && IMAGEBAN_SECRET_KEY) {
+      formData.append('album', req.body.album);
+    }
+
+    const authHeader = IMAGEBAN_SECRET_KEY
+      ? `Bearer ${IMAGEBAN_SECRET_KEY}`
+      : `TOKEN ${IMAGEBAN_CLIENT_ID}`;
+    const headers = {
+      ...formData.getHeaders(),
+      Authorization: authHeader,
+    };
+
+    console.log('Отправка запроса к ImageBan.ru:', { authType: IMAGEBAN_SECRET_KEY ? 'Bearer' : 'TOKEN', fileSize, name: req.body.name, album: req.body.album });
+
+    const response = await axios.post('https://api.imageban.ru/v1', formData, { headers });
+
+    // Логируем полный ответ для диагностики
+    console.log('Полный ответ от ImageBan.ru:', JSON.stringify(response.data, null, 2));
+
+    // Усиленная проверка успешности ответа
+    if (!response.data || typeof response.data !== 'object') {
+      console.error('Ответ от ImageBan не является объектом:', response.data);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(500).json({ error: 'Неверный формат ответа от ImageBan.ru' });
+    }
+
+    if (!response.data.success) {
+      console.error('ImageBan вернул success: false:', response.data.error);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(500).json({
+        error: response.data.error?.message || 'Ошибка загрузки на ImageBan',
+        code: response.data.error?.code || 'Unknown',
+      });
+    }
+
+    if (!response.data.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+      console.error('Пустой или неверный data в ответе ImageBan:', response.data.data);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(500).json({
+        error: 'ImageBan вернул пустой результат загрузки (data пустой)',
+        code: 'EmptyData',
+      });
+    }
+
+    const imageData = response.data.data[0];
+    if (!imageData || typeof imageData !== 'object') {
+      console.error('Первый элемент data не является объектом:', imageData);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(500).json({ error: 'Неверная структура данных изображения от ImageBan' });
+    }
+
+    // Проверяем наличие link, fallback на short_link или генерацию
+    let imageUrl = imageData.link;
+    if (!imageUrl) {
+      console.warn('Поле link отсутствует, используем short_link или fallback');
+      imageUrl = imageData.short_link || `https://i${Math.floor(Math.random() * 10)}.imageban.ru/out/2025/09/25/${imageData.id || 'unknown'}.jpg`;
+    }
+
+    // Удаляем файл после успешной обработки
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      filePath = null;
+    }
+
+    console.log('Успешная загрузка: URL =', imageUrl, ', ID =', imageData.id);
+
+    // Для поля Attachment в Airtable возвращаем объект с url
+    res.json({
+      url: imageUrl,
+      filename: imageData.img_name || `option_image_${Date.now()}.jpg`,
+    });
+  } catch (error) {
+    console.error('Ошибка загрузки изображения номинанта:', error.message);
+    if (error.response) {
+      console.error('Статус ответа ImageBan:', error.response.status);
+      console.error('Полный ответ ImageBan в ошибке:', JSON.stringify(error.response.data, null, 2));
+    }
+    // Удаляем файл только если он существует
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log('Временный файл удалён в catch');
+      } catch (unlinkError) {
+        console.error('Ошибка удаления временного файла:', unlinkError.message);
+      }
+    }
+    // Специфическая обработка ошибок ImageBan
+    let status = 500;
+    let errorMessage = error.response?.data?.error?.message || error.message;
+    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
+
+    if (['100', '105', '110'].includes(errorCode)) {
+      status = 401;
+      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan (проверьте CLIENT_ID или SECRET_KEY)';
+    } else if (['108', '109'].includes(errorCode)) {
+      status = 429;
+      errorMessage = errorMessage || 'Превышен дневной лимит загрузок (1000 изображений в сутки)';
+    } else if (errorCode === '101') {
+      status = 400;
+      errorMessage = 'Размер изображения превышает 10 МБ';
+    } else if (errorCode === '103') {
+      status = 400;
+      errorMessage = 'Неверный тип изображения';
+    }
+
+    res.status(status).json({
+      error: errorMessage,
+      code: errorCode,
+    });
+  }
+});
+
+// API для загрузки изображений
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+  let filePath;
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл изображения не загружен' });
+    }
+
+    filePath = req.file.path;
+    // Проверяем размер файла
+    const stats = fs.statSync(filePath);
+    const fileSize = stats.size;
+    if (fileSize > 10 * 1024 * 1024) {
+      fs.unlinkSync(filePath);
+      filePath = null;
+      return res.status(400).json({ error: 'Размер изображения превышает лимит 10 МБ' });
+    }
+
+    // Проверяем формат файла
+    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!allowedFormats.includes(req.file.mimetype)) {
+      fs.unlinkSync(filePath);
+      filePath = null;
+      return res.status(400).json({ error: 'Неподдерживаемый формат изображения. Используйте JPEG, JPG, PNG или GIF' });
+    }
+
+    const formData = new FormData();
+    formData.append('image', fs.createReadStream(filePath));
+    if (req.body.name) {
+      formData.append('name', req.body.name);
+    }
+
+    const headers = {
+      ...formData.getHeaders(),
+      Authorization: `TOKEN ${IMAGEBAN_CLIENT_ID}`,
+    };
+
+    console.log('Отправка запроса к ImageBan.ru:', { authType: 'TOKEN', fileSize, name: req.body.name });
+
+    const response = await axios.post('https://api.imageban.ru/v1', formData, { headers });
+
+    // Логируем полный ответ
+    console.log('Полный ответ от ImageBan.ru:', JSON.stringify(response.data, null, 2));
+
+    // Проверка ответа
+    if (!response.data || typeof response.data !== 'object') {
+      console.error('Ответ от ImageBan не является объектом:', response.data);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(500).json({ error: 'Неверный формат ответа от ImageBan.ru' });
+    }
+
+    if (!response.data.success) {
+      console.error('ImageBan вернул success: false:', response.data.error);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(500).json({
+        error: response.data.error?.message || 'Ошибка загрузки на ImageBan',
+        code: response.data.error?.code || 'Unknown',
+      });
+    }
+
+    if (!response.data.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+      console.error('Пустой или неверный data в ответе ImageBan:', response.data.data);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(500).json({
+        error: 'ImageBan вернул пустой результат загрузки (data пустой)',
+        code: 'EmptyData',
+      });
+    }
+
+    const imageData = response.data.data[0];
+    if (!imageData || typeof imageData !== 'object') {
+      console.error('Первый элемент data не является объектом:', imageData);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(500).json({ error: 'Неверная структура данных изображения от ImageBan' });
+    }
+
+    // Проверяем наличие link
+    let imageUrl = imageData.link;
+    if (!imageUrl) {
+      console.warn('Поле link отсутствует, используем short_link или fallback');
+      imageUrl = imageData.short_link || `https://i${Math.floor(Math.random() * 10)}.imageban.ru/out/2025/09/25/${imageData.id || 'unknown'}.jpg`;
+    }
+
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      filePath = null;
+    }
+
+    console.log('Успешная загрузка: URL =', imageUrl, ', ID =', imageData.id);
+
+    res.json({ url: imageUrl });
+  } catch (error) {
+    console.error('Ошибка загрузки:', error.message);
+    if (error.response) {
+      console.error('Статус ответа ImageBan:', error.response.status);
+      console.error('Полный ответ ImageBan в ошибке:', JSON.stringify(error.response.data, null, 2));
+    }
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log('Временный файл удалён в catch');
+      } catch (unlinkError) {
+        console.error('Ошибка удаления временного файла:', unlinkError.message);
+      }
+    }
+    let status = 500;
+    let errorMessage = error.response?.data?.error?.message || error.message;
+    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
+
+    if (['100', '105', '110'].includes(errorCode)) {
+      status = 401;
+      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
+    } else if (['108', '109'].includes(errorCode)) {
+      status = 429;
+      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
+    } else if (errorCode === '101') {
+      status = 400;
+      errorMessage = 'Размер изображения превышает 10 МБ';
+    } else if (errorCode === '103') {
+      status = 400;
+      errorMessage = 'Неверный тип изображения';
+    }
+
+    res.status(status).json({
+      error: errorMessage,
+      code: errorCode,
+    });
+  }
+});
+
+// API для загрузки изображения по URL
+app.post('/api/upload-from-url', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL не предоставлен' });
+    }
+
+    const formData = new FormData();
+    formData.append('url', url);
+
+    const headers = {
+      ...formData.getHeaders(),
+      Authorization: `TOKEN ${IMAGEBAN_CLIENT_ID}`,
+    };
+
+    console.log('Отправка запроса к ImageBan.ru по URL:', { url });
+
+    const response = await axios.post('https://api.imageban.ru/v1', formData, { headers });
+
+    console.log('Полный ответ от ImageBan.ru:', JSON.stringify(response.data, null, 2));
+
+    if (!response.data || typeof response.data !== 'object') {
+      console.error('Ответ от ImageBan не является объектом:', response.data);
+      return res.status(500).json({ error: 'Неверный формат ответа от ImageBan.ru' });
+    }
+
+    if (!response.data.success) {
+      console.error('ImageBan вернул success: false:', response.data.error);
+      return res.status(500).json({
+        error: response.data.error?.message || 'Ошибка загрузки на ImageBan',
+        code: response.data.error?.code || 'Unknown',
+      });
+    }
+
+    if (!response.data.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+      console.error('Пустой или неверный data в ответе ImageBan:', response.data.data);
+      return res.status(500).json({
+        error: 'ImageBan вернул пустой результат загрузки (data пустой)',
+        code: 'EmptyData',
+      });
+    }
+
+    const imageData = response.data.data[0];
+    if (!imageData || typeof imageData !== 'object') {
+      console.error('Первый элемент data не является объектом:', imageData);
+      return res.status(500).json({ error: 'Неверная структура данных изображения от ImageBan' });
+    }
+
+    let imageUrl = imageData.link;
+    if (!imageUrl) {
+      console.warn('Поле link отсутствует, используем short_link или fallback');
+      imageUrl = imageData.short_link || `https://i${Math.floor(Math.random() * 10)}.imageban.ru/out/2025/09/25/${imageData.id || 'unknown'}.jpg`;
+    }
+
+    console.log('Успешная загрузка: URL =', imageUrl, ', ID =', imageData.id);
+
+    res.json({ url: imageUrl });
+  } catch (error) {
+    console.error('Ошибка загрузки по URL:', error.message);
+    if (error.response) {
+      console.error('Статус ответа ImageBan:', error.response.status);
+      console.error('Полный ответ ImageBan в ошибке:', JSON.stringify(error.response.data, null, 2));
+    }
+    let status = 500;
+    let errorMessage = error.response?.data?.error?.message || error.message;
+    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
+
+    if (['100', '105', '110'].includes(errorCode)) {
+      status = 401;
+      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
+    } else if (['108', '109'].includes(errorCode)) {
+      status = 429;
+      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
+    } else if (errorCode === '101') {
+      status = 400;
+      errorMessage = 'Размер изображения превышает 10 МБ';
+    } else if (errorCode === '103') {
+      status = 400;
+      errorMessage = 'Неверный тип изображения';
+    }
+
+    res.status(status).json({
+      error: errorMessage,
+      code: errorCode,
+    });
+  }
+});
+
+// ==================== API ДЛЯ "Я ПОЙДУ!" ====================
+
+app.post('/api/events/:eventId/attend', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+
+    console.log(`Пользователь ${userId} участвует в событии ${eventId}`);
+
+    if (!userId) {
+      return res.status(400).json({ error: 'Требуется ID пользователя' });
+    }
+
+    // Получаем текущее событие
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+    });
+
+    const event = eventResponse.data;
+
+    if (!event.fields) {
+      return res.status(404).json({ error: 'Событие не найдено' });
+    }
+
+    const currentAttendees = event.fields.AttendeesIDs || '';
+    const currentCount = event.fields.AttendeesCount || 0;
+
+    console.log('Текущие участники:', currentAttendees);
+    console.log('Текущее количество:', currentCount);
+
+    // Обрабатываем разные форматы данных
+    let attendeesArray = [];
+
+    if (Array.isArray(currentAttendees)) {
+      attendeesArray = currentAttendees.filter((id) => id && id.toString().trim());
+    } else if (typeof currentAttendees === 'string') {
+      attendeesArray = currentAttendees.split(',').filter((id) => id && id.trim());
+    }
+
+    // Проверяем, не записан ли уже пользователь
+    const userIdStr = userId.toString();
+    if (attendeesArray.includes(userIdStr)) {
+      console.log('Пользователь уже участвует');
+      return res.status(400).json({ error: 'Пользователь уже участвует' });
+    }
+
+    // Добавляем пользователя
+    attendeesArray.push(userIdStr);
+    const newAttendees = attendeesArray.join(',');
+    const newCount = currentCount + 1;
+
+    console.log('Новые участники:', newAttendees);
+    console.log('Новое количество:', newCount);
+
+    // Обновляем запись
+    const updateData = {
+      fields: {
+        AttendeesIDs: newAttendees,
+        AttendeesCount: newCount,
+      },
+    };
+
+    console.log('Данные для обновления:', JSON.stringify(updateData, null, 2));
+
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('Обновление успешно:', updateResponse.data);
+    res.json({ success: true, count: newCount, attending: true });
+  } catch (error) {
+    console.error('Ошибка участия:', error.message);
+    if (error.response) {
+      console.error('Ответ Airtable:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/events/:eventId/unattend', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+
+    console.log(`Пользователь ${userId} отменяет участие в событии ${eventId}`);
+
+    if (!userId) {
+      return res.status(400).json({ error: 'Требуется ID пользователя' });
+    }
+
+    // Получаем текущее событие
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+    });
+
+    const event = eventResponse.data;
+
+    if (!event.fields) {
+      return res.status(404).json({ error: 'Событие не найдено' });
+    }
+
+    const currentAttendees = event.fields.AttendeesIDs || '';
+    const currentCount = event.fields.AttendeesCount || 0;
+
+    console.log('Текущие участники:', currentAttendees);
+    console.log('Текущее количество:', currentCount);
+
+    // Обрабатываем разные форматы данных
+    let attendeesArray = [];
+
+    if (Array.isArray(currentAttendees)) {
+      attendeesArray = currentAttendees.filter((id) => id && id.toString().trim());
+    } else if (typeof currentAttendees === 'string') {
+      attendeesArray = currentAttendees.split(',').filter((id) => id && id.trim());
+    }
+
+    // Удаляем пользователя
+    const userIdStr = userId.toString();
+    const newAttendeesArray = attendeesArray.filter((id) => id !== userIdStr);
+    const newAttendees = newAttendeesArray.join(',');
+    const newCount = Math.max(0, newAttendeesArray.length);
+
+    console.log('Новые участники:', newAttendees);
+    console.log('Новое количество:', newCount);
+
+    // Обновляем запись
+    const updateData = {
+      fields: {
+        AttendeesIDs: newAttendees,
+        AttendeesCount: newCount,
+      },
+    };
+
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('Отмена участия успешна');
+    res.json({ success: true, count: newCount, attending: false });
+  } catch (error) {
+    console.error('Ошибка отмены участия:', error.message);
+    if (error.response) {
+      console.error('Ответ Airtable:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Проверяем статус участия пользователя
+app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
+  try {
+    const { eventId, userId } = req.params;
+
+    console.log(`Проверка статуса участия пользователя ${userId} в событии ${eventId}`);
+
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+    });
+
+    const event = eventResponse.data;
+
+    if (!event.fields) {
+      return res.status(404).json({ error: 'Событие не найдено' });
+    }
+
+    const attendees = event.fields.AttendeesIDs || '';
+    let attendeesArray = [];
+
+    if (Array.isArray(attendees)) {
+      attendeesArray = attendees.filter((id) => id && id.toString().trim());
+    } else if (typeof attendees === 'string') {
+      attendeesArray = attendees.split(',').filter((id) => id && id.trim());
+    }
+
+    const isAttending = attendeesArray.includes(userId.toString());
+
+    console.log('Участвует:', isAttending);
+    res.json({ isAttending });
+  } catch (error) {
+    console.error('Ошибка проверки статуса участия:', error.message);
+    if (error.response) {
+      console.error('Ответ Airtable:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Радиус Земли в метрах
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c;
+  return distance;
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+// Создание папки uploads
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(UploadsDir, { recursive: true });
+}
+
+// Запуск сервера
+app.listen(port, () => {
+  console.log(`Сервер запущен на порту ${port}`);
+  console.log(`URL событий: ${EVENTS_URL}`);
+  console.log(`URL рекламы: ${ADS_URL}`);
+  console.log(`URL голосований: ${VOTINGS_URL}`);
+  console.log('Убедитесь, что в Airtable есть следующие столбцы:');
+  console.log('- Events: AttendeesIDs, AttendeesCount');
+  console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results, OptionImages, ResultsImage');
+});
