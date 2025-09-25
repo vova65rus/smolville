@@ -27,13 +27,13 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
-const IMAGEBAN_API_KEY = process.env.IMAGEBAN_API_KEY;
+const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
 
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
-  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID in Render');
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
+  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
   process.exit(1);
 }
 
@@ -44,61 +44,6 @@ const VOTINGS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${VOTINGS_T
 app.get('/', (req, res) => {
   res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
 });
-
-// ==================== ФУНКЦИИ ДЛЯ РАБОТЫ С IMAGEBAN ====================
-
-/**
- * Загружает изображение на ImageBan.ru
- * @param {Buffer|Stream} imageData - Данные изображения
- * @param {string} filename - Имя файла
- * @returns {Promise<string>} URL загруженного изображения
- */
-async function uploadToImageBan(imageData, filename = 'image.jpg') {
-  try {
-    console.log('Starting upload to ImageBan, filename:', filename);
-    
-    const formData = new FormData();
-    
-    // ImageBan ожидает поле 'image' с файлом
-    if (Buffer.isBuffer(imageData)) {
-      formData.append('image', imageData, {
-        filename: filename,
-        contentType: 'image/jpeg'
-      });
-    } else {
-      // Если это stream, просто добавляем
-      formData.append('image', imageData);
-    }
-
-    // ImageBan использует ключ в заголовке или параметре
-    const uploadUrl = `https://imageban.ru/api/v1/upload?key=${IMAGEBAN_API_KEY}`;
-
-    console.log('Uploading to ImageBan...');
-    
-    const response = await axios.post(uploadUrl, formData, {
-      headers: {
-        ...formData.getHeaders(),
-      },
-      timeout: 30000
-    });
-
-    console.log('ImageBan response status:', response.status);
-    console.log('ImageBan response data:', response.data);
-
-    if (response.data && response.data.success === true) {
-      return response.data.data.link;
-    } else {
-      throw new Error(response.data.error || `Upload failed: ${JSON.stringify(response.data)}`);
-    }
-  } catch (error) {
-    console.error('ImageBan upload error:', error.message);
-    if (error.response) {
-      console.error('ImageBan response status:', error.response.status);
-      console.error('ImageBan response data:', error.response.data);
-    }
-    throw new Error(`ImageBan upload failed: ${error.message}`);
-  }
-}
 
 // ==================== API ДЛЯ АДМИНА ====================
 
@@ -650,12 +595,23 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       })
       .toBuffer();
 
-    // Загружаем на ImageBan.ru используя нашу функцию
-    try {
-      const imageUrl = await uploadToImageBan(imageBuffer, `voting_results_${id}_${Date.now()}.jpg`);
-      console.log('Image uploaded to ImageBan:', imageUrl);
+    // Загружаем на ImgBB
+    const formData = new FormData();
+    formData.append('image', imageBuffer, { 
+      filename: `voting_results_${id}_${Date.now()}.jpg`,
+      contentType: 'image/jpeg'
+    });
+    
+    const imgbbResponse = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
+      headers: formData.getHeaders()
+    });
+
+    if (imgbbResponse.data.success) {
+      console.log('Image uploaded to ImgBB:', imgbbResponse.data.data.url);
       
-      // Сохраняем URL изображения в Airtable
+      // СОХРАНЯЕМ URL ИЗОБРАЖЕНИЯ В AIRTABLE
+      const imageUrl = imgbbResponse.data.data.url;
+      
       try {
         const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
           fields: { 
@@ -676,25 +632,43 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
       res.json({ 
         success: true, 
-        imageUrl: imageUrl
+        imageUrl: imageUrl,
+        imageId: imgbbResponse.data.data.id
       });
-    } catch (uploadError) {
-      console.error('ImageBan upload failed:', uploadError.message);
-      // Fallback: попробуем альтернативный метод загрузки
-      try {
-        console.log('Trying alternative upload method...');
-        const fallbackUrl = await uploadToImageBanAlternative(imageBuffer, `voting_results_${id}_${Date.now()}.jpg`);
-        res.json({ 
-          success: true, 
-          imageUrl: fallbackUrl 
-        });
-      } catch (fallbackError) {
-        console.error('Fallback upload also failed:', fallbackError.message);
-        res.status(500).json({ error: 'Failed to upload image to ImageBan: ' + uploadError.message });
-      }
+    } else {
+      console.error('ImgBB upload failed:', imgbbResponse.data);
+      res.status(500).json({ error: 'Failed to upload image to ImgBB' });
     }
   } catch (error) {
     console.error('Generate results image error:', error.message);
+    if (error.response) {
+      console.error('Airtable/ImgBB response:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Тестовый эндпоинт для проверки сохранения ResultsImage
+app.post('/api/votings/:id/test-save', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const testUrl = 'https://via.placeholder.com/600x400/0000FF/FFFFFF?text=Test+Image';
+    
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { 
+        ResultsImage: testUrl
+      }
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
+    });
+    
+    console.log('Test save response:', updateResponse.data);
+    res.json({ success: true, data: updateResponse.data });
+  } catch (error) {
+    console.error('Test save error:', error.message);
     if (error.response) {
       console.error('Airtable response:', error.response.data);
     }
@@ -702,108 +676,93 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
   }
 });
 
-// Альтернативная функция загрузки (на случай проблем с основной)
-async function uploadToImageBanAlternative(imageBuffer, filename) {
+// Упрощенная версия для тестирования
+app.post('/api/votings/:id/generate-results-simple', async (req, res) => {
   try {
-    const formData = new FormData();
-    formData.append('image', imageBuffer, {
-      filename: filename,
-      contentType: 'image/jpeg'
-    });
-
-    const response = await axios.post('https://imageban.ru/api/v1/upload', formData, {
-      params: {
-        key: IMAGEBAN_API_KEY
-      },
-      headers: {
-        ...formData.getHeaders()
+    const { id } = req.params;
+    
+    // Просто возвращаем тестовое изображение
+    const testImageUrl = 'https://via.placeholder.com/800x600/007bff/ffffff?text=Results+Placeholder';
+    
+    // Сохраняем в Airtable
+    await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { 
+        ResultsImage: testImageUrl
+      }
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
       }
     });
-
-    if (response.data && response.data.success) {
-      return response.data.data.link;
-    } else {
-      throw new Error(response.data.error || 'Alternative upload failed');
-    }
-  } catch (error) {
-    throw error;
-  }
-}
-
-// ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
-
-app.post('/api/upload', upload.single('image'), async (req, res) => {
-  let filePath = null;
-  
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
-    }
     
-    filePath = req.file.path;
-    console.log('Uploading file:', req.file.originalname, 'Size:', req.file.size);
-    
-    // Читаем файл в buffer для надежности
-    const fileBuffer = fs.readFileSync(filePath);
-    
-    const imageUrl = await uploadToImageBan(fileBuffer, req.file.originalname);
-    
-    // Удаляем временный файл
-    fs.unlinkSync(filePath);
-    filePath = null;
-    
-    console.log('Upload successful, URL:', imageUrl);
-    res.json({ url: imageUrl });
+    res.json({ 
+      success: true, 
+      imageUrl: testImageUrl,
+      message: 'Test image saved successfully'
+    });
     
   } catch (error) {
-    console.error('Upload error:', error.message);
-    
-    // Удаляем временный файл в случае ошибки
-    if (filePath && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-    
+    console.error('Simple generate error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 // API для загрузки изображений номинантов
 app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
-  let filePath = null;
-  
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
     
-    filePath = req.file.path;
-    console.log('Uploading option image:', req.file.originalname);
+    const filePath = req.file.path;
+    const formData = new FormData();
+    formData.append('image', fs.createReadStream(filePath));
     
-    // Читаем файл в buffer
-    const fileBuffer = fs.readFileSync(filePath);
-    
-    const imageUrl = await uploadToImageBan(fileBuffer, req.file.originalname);
-    
-    // Удаляем временный файл
-    fs.unlinkSync(filePath);
-    filePath = null;
-    
-    console.log('Option image upload successful, URL:', imageUrl);
-    
-    // Для Attachment поля возвращаем объект с url
-    res.json({ 
-      url: imageUrl,
-      filename: req.file.originalname || `option_image_${Date.now()}.jpg`
+    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
+      headers: formData.getHeaders()
     });
     
+    fs.unlinkSync(filePath);
+    
+    if (response.data.success) {
+      // Для Attachment поля возвращаем объект с url
+      res.json({ 
+        url: response.data.data.url,
+        filename: response.data.data.image.filename || `option_image_${Date.now()}.jpg`
+      });
+    } else {
+      res.status(500).json({ error: 'ImgBB upload failed' });
+    }
   } catch (error) {
     console.error('Option image upload error:', error.message);
-    
-    // Удаляем временный файл в случае ошибки
-    if (filePath && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
+
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded' });
     }
-    
+    const filePath = req.file.path;
+    const formData = new FormData();
+    formData.append('image', fs.createReadStream(filePath));
+    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
+      headers: formData.getHeaders()
+    });
+    fs.unlinkSync(filePath);
+    if (response.data.success) {
+      res.json({ url: response.data.data.url });
+    } else {
+      res.status(500).json({ error: 'ImgBB upload failed' });
+    }
+  } catch (error) {
+    console.error('Upload error:', error.message);
+    if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1036,7 +995,6 @@ app.listen(port, () => {
   console.log(`Events URL: ${EVENTS_URL}`);
   console.log(`Ads URL: ${ADS_URL}`);
   console.log(`Votings URL: ${VOTINGS_URL}`);
-  console.log('ImageBan API configured');
   console.log('Make sure you have these columns in Airtable:');
   console.log('- Events: AttendeesIDs, AttendeesCount');
   console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results, OptionImages, ResultsImage');
