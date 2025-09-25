@@ -622,42 +622,46 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     const imagebanResponse = await axios.post('https://api.imageban.ru/v1', formData, { headers });
 
-    if (imagebanResponse.data.success) {
-      console.log('Изображение загружено на ImageBan:', imagebanResponse.data.data[0].link);
-
-      // Сохраняем URL изображения в Airtable
-      const imageUrl = imagebanResponse.data.data[0].link;
-
-      try {
-        const updateResponse = await axios.patch(
-          `${VOTINGS_URL}/${id}`,
-          {
-            fields: {
-              ResultsImage: imageUrl,
-            },
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        console.log('ResultsImage успешно сохранен в Airtable');
-      } catch (updateError) {
-        console.error('Ошибка сохранения ResultsImage в Airtable:', updateError.message);
-      }
-
-      res.json({
-        success: true,
-        imageUrl: imageUrl,
-        imageId: imagebanResponse.data.data[0].id,
+    // Проверяем успешность ответа
+    if (!imagebanResponse.data.success || !imagebanResponse.data.data || !imagebanResponse.data.data[0]) {
+      console.error('Неверный ответ от ImageBan:', imagebanResponse.data);
+      return res.status(500).json({
+        error: imagebanResponse.data.error?.message || 'Ошибка загрузки на ImageBan: неверный формат ответа',
+        code: imagebanResponse.data.error?.code || 'Unknown',
       });
-    } else {
-      console.error('Ошибка загрузки на ImageBan:', imagebanResponse.data);
-      res.status(500).json({ error: imagebanResponse.data.error?.message || 'Ошибка загрузки на ImageBan' });
     }
+
+    console.log('Изображение загружено на ImageBan:', imagebanResponse.data.data[0].link);
+
+    // Сохраняем URL изображения в Airtable
+    const imageUrl = imagebanResponse.data.data[0].link;
+
+    try {
+      const updateResponse = await axios.patch(
+        `${VOTINGS_URL}/${id}`,
+        {
+          fields: {
+            ResultsImage: imageUrl,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('ResultsImage успешно сохранен в Airtable');
+    } catch (updateError) {
+      console.error('Ошибка сохранения ResultsImage в Airtable:', updateError.message);
+    }
+
+    res.json({
+      success: true,
+      imageUrl: imageUrl,
+      imageId: imagebanResponse.data.data[0].id,
+    });
   } catch (error) {
     console.error('Ошибка генерации изображения результатов:', error.message);
     if (error.response) {
@@ -739,16 +743,18 @@ app.post('/api/votings/:id/generate-results-simple', async (req, res) => {
 
 // API для загрузки изображений номинантов
 app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
+  let filePath; // Объявляем filePath вне try, чтобы использовать в catch
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Файл изображения не загружен' });
     }
 
-    const filePath = req.file.path;
+    filePath = req.file.path;
     // Проверяем размер файла (лимит ImageBan.ru: 10 МБ)
     const fileSize = fs.statSync(filePath).size;
     if (fileSize > 10 * 1024 * 1024) {
       fs.unlinkSync(filePath);
+      filePath = null; // Помечаем файл как удалённый
       return res.status(400).json({ error: 'Размер изображения превышает лимит 10 МБ' });
     }
 
@@ -756,6 +762,7 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!allowedFormats.includes(req.file.mimetype)) {
       fs.unlinkSync(filePath);
+      filePath = null; // Помечаем файл как удалённый
       return res.status(400).json({ error: 'Неподдерживаемый формат изображения. Используйте JPEG, JPG, PNG или GIF' });
     }
 
@@ -778,23 +785,49 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
 
     const response = await axios.post('https://api.imageban.ru/v1', formData, { headers });
 
-    fs.unlinkSync(filePath);
-
-    if (response.data.success) {
-      // Для поля Attachment в Airtable возвращаем объект с url
-      res.json({
-        url: response.data.data[0].link,
-        filename: response.data.data[0].img_name || `option_image_${Date.now()}.jpg`,
+    // Проверяем успешность ответа
+    if (!response.data.success || !response.data.data || !response.data.data[0]) {
+      console.error('Неверный ответ от ImageBan:', response.data);
+      fs.unlinkSync(filePath);
+      filePath = null;
+      return res.status(500).json({
+        error: response.data.error?.message || 'Ошибка загрузки на ImageBan: неверный формат ответа',
+        code: response.data.error?.code || 'Unknown',
       });
-    } else {
-      res.status(500).json({ error: response.data.error?.message || 'Ошибка загрузки на ImageBan' });
     }
+
+    fs.unlinkSync(filePath);
+    filePath = null; // Помечаем файл как удалённый
+
+    res.json({
+      url: response.data.data[0].link,
+      filename: response.data.data[0].img_name || `option_image_${Date.now()}.jpg`,
+    });
   } catch (error) {
     console.error('Ошибка загрузки изображения номинанта:', error.message);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({
-      error: error.response?.data?.error?.message || error.message,
-      code: error.response?.data?.error?.code || 'Неизвестно',
+    if (error.response) {
+      console.error('Ответ ImageBan:', error.response.data);
+    }
+    // Удаляем файл только если он существует
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    // Специфическая обработка ошибок ImageBan
+    let status = 500;
+    let errorMessage = error.response?.data?.error?.message || error.message;
+    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
+
+    if (['100', '105', '110'].includes(errorCode)) {
+      status = 401; // Проблемы с авторизацией
+      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
+    } else if (['108', '109'].includes(errorCode)) {
+      status = 429; // Превышен лимит загрузок
+      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
+    }
+
+    res.status(status).json({
+      error: errorMessage,
+      code: errorCode,
     });
   }
 });
@@ -802,16 +835,18 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
 // ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
 
 app.post('/api/upload', upload.single('image'), async (req, res) => {
+  let filePath; // Объявляем filePath вне try
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Файл изображения не загружен' });
     }
 
-    const filePath = req.file.path;
+    filePath = req.file.path;
     // Проверяем размер файла (лимит ImageBan.ru: 10 МБ)
     const fileSize = fs.statSync(filePath).size;
     if (fileSize > 10 * 1024 * 1024) {
       fs.unlinkSync(filePath);
+      filePath = null;
       return res.status(400).json({ error: 'Размер изображения превышает лимит 10 МБ' });
     }
 
@@ -819,6 +854,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     if (!allowedFormats.includes(req.file.mimetype)) {
       fs.unlinkSync(filePath);
+      filePath = null;
       return res.status(400).json({ error: 'Неподдерживаемый формат изображения. Используйте JPEG, JPG, PNG или GIF' });
     }
 
@@ -835,19 +871,46 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
       },
     });
 
-    fs.unlinkSync(filePath);
-
-    if (response.data.success) {
-      res.json({ url: response.data.data[0].link });
-    } else {
-      res.status(500).json({ error: response.data.error?.message || 'Ошибка загрузки на ImageBan' });
+    // Проверяем успешность ответа
+    if (!response.data.success || !response.data.data || !response.data.data[0]) {
+      console.error('Неверный ответ от ImageBan:', response.data);
+      fs.unlinkSync(filePath);
+      filePath = null;
+      return res.status(500).json({
+        error: response.data.error?.message || 'Ошибка загрузки на ImageBan: неверный формат ответа',
+        code: response.data.error?.code || 'Unknown',
+      });
     }
+
+    fs.unlinkSync(filePath);
+    filePath = null;
+
+    res.json({ url: response.data.data[0].link });
   } catch (error) {
     console.error('Ошибка загрузки:', error.message);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({
-      error: error.response?.data?.error?.message || error.message,
-      code: error.response?.data?.error?.code || 'Неизвестно',
+    if (error.response) {
+      console.error('Ответ ImageBan:', error.response.data);
+    }
+    // Удаляем файл только если он существует
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    // Специфическая обработка ошибок ImageBan
+    let status = 500;
+    let errorMessage = error.response?.data?.error?.message || error.message;
+    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
+
+    if (['100', '105', '110'].includes(errorCode)) {
+      status = 401;
+      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
+    } else if (['108', '109'].includes(errorCode)) {
+      status = 429;
+      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
+    }
+
+    res.status(status).json({
+      error: errorMessage,
+      code: errorCode,
     });
   }
 });
@@ -870,16 +933,37 @@ app.post('/api/upload-from-url', async (req, res) => {
       },
     });
 
-    if (response.data.success) {
-      res.json({ url: response.data.data[0].link });
-    } else {
-      res.status(500).json({ error: response.data.error?.message || 'Ошибка загрузки на ImageBan' });
+    // Проверяем успешность ответа
+    if (!response.data.success || !response.data.data || !response.data.data[0]) {
+      console.error('Неверный ответ от ImageBan:', response.data);
+      return res.status(500).json({
+        error: response.data.error?.message || 'Ошибка загрузки на ImageBan: неверный формат ответа',
+        code: response.data.error?.code || 'Unknown',
+      });
     }
+
+    res.json({ url: response.data.data[0].link });
   } catch (error) {
     console.error('Ошибка загрузки по URL:', error.message);
-    res.status(500).json({
-      error: error.response?.data?.error?.message || error.message,
-      code: error.response?.data?.error?.code || 'Неизвестно',
+    if (error.response) {
+      console.error('Ответ ImageBan:', error.response.data);
+    }
+    // Специфическая обработка ошибок ImageBan
+    let status = 500;
+    let errorMessage = error.response?.data?.error?.message || error.message;
+    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
+
+    if (['100', '105', '110'].includes(errorCode)) {
+      status = 401;
+      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
+    } else if (['108', '109'].includes(errorCode)) {
+      status = 429;
+      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
+    }
+
+    res.status(status).json({
+      error: errorMessage,
+      code: errorCode,
     });
   }
 });
@@ -1098,7 +1182,7 @@ function deg2rad(deg) {
 // Создание папки uploads
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(UploadsDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // Запуск сервера
