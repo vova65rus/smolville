@@ -18,12 +18,12 @@
       --ad-bg-color: #fff3cd;
       --ad-text-color: #856404;
       --ad-border-color: #ffeaa7;
-      --voting-bg-color: #fff0f0;
-      --voting-text-color: #8b0000;
-      --voting-border-color: #ffcccc;
-      --voting-completed-bg: #f0fff0;
+      --voting-bg-color: #e6f7ff;
+      --voting-text-color: #0056b3;
+      --voting-border-color: #3390ec;
+      --voting-completed-bg: #f0f8ff;
       --voting-completed-text: #006400;
-      --voting-completed-border: #ccffcc;
+      --voting-completed-border: #3390ec;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -38,11 +38,11 @@
         --ad-bg-color: #333300;
         --ad-text-color: #ffffcc;
         --ad-border-color: #666600;
-        --voting-bg-color: #330000;
-        --voting-text-color: #ffcccc;
-        --voting-border-color: #660000;
+        --voting-bg-color: #002b4d;
+        --voting-text-color: #4da6ff;
+        --voting-border-color: #004d80;
         --voting-completed-bg: #003300;
-        --voting-completed-text: #ccffcc;
+        --voting-completed-text: #00cc00;
         --voting-completed-border: #006600;
       }
     }
@@ -94,7 +94,7 @@
     }
 
     .voting-card:hover {
-      background: #ffcccc;
+      background: #cce7ff;
       transform: scale(1.02);
       transition: all 0.2s ease;
     }
@@ -497,11 +497,11 @@
       document.documentElement.style.setProperty('--ad-bg-color', '#333300');
       document.documentElement.style.setProperty('--ad-text-color', '#ffffcc');
       document.documentElement.style.setProperty('--ad-border-color', '#666600');
-      document.documentElement.style.setProperty('--voting-bg-color', '#330000');
-      document.documentElement.style.setProperty('--voting-text-color', '#ffcccc');
-      document.documentElement.style.setProperty('--voting-border-color', '#660000');
+      document.documentElement.style.setProperty('--voting-bg-color', '#002b4d');
+      document.documentElement.style.setProperty('--voting-text-color', '#4da6ff');
+      document.documentElement.style.setProperty('--voting-border-color', '#004d80');
       document.documentElement.style.setProperty('--voting-completed-bg', '#003300');
-      document.documentElement.style.setProperty('--voting-completed-text', '#ccffcc');
+      document.documentElement.style.setProperty('--voting-completed-text', '#00cc00');
       document.documentElement.style.setProperty('--voting-completed-border', '#006600');
     }
 
@@ -516,12 +516,12 @@
       document.documentElement.style.setProperty('--ad-bg-color', '#fff3cd');
       document.documentElement.style.setProperty('--ad-text-color', '#856404');
       document.documentElement.style.setProperty('--ad-border-color', '#ffeaa7');
-      document.documentElement.style.setProperty('--voting-bg-color', '#fff0f0');
-      document.documentElement.style.setProperty('--voting-text-color', '#8b0000');
-      document.documentElement.style.setProperty('--voting-border-color', '#ffcccc');
-      document.documentElement.style.setProperty('--voting-completed-bg', '#f0fff0');
+      document.documentElement.style.setProperty('--voting-bg-color', '#e6f7ff');
+      document.documentElement.style.setProperty('--voting-text-color', '#0056b3');
+      document.documentElement.style.setProperty('--voting-border-color', '#3390ec');
+      document.documentElement.style.setProperty('--voting-completed-bg', '#f0f8ff');
       document.documentElement.style.setProperty('--voting-completed-text', '#006400');
-      document.documentElement.style.setProperty('--voting-completed-border', '#ccffcc');
+      document.documentElement.style.setProperty('--voting-completed-border', '#3390ec');
     }
 
     function formatDate(dateStr) {
@@ -917,17 +917,22 @@
 
     async function generateResultsImage(votingId) {
       try {
+        console.log('Starting image generation for voting:', votingId);
+        
         const response = await fetch(`${BACKEND_URL}/api/votings/${votingId}/generate-results`, {
           method: 'POST'
         });
 
         if (response.ok) {
           const data = await response.json();
+          console.log('Generation response:', data);
+          
           if (data.success) {
             currentResultsImageUrl = data.imageUrl;
             
-            // Сохраняем URL изображения в базе данных
-            await fetch(`${BACKEND_URL}/api/votings/${votingId}`, {
+            // 1. Сохраняем URL изображения в Airtable
+            console.log('Saving to Airtable...');
+            const saveResponse = await fetch(`${BACKEND_URL}/api/votings/${votingId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -936,15 +941,32 @@
                 }
               })
             });
-            
-            // Обновляем отображение
-            showVotingModal(currentVotingRecord);
-            alert('Изображение с результатами успешно сгенерировано!');
+
+            if (saveResponse.ok) {
+              console.log('Successfully saved to Airtable');
+              
+              // 2. ОБНОВЛЯЕМ ДАННЫЕ ГОЛОСОВАНИЯ ИЗ БАЗЫ
+              const updatedVotingResponse = await fetch(`${BACKEND_URL}/api/votings/${votingId}`);
+              if (updatedVotingResponse.ok) {
+                const updatedVoting = await updatedVotingResponse.json();
+                currentVotingRecord.fields.ResultsImage = data.imageUrl;
+                
+                // 3. Показываем обновленные результаты
+                showVotingResults(updatedVoting.fields, null, votingId);
+              }
+              
+              alert('Изображение с результатами успешно сгенерировано и сохранено!');
+            } else {
+              const error = await saveResponse.json();
+              console.error('Save error:', error);
+              alert('Ошибка при сохранении в базу: ' + error.error);
+            }
           } else {
             alert('Ошибка при генерации изображения: ' + data.error);
           }
         } else {
           const error = await response.json();
+          console.error('Generation error:', error);
           alert('Ошибка при генерации изображения: ' + error.error);
         }
       } catch (err) {
@@ -1507,6 +1529,8 @@
     }
 
     function editVoting(recordId, title, description, lat, lon, options, eventId, status, optionImagesJson) {
+      console.log('Editing voting:', { recordId, title, description, lat, lon, options, eventId, status });
+      
       document.getElementById('votingRecordId').value = recordId;
       document.getElementById('votingTitle').value = title || '';
       document.getElementById('votingDescription').value = description || '';
@@ -1535,17 +1559,25 @@
       try {
         const optionsArray = typeof options === 'string' ? JSON.parse(options) : options;
         const imagesArray = typeof optionImagesJson === 'string' ? JSON.parse(optionImagesJson) : [];
+        
+        console.log('Options array:', optionsArray);
+        console.log('Images array:', imagesArray);
+        
         if (optionsArray && optionsArray.length > 0) {
           optionsArray.forEach((option, index) => {
             addOption();
             const items = optionsContainer.querySelectorAll('.option-item');
             const currentItem = items[items.length - 1];
             currentItem.querySelector('.option-name').value = option;
+            
             if (imagesArray[index] && imagesArray[index].url) {
               optionImages[index] = imagesArray[index].url;
               currentItem.querySelector('.option-preview').src = imagesArray[index].url;
               currentItem.querySelector('.option-preview').classList.remove('hidden');
               currentItem.querySelector('.image-status').textContent = 'Фото загружено';
+              currentItem.querySelector('button').textContent = '✅ Фото загружено';
+              currentItem.querySelector('button').classList.remove('bg-blue-500');
+              currentItem.querySelector('button').classList.add('bg-green-500');
             }
           });
         } else {
@@ -1771,6 +1803,8 @@
         loadAds();
       } else if (tabId === 'tab-votings-list') {
         loadVotings();
+      } else if (tabId === 'tab-voting-form') {
+        loadEventsForVoting();
       }
     }
 
