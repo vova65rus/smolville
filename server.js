@@ -21,38 +21,28 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const upload = multer({ dest: 'uploads/' });
 
-// Переменные окружения
+// Env vars
 const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
-const IMAGEBAN_CLIENT_ID = process.env.IMAGEBAN_CLIENT_ID;
-const IMAGEBAN_SECRET_KEY = process.env.IMAGEBAN_SECRET_KEY; // Опционально для авторизованных загрузок
+const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
 
-// Проверка переменных окружения
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMAGEBAN_CLIENT_ID) {
-  console.error('Отсутствуют переменные окружения: Установите AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMAGEBAN_CLIENT_ID в Render');
+// Хардкод админа
+const ADMIN_ID = 366825437;
+
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
+  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
   process.exit(1);
 }
-
-// Логирование переменных окружения (для диагностики)
-console.log('Переменные окружения:', {
-  AIRTABLE_API_KEY: AIRTABLE_API_KEY ? 'Установлен' : 'Отсутствует',
-  AIRTABLE_BASE_ID: AIRTABLE_BASE_ID ? 'Установлен' : 'Отсутствует',
-  IMAGEBAN_CLIENT_ID: IMAGEBAN_CLIENT_ID ? 'Установлен' : 'Отсутствует',
-  IMAGEBAN_SECRET_KEY: IMAGEBAN_SECRET_KEY ? 'Установлен' : 'Отсутствует',
-});
 
 const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
 const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
 const VOTINGS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${VOTINGS_TABLE}`;
 
-// Хардкод ID администратора
-const ADMIN_ID = 366825437;
-
 app.get('/', (req, res) => {
-  res.send('Бэкенд Smolville запущен! Эндпоинты API: /api/events, /api/ads, /api/votings, /api/upload, /api/upload-from-url');
+  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
 });
 
 // ==================== API ДЛЯ АДМИНА ====================
@@ -68,13 +58,13 @@ app.get('/api/is-admin', (req, res) => {
 app.get('/api/events', async (req, res) => {
   try {
     const response = await axios.get(EVENTS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка получения событий:', error.message);
+    console.error('Events GET error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -82,18 +72,19 @@ app.get('/api/events', async (req, res) => {
 
 app.post('/api/events', async (req, res) => {
   try {
-    console.log('Создание события с данными:', JSON.stringify(req.body, null, 2));
+    console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
+    
     const response = await axios.post(EVENTS_URL, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка создания события:', error.message);
+    console.error('Events POST error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -102,13 +93,13 @@ app.post('/api/events', async (req, res) => {
 app.get('/api/events/:id', async (req, res) => {
   try {
     const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка получения события:', error.message);
+    console.error('Event GET error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -116,18 +107,19 @@ app.get('/api/events/:id', async (req, res) => {
 
 app.patch('/api/events/:id', async (req, res) => {
   try {
-    console.log('Обновление события с данными:', JSON.stringify(req.body, null, 2));
+    console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
+    
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка обновления события:', error.message);
+    console.error('Event PATCH error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -136,13 +128,13 @@ app.patch('/api/events/:id', async (req, res) => {
 app.delete('/api/events/:id', async (req, res) => {
   try {
     const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка удаления события:', error.message);
+    console.error('Event DELETE error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -153,13 +145,13 @@ app.delete('/api/events/:id', async (req, res) => {
 app.get('/api/ads', async (req, res) => {
   try {
     const response = await axios.get(ADS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка получения рекламы:', error.message);
+    console.error('Ads GET error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -168,16 +160,16 @@ app.get('/api/ads', async (req, res) => {
 app.post('/api/ads', async (req, res) => {
   try {
     const response = await axios.post(ADS_URL, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка создания рекламы:', error.message);
+    console.error('Ads POST error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -186,16 +178,16 @@ app.post('/api/ads', async (req, res) => {
 app.patch('/api/ads/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка обновления рекламы:', error.message);
+    console.error('Ads PATCH error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -204,13 +196,13 @@ app.patch('/api/ads/:id', async (req, res) => {
 app.delete('/api/ads/:id', async (req, res) => {
   try {
     const response = await axios.delete(`${ADS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка удаления рекламы:', error.message);
+    console.error('Ad DELETE error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -221,11 +213,11 @@ app.delete('/api/ads/:id', async (req, res) => {
 app.get('/api/votings', async (req, res) => {
   try {
     const response = await axios.get(VOTINGS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка получения голосований:', error.message);
+    console.error('Votings GET error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -233,14 +225,14 @@ app.get('/api/votings', async (req, res) => {
 app.post('/api/votings', async (req, res) => {
   try {
     const response = await axios.post(VOTINGS_URL, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка создания голосования:', error.message);
+    console.error('Votings POST error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -248,14 +240,14 @@ app.post('/api/votings', async (req, res) => {
 app.patch('/api/votings/:id', async (req, res) => {
   try {
     const response = await axios.patch(`${VOTINGS_URL}/${req.params.id}`, req.body, {
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка обновления голосования:', error.message);
+    console.error('Votings PATCH error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -263,11 +255,11 @@ app.patch('/api/votings/:id', async (req, res) => {
 app.delete('/api/votings/:id', async (req, res) => {
   try {
     const response = await axios.delete(`${VOTINGS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка удаления голосования:', error.message);
+    console.error('Votings DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -279,12 +271,12 @@ app.get('/api/events/:eventId/votings', async (req, res) => {
     const response = await axios.get(VOTINGS_URL, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
       params: {
-        filterByFormula: `{EventID} = '${eventId}'`,
-      },
+        filterByFormula: `{EventID} = '${eventId}'`
+      }
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Ошибка получения голосований по событию:', error.message);
+    console.error('Event votings GET error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -295,85 +287,85 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     const { id } = req.params;
     const { userId, optionIndex, userLat, userLon } = req.body;
 
-    console.log('Получен запрос на голосование:', { id, userId, optionIndex, userLat, userLon });
+    console.log('Received vote request:', { id, userId, optionIndex, userLat, userLon });
 
     if (!userId || optionIndex === undefined || userLat === undefined || userLon === undefined) {
-      console.error('Отсутствуют обязательные поля');
-      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
+      console.error('Missing required fields');
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
     // Получаем данные голосования
     const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
-
+    
     const voting = votingResponse.data;
     if (!voting.fields) {
-      console.error('Голосование не найдено');
+      console.error('Voting not found');
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
     if (voting.fields.Status === 'Completed') {
-      console.error('Голосование завершено');
-      return res.status(400).json({ error: 'Голосование завершено' });
+      console.error('Voting is completed');
+      return res.status(400).json({ error: 'Voting is completed' });
     }
 
     // Проверяем, голосовал ли уже пользователь
     const votedUserIds = voting.fields.VotedUserIDs || '';
-    const votedUsersArray = votedUserIds.split(',').filter((id) => id && id.trim());
-
+    const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
+    
     if (votedUsersArray.includes(userId.toString())) {
-      console.error('Пользователь уже проголосовал');
+      console.error('User has already voted');
       return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
     }
 
     // Проверяем геолокацию
     const votingLat = voting.fields.Latitude;
     const votingLon = voting.fields.Longitude;
-
+    
     if (votingLat && votingLon && userLat && userLon) {
       const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
-      console.log('Рассчитанное расстояние:', distance);
+      console.log('Calculated distance:', distance);
       if (distance > 1000) {
-        console.error('Пользователь слишком далеко');
+        console.error('User is too far away');
         return res.status(400).json({ error: 'Вы находитесь слишком далеко от места голосования' });
       }
     }
 
     // Обновляем результаты голосования
     let currentVotes = voting.fields.Votes ? JSON.parse(voting.fields.Votes) : {};
-    console.log('Текущие голоса:', currentVotes);
+    console.log('Current votes:', currentVotes);
 
     // Добавляем голос пользователя
     currentVotes[userId] = optionIndex;
-    console.log('Обновленные голоса:', currentVotes);
+    console.log('Updated votes:', currentVotes);
 
     // Добавляем пользователя в список проголосовавших
     const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
 
     // Обновляем запись в Airtable
     const updateData = {
-      fields: {
+      fields: { 
         Votes: JSON.stringify(currentVotes),
-        VotedUserIDs: newVotedUserIDs,
-      },
+        VotedUserIDs: newVotedUserIDs
+      }
     };
 
-    console.log('Обновление записи голосования:', JSON.stringify(updateData, null, 2));
+    console.log('Updating voting record with:', JSON.stringify(updateData, null, 2));
 
     const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, updateData, {
-      headers: {
+      headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+        'Content-Type': 'application/json' 
+      }
     });
 
-    console.log('Голос успешно обновлен:', updateResponse.data);
+    console.log('Vote updated successfully:', updateResponse.data);
     res.json({ success: true, voting: updateResponse.data });
   } catch (error) {
-    console.error('Ошибка голосования:', error.message);
+    console.error('Vote error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -385,17 +377,17 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
     const { id, userId } = req.params;
 
     const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
-
+    
     const voting = votingResponse.data;
     if (!voting.fields) {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
     const votedUserIds = voting.fields.VotedUserIDs || '';
-    const votedUsersArray = votedUserIds.split(',').filter((id) => id && id.trim());
-
+    const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
+    
     const hasVoted = votedUsersArray.includes(userId.toString());
     let userVote = null;
     if (voting.fields.Votes) {
@@ -405,7 +397,7 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
 
     res.json({ hasVoted, userVote });
   } catch (error) {
-    console.error('Ошибка проверки статуса голосования:', error.message);
+    console.error('Vote status error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -417,33 +409,31 @@ app.post('/api/votings/:id/complete', async (req, res) => {
 
     // Получаем данные голосования
     const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
-
+    
     const voting = votingResponse.data;
     if (!voting.fields) {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
     // Подсчитываем финальные результаты
-    const votes = voting.fields.Votes
-      ? typeof voting.fields.Votes === 'string'
-        ? JSON.parse(voting.fields.Votes)
-        : voting.fields.Votes
+    const votes = voting.fields.Votes ? 
+      (typeof voting.fields.Votes === 'string' ? JSON.parse(voting.fields.Votes) : voting.fields.Votes) 
       : {};
-
+    
     const results = [];
-
+    
     if (voting.fields.Options) {
       const options = voting.fields.Options.split(',');
-
+      
       // Считаем голоса для каждого варианта
       const voteCounts = {};
       options.forEach((option, index) => {
         voteCounts[index] = 0;
       });
-
-      Object.values(votes).forEach((voteIndex) => {
+      
+      Object.values(votes).forEach(voteIndex => {
         if (voteCounts[voteIndex] !== undefined) {
           voteCounts[voteIndex]++;
         }
@@ -451,40 +441,36 @@ app.post('/api/votings/:id/complete', async (req, res) => {
 
       // Считаем проценты
       const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
-
+      
       // Создаем массив результатов
       options.forEach((option, index) => {
         const count = voteCounts[index] || 0;
         const percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-
+        
         results.push({
           option: option,
           count: count,
-          percentage: percentage,
+          percentage: percentage
         });
       });
     }
 
     // Обновляем голосование
-    const updateResponse = await axios.patch(
-      `${VOTINGS_URL}/${id}`,
-      {
-        fields: {
-          Status: 'Completed',
-          Results: JSON.stringify(results),
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { 
+        Status: 'Completed',
+        Results: JSON.stringify(results)
       }
-    );
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
+    });
 
     res.json({ success: true, results: results, voting: updateResponse.data });
   } catch (error) {
-    console.error('Ошибка завершения голосования:', error.message);
+    console.error('Complete voting error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -496,7 +482,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     // Получаем данные голосования
     const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
     const voting = votingResponse.data;
@@ -517,7 +503,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
         results = voting.fields.Results;
       }
     } catch (parseError) {
-      console.error('Ошибка парсинга результатов:', parseError);
+      console.error('Error parsing results:', parseError);
       return res.status(400).json({ error: 'Неверный формат результатов голосования' });
     }
 
@@ -533,10 +519,10 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     const title = voting.fields.Title || 'Результаты голосования';
     const description = voting.fields.Description || '';
-
+    
     // Обрабатываем изображения номинантов
     const optionImages = voting.fields.OptionImages || [];
-    console.log('Изображения номинантов из Airtable:', JSON.stringify(optionImages, null, 2));
+    console.log('OptionImages from Airtable:', JSON.stringify(optionImages, null, 2));
 
     // Генерируем SVG
     let height = 600;
@@ -560,7 +546,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     resultsArray.forEach((result, index) => {
       const barWidth = (result.percentage / 100) * 400;
       const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
-
+      
       svg += `
         <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0" rx="5"/>
         <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="5"/>
@@ -575,7 +561,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       y += 20;
       svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
       y += 30;
-
+      
       resultsArray.forEach((result, index) => {
         let imageUrl = null;
         if (optionImages[index]) {
@@ -585,7 +571,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
             imageUrl = optionImages[index].url;
           }
         }
-
+        
         if (imageUrl) {
           const col = index % 3;
           const row = Math.floor(index / 3);
@@ -601,133 +587,64 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     const imageBuffer = await sharp(svgBuffer)
       .resize(800, height, {
         fit: 'fill',
-        background: { r: 255, g: 255, b: 255, alpha: 1 },
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
       })
-      .jpeg({
+      .jpeg({ 
         quality: 90,
-        chromaSubsampling: '4:4:4',
+        chromaSubsampling: '4:4:4'
       })
       .toBuffer();
 
-    // Проверяем размер файла
-    if (imageBuffer.length > 10 * 1024 * 1024) {
-      return res.status(400).json({ error: 'Размер сгенерированного изображения превышает лимит 10 МБ' });
-    }
-
-    // Загружаем на ImageBan.ru
+    // Загружаем на ImgBB
     const formData = new FormData();
-    formData.append('image', imageBuffer, {
+    formData.append('image', imageBuffer, { 
       filename: `voting_results_${id}_${Date.now()}.jpg`,
-      contentType: 'image/jpeg',
+      contentType: 'image/jpeg'
+    });
+    
+    const imgbbResponse = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
+      headers: formData.getHeaders()
     });
 
-    const authHeader = IMAGEBAN_SECRET_KEY
-      ? `Bearer ${IMAGEBAN_SECRET_KEY}`
-      : `TOKEN ${IMAGEBAN_CLIENT_ID}`;
-    const headers = {
-      ...formData.getHeaders(),
-      Authorization: authHeader,
-    };
-
-    console.log('Отправка запроса к ImageBan.ru для результатов:', { authType: IMAGEBAN_SECRET_KEY ? 'Bearer' : 'TOKEN', fileSize: imageBuffer.length });
-
-    const imagebanResponse = await axios.post('https://api.imageban.ru/v1', formData, { headers });
-
-    // Логируем полный ответ для диагностики
-    console.log('Полный ответ от ImageBan.ru:', JSON.stringify(imagebanResponse.data, null, 2));
-
-    // Проверяем успешность ответа
-    if (!imagebanResponse.data || typeof imagebanResponse.data !== 'object') {
-      console.error('Ответ от ImageBan не является объектом:', imagebanResponse.data);
-      return res.status(500).json({ error: 'Неверный формат ответа от ImageBan.ru' });
-    }
-
-    if (!imagebanResponse.data.success) {
-      console.error('ImageBan вернул success: false:', imagebanResponse.data.error);
-      return res.status(500).json({
-        error: imagebanResponse.data.error?.message || 'Ошибка загрузки на ImageBan',
-        code: imagebanResponse.data.error?.code || 'Unknown',
-      });
-    }
-
-    if (!imagebanResponse.data.data || !Array.isArray(imagebanResponse.data.data) || imagebanResponse.data.data.length === 0) {
-      console.error('Пустой или неверный data в ответе ImageBan:', imagebanResponse.data.data);
-      return res.status(500).json({
-        error: 'ImageBan вернул пустой результат загрузки (data пустой)',
-        code: 'EmptyData',
-      });
-    }
-
-    const imageData = imagebanResponse.data.data[0];
-    if (!imageData || typeof imageData !== 'object') {
-      console.error('Первый элемент data не является объектом:', imageData);
-      return res.status(500).json({ error: 'Неверная структура данных изображения от ImageBan' });
-    }
-
-    // Проверяем наличие link, fallback на short_link или генерацию
-    let imageUrl = imageData.link;
-    if (!imageUrl) {
-      console.warn('Поле link отсутствует, используем short_link или fallback');
-      imageUrl = imageData.short_link || `https://i${Math.floor(Math.random() * 10)}.imageban.ru/out/2025/09/25/${imageData.id || 'unknown'}.jpg`;
-    }
-
-    console.log('Успешная загрузка: URL =', imageUrl, ', ID =', imageData.id);
-
-    // Сохраняем URL изображения в Airtable
-    try {
-      const updateResponse = await axios.patch(
-        `${VOTINGS_URL}/${id}`,
-        {
-          fields: {
-            ResultsImage: imageUrl,
-          },
-        },
-        {
-          headers: {
+    if (imgbbResponse.data.success) {
+      console.log('Image uploaded to ImgBB:', imgbbResponse.data.data.url);
+      
+      // СОХРАНЯЕМ URL ИЗОБРАЖЕНИЯ В AIRTABLE
+      const imageUrl = imgbbResponse.data.data.url;
+      
+      try {
+        const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+          fields: { 
+            ResultsImage: imageUrl
+          }
+        }, {
+          headers: { 
             Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      console.log('ResultsImage успешно сохранен в Airtable:', updateResponse.data);
-    } catch (updateError) {
-      console.error('Ошибка сохранения ResultsImage в Airtable:', updateError.message);
-    }
+            'Content-Type': 'application/json' 
+          }
+        });
+        
+        console.log('ResultsImage saved to Airtable successfully');
+      } catch (updateError) {
+        console.error('Error saving ResultsImage to Airtable:', updateError.message);
+        // Продолжаем выполнение даже если сохранение не удалось
+      }
 
-    res.json({
-      success: true,
-      imageUrl: imageUrl,
-      imageId: imageData.id,
-    });
+      res.json({ 
+        success: true, 
+        imageUrl: imageUrl,
+        imageId: imgbbResponse.data.data.id
+      });
+    } else {
+      console.error('ImgBB upload failed:', imgbbResponse.data);
+      res.status(500).json({ error: 'Failed to upload image to ImgBB' });
+    }
   } catch (error) {
-    console.error('Ошибка генерации изображения результатов:', error.message);
+    console.error('Generate results image error:', error.message);
     if (error.response) {
-      console.error('Статус ответа:', error.response.status);
-      console.error('Полный ответ в ошибке:', JSON.stringify(error.response.data, null, 2));
+      console.error('Airtable/ImgBB response:', error.response.data);
     }
-    // Специфическая обработка ошибок ImageBan
-    let status = 500;
-    let errorMessage = error.response?.data?.error?.message || error.message;
-    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
-
-    if (['100', '105', '110'].includes(errorCode)) {
-      status = 401;
-      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
-    } else if (['108', '109'].includes(errorCode)) {
-      status = 429;
-      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
-    } else if (errorCode === '101') {
-      status = 400;
-      errorMessage = 'Размер изображения превышает 10 МБ';
-    } else if (errorCode === '103') {
-      status = 400;
-      errorMessage = 'Неверный тип изображения';
-    }
-
-    res.status(status).json({
-      error: errorMessage,
-      code: errorCode,
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -736,28 +653,24 @@ app.post('/api/votings/:id/test-save', async (req, res) => {
   try {
     const { id } = req.params;
     const testUrl = 'https://via.placeholder.com/600x400/0000FF/FFFFFF?text=Test+Image';
-
-    const updateResponse = await axios.patch(
-      `${VOTINGS_URL}/${id}`,
-      {
-        fields: {
-          ResultsImage: testUrl,
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+    
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { 
+        ResultsImage: testUrl
       }
-    );
-
-    console.log('Ответ тестового сохранения:', updateResponse.data);
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
+    });
+    
+    console.log('Test save response:', updateResponse.data);
     res.json({ success: true, data: updateResponse.data });
   } catch (error) {
-    console.error('Ошибка тестового сохранения:', error.message);
+    console.error('Test save error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -767,397 +680,90 @@ app.post('/api/votings/:id/test-save', async (req, res) => {
 app.post('/api/votings/:id/generate-results-simple', async (req, res) => {
   try {
     const { id } = req.params;
-
+    
     // Просто возвращаем тестовое изображение
     const testImageUrl = 'https://via.placeholder.com/800x600/007bff/ffffff?text=Results+Placeholder';
-
+    
     // Сохраняем в Airtable
-    await axios.patch(
-      `${VOTINGS_URL}/${id}`,
-      {
-        fields: {
-          ResultsImage: testImageUrl,
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+    await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { 
+        ResultsImage: testImageUrl
       }
-    );
-
-    res.json({
-      success: true,
-      imageUrl: testImageUrl,
-      message: 'Тестовое изображение успешно сохранено',
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
     });
+    
+    res.json({ 
+      success: true, 
+      imageUrl: testImageUrl,
+      message: 'Test image saved successfully'
+    });
+    
   } catch (error) {
-    console.error('Ошибка упрощенной генерации:', error.message);
+    console.error('Simple generate error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 // API для загрузки изображений номинантов
 app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
-  let filePath; // Объявляем filePath вне try
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'Файл изображения не загружен' });
+      return res.status(400).json({ error: 'No image file uploaded' });
     }
-
-    filePath = req.file.path;
-    // Проверяем размер файла (лимит ImageBan.ru: 10 МБ)
-    const stats = fs.statSync(filePath);
-    const fileSize = stats.size;
-    if (fileSize > 10 * 1024 * 1024) {
-      fs.unlinkSync(filePath);
-      filePath = null;
-      return res.status(400).json({ error: 'Размер изображения превышает лимит 10 МБ' });
-    }
-
-    // Проверяем формат файла
-    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-    if (!allowedFormats.includes(req.file.mimetype)) {
-      fs.unlinkSync(filePath);
-      filePath = null;
-      return res.status(400).json({ error: 'Неподдерживаемый формат изображения. Используйте JPEG, JPG, PNG или GIF' });
-    }
-
+    
+    const filePath = req.file.path;
     const formData = new FormData();
     formData.append('image', fs.createReadStream(filePath));
-    // Опционально: добавляем имя или альбом
-    if (req.body.name) {
-      formData.append('name', req.body.name);
-    }
-    if (req.body.album && IMAGEBAN_SECRET_KEY) {
-      formData.append('album', req.body.album);
-    }
-
-    const authHeader = IMAGEBAN_SECRET_KEY
-      ? `Bearer ${IMAGEBAN_SECRET_KEY}`
-      : `TOKEN ${IMAGEBAN_CLIENT_ID}`;
-    const headers = {
-      ...formData.getHeaders(),
-      Authorization: authHeader,
-    };
-
-    console.log('Отправка запроса к ImageBan.ru:', { authType: IMAGEBAN_SECRET_KEY ? 'Bearer' : 'TOKEN', fileSize, name: req.body.name, album: req.body.album });
-
-    const response = await axios.post('https://api.imageban.ru/v1', formData, { headers });
-
-    // Логируем полный ответ для диагностики
-    console.log('Полный ответ от ImageBan.ru:', JSON.stringify(response.data, null, 2));
-
-    // Усиленная проверка успешности ответа
-    if (!response.data || typeof response.data !== 'object') {
-      console.error('Ответ от ImageBan не является объектом:', response.data);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(500).json({ error: 'Неверный формат ответа от ImageBan.ru' });
-    }
-
-    if (!response.data.success) {
-      console.error('ImageBan вернул success: false:', response.data.error);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(500).json({
-        error: response.data.error?.message || 'Ошибка загрузки на ImageBan',
-        code: response.data.error?.code || 'Unknown',
-      });
-    }
-
-    if (!response.data.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
-      console.error('Пустой или неверный data в ответе ImageBan:', response.data.data);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(500).json({
-        error: 'ImageBan вернул пустой результат загрузки (data пустой)',
-        code: 'EmptyData',
-      });
-    }
-
-    const imageData = response.data.data[0];
-    if (!imageData || typeof imageData !== 'object') {
-      console.error('Первый элемент data не является объектом:', imageData);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(500).json({ error: 'Неверная структура данных изображения от ImageBan' });
-    }
-
-    // Проверяем наличие link, fallback на short_link или генерацию
-    let imageUrl = imageData.link;
-    if (!imageUrl) {
-      console.warn('Поле link отсутствует, используем short_link или fallback');
-      imageUrl = imageData.short_link || `https://i${Math.floor(Math.random() * 10)}.imageban.ru/out/2025/09/25/${imageData.id || 'unknown'}.jpg`;
-    }
-
-    // Удаляем файл после успешной обработки
-    if (filePath && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      filePath = null;
-    }
-
-    console.log('Успешная загрузка: URL =', imageUrl, ', ID =', imageData.id);
-
-    // Для поля Attachment в Airtable возвращаем объект с url
-    res.json({
-      url: imageUrl,
-      filename: imageData.img_name || `option_image_${Date.now()}.jpg`,
+    
+    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
+      headers: formData.getHeaders()
     });
+    
+    fs.unlinkSync(filePath);
+    
+    if (response.data.success) {
+      // Для Attachment поля возвращаем объект с url
+      res.json({ 
+        url: response.data.data.url,
+        filename: response.data.data.image.filename || `option_image_${Date.now()}.jpg`
+      });
+    } else {
+      res.status(500).json({ error: 'ImgBB upload failed' });
+    }
   } catch (error) {
-    console.error('Ошибка загрузки изображения номинанта:', error.message);
-    if (error.response) {
-      console.error('Статус ответа ImageBan:', error.response.status);
-      console.error('Полный ответ ImageBan в ошибке:', JSON.stringify(error.response.data, null, 2));
-    }
-    // Удаляем файл только если он существует
-    if (filePath && fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-        console.log('Временный файл удалён в catch');
-      } catch (unlinkError) {
-        console.error('Ошибка удаления временного файла:', unlinkError.message);
-      }
-    }
-    // Специфическая обработка ошибок ImageBan
-    let status = 500;
-    let errorMessage = error.response?.data?.error?.message || error.message;
-    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
-
-    if (['100', '105', '110'].includes(errorCode)) {
-      status = 401;
-      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan (проверьте CLIENT_ID или SECRET_KEY)';
-    } else if (['108', '109'].includes(errorCode)) {
-      status = 429;
-      errorMessage = errorMessage || 'Превышен дневной лимит загрузок (1000 изображений в сутки)';
-    } else if (errorCode === '101') {
-      status = 400;
-      errorMessage = 'Размер изображения превышает 10 МБ';
-    } else if (errorCode === '103') {
-      status = 400;
-      errorMessage = 'Неверный тип изображения';
-    }
-
-    res.status(status).json({
-      error: errorMessage,
-      code: errorCode,
-    });
+    console.error('Option image upload error:', error.message);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// API для загрузки изображений
+// ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
+
 app.post('/api/upload', upload.single('image'), async (req, res) => {
-  let filePath;
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'Файл изображения не загружен' });
+      return res.status(400).json({ error: 'No image file uploaded' });
     }
-
-    filePath = req.file.path;
-    // Проверяем размер файла
-    const stats = fs.statSync(filePath);
-    const fileSize = stats.size;
-    if (fileSize > 10 * 1024 * 1024) {
-      fs.unlinkSync(filePath);
-      filePath = null;
-      return res.status(400).json({ error: 'Размер изображения превышает лимит 10 МБ' });
-    }
-
-    // Проверяем формат файла
-    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-    if (!allowedFormats.includes(req.file.mimetype)) {
-      fs.unlinkSync(filePath);
-      filePath = null;
-      return res.status(400).json({ error: 'Неподдерживаемый формат изображения. Используйте JPEG, JPG, PNG или GIF' });
-    }
-
+    const filePath = req.file.path;
     const formData = new FormData();
     formData.append('image', fs.createReadStream(filePath));
-    if (req.body.name) {
-      formData.append('name', req.body.name);
-    }
-
-    const headers = {
-      ...formData.getHeaders(),
-      Authorization: `TOKEN ${IMAGEBAN_CLIENT_ID}`,
-    };
-
-    console.log('Отправка запроса к ImageBan.ru:', { authType: 'TOKEN', fileSize, name: req.body.name });
-
-    const response = await axios.post('https://api.imageban.ru/v1', formData, { headers });
-
-    // Логируем полный ответ
-    console.log('Полный ответ от ImageBan.ru:', JSON.stringify(response.data, null, 2));
-
-    // Проверка ответа
-    if (!response.data || typeof response.data !== 'object') {
-      console.error('Ответ от ImageBan не является объектом:', response.data);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(500).json({ error: 'Неверный формат ответа от ImageBan.ru' });
-    }
-
-    if (!response.data.success) {
-      console.error('ImageBan вернул success: false:', response.data.error);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(500).json({
-        error: response.data.error?.message || 'Ошибка загрузки на ImageBan',
-        code: response.data.error?.code || 'Unknown',
-      });
-    }
-
-    if (!response.data.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
-      console.error('Пустой или неверный data в ответе ImageBan:', response.data.data);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(500).json({
-        error: 'ImageBan вернул пустой результат загрузки (data пустой)',
-        code: 'EmptyData',
-      });
-    }
-
-    const imageData = response.data.data[0];
-    if (!imageData || typeof imageData !== 'object') {
-      console.error('Первый элемент data не является объектом:', imageData);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(500).json({ error: 'Неверная структура данных изображения от ImageBan' });
-    }
-
-    // Проверяем наличие link
-    let imageUrl = imageData.link;
-    if (!imageUrl) {
-      console.warn('Поле link отсутствует, используем short_link или fallback');
-      imageUrl = imageData.short_link || `https://i${Math.floor(Math.random() * 10)}.imageban.ru/out/2025/09/25/${imageData.id || 'unknown'}.jpg`;
-    }
-
-    if (filePath && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      filePath = null;
-    }
-
-    console.log('Успешная загрузка: URL =', imageUrl, ', ID =', imageData.id);
-
-    res.json({ url: imageUrl });
-  } catch (error) {
-    console.error('Ошибка загрузки:', error.message);
-    if (error.response) {
-      console.error('Статус ответа ImageBan:', error.response.status);
-      console.error('Полный ответ ImageBan в ошибке:', JSON.stringify(error.response.data, null, 2));
-    }
-    if (filePath && fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-        console.log('Временный файл удалён в catch');
-      } catch (unlinkError) {
-        console.error('Ошибка удаления временного файла:', unlinkError.message);
-      }
-    }
-    let status = 500;
-    let errorMessage = error.response?.data?.error?.message || error.message;
-    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
-
-    if (['100', '105', '110'].includes(errorCode)) {
-      status = 401;
-      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
-    } else if (['108', '109'].includes(errorCode)) {
-      status = 429;
-      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
-    } else if (errorCode === '101') {
-      status = 400;
-      errorMessage = 'Размер изображения превышает 10 МБ';
-    } else if (errorCode === '103') {
-      status = 400;
-      errorMessage = 'Неверный тип изображения';
-    }
-
-    res.status(status).json({
-      error: errorMessage,
-      code: errorCode,
+    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
+      headers: formData.getHeaders()
     });
-  }
-});
-
-// API для загрузки изображения по URL
-app.post('/api/upload-from-url', async (req, res) => {
-  try {
-    const { url } = req.body;
-    if (!url) {
-      return res.status(400).json({ error: 'URL не предоставлен' });
+    fs.unlinkSync(filePath);
+    if (response.data.success) {
+      res.json({ url: response.data.data.url });
+    } else {
+      res.status(500).json({ error: 'ImgBB upload failed' });
     }
-
-    const formData = new FormData();
-    formData.append('url', url);
-
-    const headers = {
-      ...formData.getHeaders(),
-      Authorization: `TOKEN ${IMAGEBAN_CLIENT_ID}`,
-    };
-
-    console.log('Отправка запроса к ImageBan.ru по URL:', { url });
-
-    const response = await axios.post('https://api.imageban.ru/v1', formData, { headers });
-
-    console.log('Полный ответ от ImageBan.ru:', JSON.stringify(response.data, null, 2));
-
-    if (!response.data || typeof response.data !== 'object') {
-      console.error('Ответ от ImageBan не является объектом:', response.data);
-      return res.status(500).json({ error: 'Неверный формат ответа от ImageBan.ru' });
-    }
-
-    if (!response.data.success) {
-      console.error('ImageBan вернул success: false:', response.data.error);
-      return res.status(500).json({
-        error: response.data.error?.message || 'Ошибка загрузки на ImageBan',
-        code: response.data.error?.code || 'Unknown',
-      });
-    }
-
-    if (!response.data.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
-      console.error('Пустой или неверный data в ответе ImageBan:', response.data.data);
-      return res.status(500).json({
-        error: 'ImageBan вернул пустой результат загрузки (data пустой)',
-        code: 'EmptyData',
-      });
-    }
-
-    const imageData = response.data.data[0];
-    if (!imageData || typeof imageData !== 'object') {
-      console.error('Первый элемент data не является объектом:', imageData);
-      return res.status(500).json({ error: 'Неверная структура данных изображения от ImageBan' });
-    }
-
-    let imageUrl = imageData.link;
-    if (!imageUrl) {
-      console.warn('Поле link отсутствует, используем short_link или fallback');
-      imageUrl = imageData.short_link || `https://i${Math.floor(Math.random() * 10)}.imageban.ru/out/2025/09/25/${imageData.id || 'unknown'}.jpg`;
-    }
-
-    console.log('Успешная загрузка: URL =', imageUrl, ', ID =', imageData.id);
-
-    res.json({ url: imageUrl });
   } catch (error) {
-    console.error('Ошибка загрузки по URL:', error.message);
-    if (error.response) {
-      console.error('Статус ответа ImageBan:', error.response.status);
-      console.error('Полный ответ ImageBan в ошибке:', JSON.stringify(error.response.data, null, 2));
-    }
-    let status = 500;
-    let errorMessage = error.response?.data?.error?.message || error.message;
-    const errorCode = error.response?.data?.error?.code || 'Неизвестно';
-
-    if (['100', '105', '110'].includes(errorCode)) {
-      status = 401;
-      errorMessage = errorMessage || 'Ошибка авторизации в ImageBan';
-    } else if (['108', '109'].includes(errorCode)) {
-      status = 429;
-      errorMessage = errorMessage || 'Превышен дневной лимит загрузок';
-    } else if (errorCode === '101') {
-      status = 400;
-      errorMessage = 'Размер изображения превышает 10 МБ';
-    } else if (errorCode === '103') {
-      status = 400;
-      errorMessage = 'Неверный тип изображения';
-    }
-
-    res.status(status).json({
-      error: errorMessage,
-      code: errorCode,
-    });
+    console.error('Upload error:', error.message);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1168,43 +774,43 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     const { eventId } = req.params;
     const { userId } = req.body;
 
-    console.log(`Пользователь ${userId} участвует в событии ${eventId}`);
+    console.log(`User ${userId} attending event ${eventId}`);
 
     if (!userId) {
-      return res.status(400).json({ error: 'Требуется ID пользователя' });
+      return res.status(400).json({ error: 'User ID is required' });
     }
 
     // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
     const event = eventResponse.data;
-
+    
     if (!event.fields) {
-      return res.status(404).json({ error: 'Событие не найдено' });
+      return res.status(404).json({ error: 'Event not found' });
     }
 
     const currentAttendees = event.fields.AttendeesIDs || '';
     const currentCount = event.fields.AttendeesCount || 0;
-
-    console.log('Текущие участники:', currentAttendees);
-    console.log('Текущее количество:', currentCount);
+    
+    console.log('Current attendees:', currentAttendees);
+    console.log('Current count:', currentCount);
 
     // Обрабатываем разные форматы данных
     let attendeesArray = [];
-
+    
     if (Array.isArray(currentAttendees)) {
-      attendeesArray = currentAttendees.filter((id) => id && id.toString().trim());
+      attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
     } else if (typeof currentAttendees === 'string') {
-      attendeesArray = currentAttendees.split(',').filter((id) => id && id.trim());
+      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
     }
 
     // Проверяем, не записан ли уже пользователь
     const userIdStr = userId.toString();
     if (attendeesArray.includes(userIdStr)) {
-      console.log('Пользователь уже участвует');
-      return res.status(400).json({ error: 'Пользователь уже участвует' });
+      console.log('User already attending');
+      return res.status(400).json({ error: 'User already attending' });
     }
 
     // Добавляем пользователя
@@ -1212,32 +818,34 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     const newAttendees = attendeesArray.join(',');
     const newCount = currentCount + 1;
 
-    console.log('Новые участники:', newAttendees);
-    console.log('Новое количество:', newCount);
+    console.log('New attendees:', newAttendees);
+    console.log('New count:', newCount);
 
     // Обновляем запись
     const updateData = {
       fields: {
         AttendeesIDs: newAttendees,
-        AttendeesCount: newCount,
-      },
+        AttendeesCount: newCount
+      }
     };
 
-    console.log('Данные для обновления:', JSON.stringify(updateData, null, 2));
+    console.log('Update data:', JSON.stringify(updateData, null, 2));
 
     const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
-      headers: {
+      headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+        'Content-Type': 'application/json' 
+      }
     });
 
-    console.log('Обновление успешно:', updateResponse.data);
+    console.log('Update successful:', updateResponse.data);
     res.json({ success: true, count: newCount, attending: true });
+    
   } catch (error) {
-    console.error('Ошибка участия:', error.message);
+    console.error('Attend error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response status:', error.response.status);
+      console.error('Airtable response data:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -1248,68 +856,69 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     const { eventId } = req.params;
     const { userId } = req.body;
 
-    console.log(`Пользователь ${userId} отменяет участие в событии ${eventId}`);
+    console.log(`User ${userId} unattending event ${eventId}`);
 
     if (!userId) {
-      return res.status(400).json({ error: 'Требуется ID пользователя' });
+      return res.status(400).json({ error: 'User ID is required' });
     }
 
     // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
     const event = eventResponse.data;
-
+    
     if (!event.fields) {
-      return res.status(404).json({ error: 'Событие не найдено' });
+      return res.status(404).json({ error: 'Event not found' });
     }
 
     const currentAttendees = event.fields.AttendeesIDs || '';
     const currentCount = event.fields.AttendeesCount || 0;
-
-    console.log('Текущие участники:', currentAttendees);
-    console.log('Текущее количество:', currentCount);
+    
+    console.log('Current attendees:', currentAttendees);
+    console.log('Current count:', currentCount);
 
     // Обрабатываем разные форматы данных
     let attendeesArray = [];
-
+    
     if (Array.isArray(currentAttendees)) {
-      attendeesArray = currentAttendees.filter((id) => id && id.toString().trim());
+      attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
     } else if (typeof currentAttendees === 'string') {
-      attendeesArray = currentAttendees.split(',').filter((id) => id && id.trim());
+      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
     }
 
     // Удаляем пользователя
     const userIdStr = userId.toString();
-    const newAttendeesArray = attendeesArray.filter((id) => id !== userIdStr);
+    const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
     const newAttendees = newAttendeesArray.join(',');
     const newCount = Math.max(0, newAttendeesArray.length);
 
-    console.log('Новые участники:', newAttendees);
-    console.log('Новое количество:', newCount);
+    console.log('New attendees:', newAttendees);
+    console.log('New count:', newCount);
 
     // Обновляем запись
     const updateData = {
       fields: {
         AttendeesIDs: newAttendees,
-        AttendeesCount: newCount,
-      },
+        AttendeesCount: newCount
+      }
     };
 
     const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
-      headers: {
+      headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+        'Content-Type': 'application/json' 
+      }
     });
 
-    console.log('Отмена участия успешна');
+    console.log('Unattend successful');
     res.json({ success: true, count: newCount, attending: false });
+    
   } catch (error) {
-    console.error('Ошибка отмены участия:', error.message);
+    console.error('Unattend error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -1320,35 +929,36 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
   try {
     const { eventId, userId } = req.params;
 
-    console.log(`Проверка статуса участия пользователя ${userId} в событии ${eventId}`);
+    console.log(`Checking attend status for user ${userId} in event ${eventId}`);
 
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
     const event = eventResponse.data;
-
+    
     if (!event.fields) {
-      return res.status(404).json({ error: 'Событие не найдено' });
+      return res.status(404).json({ error: 'Event not found' });
     }
 
     const attendees = event.fields.AttendeesIDs || '';
     let attendeesArray = [];
-
+    
     if (Array.isArray(attendees)) {
-      attendeesArray = attendees.filter((id) => id && id.toString().trim());
+      attendeesArray = attendees.filter(id => id && id.toString().trim());
     } else if (typeof attendees === 'string') {
-      attendeesArray = attendees.split(',').filter((id) => id && id.trim());
+      attendeesArray = attendees.split(',').filter(id => id && id.trim());
     }
-
+    
     const isAttending = attendeesArray.includes(userId.toString());
 
-    console.log('Участвует:', isAttending);
+    console.log('Is attending:', isAttending);
     res.json({ isAttending });
+    
   } catch (error) {
-    console.error('Ошибка проверки статуса участия:', error.message);
+    console.error('Attend status error:', error.message);
     if (error.response) {
-      console.error('Ответ Airtable:', error.response.data);
+      console.error('Airtable response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -1357,34 +967,35 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // Радиус Земли в метрах
+  const R = 6371000; // Earth radius in meters
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
   const distance = R * c;
   return distance;
 }
 
 function deg2rad(deg) {
-  return deg * (Math.PI / 180);
+  return deg * (Math.PI/180);
 }
 
 // Создание папки uploads
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(UploadsDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // Запуск сервера
 app.listen(port, () => {
-  console.log(`Сервер запущен на порту ${port}`);
-  console.log(`URL событий: ${EVENTS_URL}`);
-  console.log(`URL рекламы: ${ADS_URL}`);
-  console.log(`URL голосований: ${VOTINGS_URL}`);
-  console.log('Убедитесь, что в Airtable есть следующие столбцы:');
+  console.log(`Server running on port ${port}`);
+  console.log(`Events URL: ${EVENTS_URL}`);
+  console.log(`Ads URL: ${ADS_URL}`);
+  console.log(`Votings URL: ${VOTINGS_URL}`);
+  console.log('Make sure you have these columns in Airtable:');
   console.log('- Events: AttendeesIDs, AttendeesCount');
   console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results, OptionImages, ResultsImage');
 });
