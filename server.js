@@ -494,23 +494,24 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       return res.status(400).json({ error: 'Результаты голосования недоступны' });
     }
 
-    // Исправление: правильно парсим результаты
+    // Парсим результаты
     let results;
     try {
-      results = typeof voting.fields.Results === 'string' 
-        ? JSON.parse(voting.fields.Results) 
-        : voting.fields.Results;
+      if (typeof voting.fields.Results === 'string') {
+        results = JSON.parse(voting.fields.Results);
+      } else {
+        results = voting.fields.Results;
+      }
     } catch (parseError) {
       console.error('Error parsing results:', parseError);
       return res.status(400).json({ error: 'Неверный формат результатов голосования' });
     }
 
-    // Преобразуем объект результатов в массив
+    // Преобразуем результаты в массив
     let resultsArray = [];
     if (Array.isArray(results)) {
       resultsArray = results;
-    } else if (typeof results === 'object' && results !== null) {
-      // Если results - объект, преобразуем в массив
+    } else if (results && typeof results === 'object') {
       resultsArray = Object.values(results);
     } else {
       return res.status(400).json({ error: 'Неверный формат результатов' });
@@ -519,14 +520,14 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     const title = voting.fields.Title || 'Результаты голосования';
     const description = voting.fields.Description || '';
     
-    // Исправление: правильно обрабатываем Attachment поле OptionImages
+    // Обрабатываем изображения номинантов
     const optionImages = voting.fields.OptionImages || [];
     console.log('OptionImages from Airtable:', JSON.stringify(optionImages, null, 2));
 
     // Генерируем SVG
-    let height = 600; // Базовая высота
-    const hasImages = optionImages.length > 0;
-    if (hasImages) height += resultsArray.length * 110;
+    let height = 600;
+    const hasImages = optionImages && optionImages.length > 0;
+    if (hasImages) height += Math.ceil(resultsArray.length / 3) * 110;
 
     let svg = `
       <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
@@ -562,10 +563,8 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       y += 30;
       
       resultsArray.forEach((result, index) => {
-        // Исправление: правильно обрабатываем Attachment
         let imageUrl = null;
         if (optionImages[index]) {
-          // Для Attachment поля в Airtable
           if (typeof optionImages[index] === 'object' && optionImages[index].url) {
             imageUrl = optionImages[index].url;
           } else if (Array.isArray(optionImages) && optionImages[index] && optionImages[index].url) {
@@ -609,9 +608,31 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     if (imgbbResponse.data.success) {
       console.log('Image uploaded to ImgBB:', imgbbResponse.data.data.url);
+      
+      // СОХРАНЯЕМ URL ИЗОБРАЖЕНИЯ В AIRTABLE
+      const imageUrl = imgbbResponse.data.data.url;
+      
+      try {
+        const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+          fields: { 
+            ResultsImage: imageUrl
+          }
+        }, {
+          headers: { 
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json' 
+          }
+        });
+        
+        console.log('ResultsImage saved to Airtable successfully');
+      } catch (updateError) {
+        console.error('Error saving ResultsImage to Airtable:', updateError.message);
+        // Продолжаем выполнение даже если сохранение не удалось
+      }
+
       res.json({ 
         success: true, 
-        imageUrl: imgbbResponse.data.data.url,
+        imageUrl: imageUrl,
         imageId: imgbbResponse.data.data.id
       });
     } else {
@@ -623,6 +644,66 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     if (error.response) {
       console.error('Airtable/ImgBB response:', error.response.data);
     }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Тестовый эндпоинт для проверки сохранения ResultsImage
+app.post('/api/votings/:id/test-save', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const testUrl = 'https://via.placeholder.com/600x400/0000FF/FFFFFF?text=Test+Image';
+    
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { 
+        ResultsImage: testUrl
+      }
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
+    });
+    
+    console.log('Test save response:', updateResponse.data);
+    res.json({ success: true, data: updateResponse.data });
+  } catch (error) {
+    console.error('Test save error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Упрощенная версия для тестирования
+app.post('/api/votings/:id/generate-results-simple', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Просто возвращаем тестовое изображение
+    const testImageUrl = 'https://via.placeholder.com/800x600/007bff/ffffff?text=Results+Placeholder';
+    
+    // Сохраняем в Airtable
+    await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { 
+        ResultsImage: testImageUrl
+      }
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      imageUrl: testImageUrl,
+      message: 'Test image saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Simple generate error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -916,5 +997,5 @@ app.listen(port, () => {
   console.log(`Votings URL: ${VOTINGS_URL}`);
   console.log('Make sure you have these columns in Airtable:');
   console.log('- Events: AttendeesIDs, AttendeesCount');
-  console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results, OptionImages');
+  console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results, OptionImages, ResultsImage');
 });
