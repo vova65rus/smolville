@@ -27,13 +27,14 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
-const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
+const UPLOADCARE_PUBLIC_KEY = process.env.UPLOADCARE_PUBLIC_KEY;
+const UPLOADCARE_SECRET_KEY = process.env.UPLOADCARE_SECRET_KEY;
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
 
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
-  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !UPLOADCARE_PUBLIC_KEY || !UPLOADCARE_SECRET_KEY) {
+  console.error('Отсутствуют переменные окружения: Установите AIRTABLE_API_KEY, AIRTABLE_BASE_ID, UPLOADCARE_PUBLIC_KEY, UPLOADCARE_SECRET_KEY в Render');
   process.exit(1);
 }
 
@@ -595,23 +596,26 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       })
       .toBuffer();
 
-    // Загружаем на ImgBB
+    // Загружаем на Uploadcare
     const formData = new FormData();
-    formData.append('image', imageBuffer, { 
+    formData.append('UPLOADCARE_PUB_KEY', UPLOADCARE_PUBLIC_KEY);
+    formData.append('file', imageBuffer, {
       filename: `voting_results_${id}_${Date.now()}.jpg`,
-      contentType: 'image/jpeg'
-    });
-    
-    const imgbbResponse = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
+      contentType: 'image/jpeg',
     });
 
-    if (imgbbResponse.data.success) {
-      console.log('Image uploaded to ImgBB:', imgbbResponse.data.data.url);
-      
+    const uploadcareResponse = await axios.post('https://upload.uploadcare.com/base/', formData, {
+      headers: {
+        ...formData.getHeaders(),
+        Authorization: `Uploadcare.Simple ${UPLOADCARE_PUBLIC_KEY}:${UPLOADCARE_SECRET_KEY}`,
+      },
+    });
+
+    if (uploadcareResponse.data && uploadcareResponse.data.file) {
+      console.log('Изображение загружено на Uploadcare:', uploadcareResponse.data.file);
+      const imageUrl = `https://ucarecdn.com/${uploadcareResponse.data.file}/`;
+
       // СОХРАНЯЕМ URL ИЗОБРАЖЕНИЯ В AIRTABLE
-      const imageUrl = imgbbResponse.data.data.url;
-      
       try {
         const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
           fields: { 
@@ -624,25 +628,25 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
           }
         });
         
-        console.log('ResultsImage saved to Airtable successfully');
+        console.log('ResultsImage успешно сохранён в Airtable');
       } catch (updateError) {
-        console.error('Error saving ResultsImage to Airtable:', updateError.message);
+        console.error('Ошибка сохранения ResultsImage в Airtable:', updateError.message);
         // Продолжаем выполнение даже если сохранение не удалось
       }
 
       res.json({ 
         success: true, 
         imageUrl: imageUrl,
-        imageId: imgbbResponse.data.data.id
+        imageId: uploadcareResponse.data.file
       });
     } else {
-      console.error('ImgBB upload failed:', imgbbResponse.data);
-      res.status(500).json({ error: 'Failed to upload image to ImgBB' });
+      console.error('Ошибка загрузки на Uploadcare:', uploadcareResponse.data);
+      res.status(500).json({ error: 'Не удалось загрузить изображение на Uploadcare' });
     }
   } catch (error) {
     console.error('Generate results image error:', error.message);
     if (error.response) {
-      console.error('Airtable/ImgBB response:', error.response.data);
+      console.error('Airtable/Uploadcare response:', error.response.data);
     }
     res.status(500).json({ error: error.message });
   }
@@ -712,30 +716,33 @@ app.post('/api/votings/:id/generate-results-simple', async (req, res) => {
 app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
+      return res.status(400).json({ error: 'Файл изображения не загружен' });
     }
-    
     const filePath = req.file.path;
     const formData = new FormData();
-    formData.append('image', fs.createReadStream(filePath));
-    
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
+    formData.append('UPLOADCARE_PUB_KEY', UPLOADCARE_PUBLIC_KEY);
+    formData.append('file', fs.createReadStream(filePath));
+
+    const response = await axios.post('https://upload.uploadcare.com/base/', formData, {
+      headers: {
+        ...formData.getHeaders(),
+        Authorization: `Uploadcare.Simple ${UPLOADCARE_PUBLIC_KEY}:${UPLOADCARE_SECRET_KEY}`,
+      },
     });
-    
+
     fs.unlinkSync(filePath);
-    
-    if (response.data.success) {
-      // Для Attachment поля возвращаем объект с url
-      res.json({ 
-        url: response.data.data.url,
-        filename: response.data.data.image.filename || `option_image_${Date.now()}.jpg`
+
+    if (response.data && response.data.file) {
+      const fileUrl = `https://ucarecdn.com/${response.data.file}/`;
+      res.json({
+        url: fileUrl,
+        filename: `option_image_${Date.now()}.jpg`,
       });
     } else {
-      res.status(500).json({ error: 'ImgBB upload failed' });
+      res.status(500).json({ error: 'Ошибка загрузки на Uploadcare' });
     }
   } catch (error) {
-    console.error('Option image upload error:', error.message);
+    console.error('Ошибка загрузки изображения номинанта:', error.message);
     if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
@@ -746,22 +753,30 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
+      return res.status(400).json({ error: 'Файл изображения не загружен' });
     }
     const filePath = req.file.path;
     const formData = new FormData();
-    formData.append('image', fs.createReadStream(filePath));
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
+    formData.append('UPLOADCARE_PUB_KEY', UPLOADCARE_PUBLIC_KEY);
+    formData.append('file', fs.createReadStream(filePath));
+
+    const response = await axios.post('https://upload.uploadcare.com/base/', formData, {
+      headers: {
+        ...formData.getHeaders(),
+        Authorization: `Uploadcare.Simple ${UPLOADCARE_PUBLIC_KEY}:${UPLOADCARE_SECRET_KEY}`,
+      },
     });
+
     fs.unlinkSync(filePath);
-    if (response.data.success) {
-      res.json({ url: response.data.data.url });
+
+    if (response.data && response.data.file) {
+      const fileUrl = `https://ucarecdn.com/${response.data.file}/`;
+      res.json({ url: fileUrl });
     } else {
-      res.status(500).json({ error: 'ImgBB upload failed' });
+      res.status(500).json({ error: 'Ошибка загрузки на Uploadcare' });
     }
   } catch (error) {
-    console.error('Upload error:', error.message);
+    console.error('Ошибка загрузки:', error.message);
     if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: error.message });
   }
