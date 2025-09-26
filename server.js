@@ -27,13 +27,17 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
-const IMGBB_API_KEY = process.env.IMGBB_API_KEY;
+
+// Uploadcare конфигурация
+const UPLOADCARE_PUBLIC_KEY = process.env.UPLOADCARE_PUBLIC_KEY;
+const UPLOADCARE_SECRET_KEY = process.env.UPLOADCARE_SECRET_KEY;
+const UPLOADCARE_CDN_SUBDOMAIN = process.env.UPLOADCARE_CDN_SUBDOMAIN || '62wb4q8n36.ucarecd.net';
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
 
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !IMGBB_API_KEY) {
-  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, IMGBB_API_KEY in Render');
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !UPLOADCARE_PUBLIC_KEY || !UPLOADCARE_SECRET_KEY) {
+  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, UPLOADCARE_PUBLIC_KEY, UPLOADCARE_SECRET_KEY in Render');
   process.exit(1);
 }
 
@@ -41,9 +45,108 @@ const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TAB
 const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
 const VOTINGS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${VOTINGS_TABLE}`;
 
+// Uploadcare API endpoints
+const UPLOADCARE_UPLOAD_URL = 'https://upload.uploadcare.com/base/';
+const UPLOADCARE_FILES_URL = 'https://api.uploadcare.com/files/';
+
 app.get('/', (req, res) => {
   res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
 });
+
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ UPLOADCARE ====================
+
+/**
+ * Загружает файл в Uploadcare
+ * @param {Buffer|Stream} fileBuffer - Буфер файла или поток
+ * @param {string} filename - Имя файла
+ * @param {string} contentType - MIME тип файла
+ * @returns {Promise<Object>} - Объект с информацией о загруженном файле
+ */
+async function uploadToUploadcare(fileBuffer, filename, contentType = 'image/jpeg') {
+  try {
+    const formData = new FormData();
+    formData.append('file', fileBuffer, {
+      filename: filename,
+      contentType: contentType
+    });
+    formData.append('UPLOADCARE_PUBLIC_KEY', UPLOADCARE_PUBLIC_KEY);
+    
+    const response = await axios.post(UPLOADCARE_UPLOAD_URL, formData, {
+      headers: {
+        ...formData.getHeaders(),
+      },
+    });
+
+    if (response.data.file) {
+      const fileId = response.data.file;
+      
+      // Получаем подробную информацию о файле
+      const fileInfo = await getUploadcareFileInfo(fileId);
+      
+      // Генерируем CDN URL с вашим субдоменом
+      const cdnUrl = `https://${UPLOADCARE_CDN_SUBDOMAIN}/${
+        fileInfo.is_image ? 'image/' : ''
+      }${fileId}/${filename}`;
+      
+      return {
+        fileId: fileId,
+        url: cdnUrl,
+        filename: filename,
+        originalFilename: fileInfo.original_filename,
+        size: fileInfo.size,
+        isImage: fileInfo.is_image,
+        mimeType: fileInfo.mime_type
+      };
+    } else {
+      throw new Error('Uploadcare response missing file ID');
+    }
+  } catch (error) {
+    console.error('Uploadcare upload error:', error.message);
+    if (error.response) {
+      console.error('Uploadcare response:', error.response.data);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Получает информацию о файле из Uploadcare
+ * @param {string} fileId - ID файла в Uploadcare
+ * @returns {Promise<Object>} - Информация о файле
+ */
+async function getUploadcareFileInfo(fileId) {
+  try {
+    const response = await axios.get(`${UPLOADCARE_FILES_URL}${fileId}/`, {
+      headers: {
+        'Authorization': `Uploadcare.Simple ${UPLOADCARE_PUBLIC_KEY}:${UPLOADCARE_SECRET_KEY}`,
+        'Accept': 'application/vnd.uploadcare-v0.7+json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error getting file info from Uploadcare:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Удаляет файл из Uploadcare
+ * @param {string} fileId - ID файла для удаления
+ */
+async function deleteFromUploadcare(fileId) {
+  try {
+    await axios.delete(`${UPLOADCARE_FILES_URL}${fileId}/storage/`, {
+      headers: {
+        'Authorization': `Uploadcare.Simple ${UPLOADCARE_PUBLIC_KEY}:${UPLOADCARE_SECRET_KEY}`,
+        'Accept': 'application/vnd.uploadcare-v0.7+json'
+      }
+    });
+    console.log(`File ${fileId} deleted from Uploadcare`);
+  } catch (error) {
+    console.error('Error deleting file from Uploadcare:', error.message);
+    // Не выбрасываем ошибку, так как удаление файла не критично
+  }
+}
 
 // ==================== API ДЛЯ АДМИНА ====================
 
@@ -595,115 +698,45 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       })
       .toBuffer();
 
-    // Загружаем на ImgBB
-    const formData = new FormData();
-    formData.append('image', imageBuffer, { 
-      filename: `voting_results_${id}_${Date.now()}.jpg`,
-      contentType: 'image/jpeg'
-    });
+    // Загружаем в Uploadcare вместо ImgBB
+    const uploadResult = await uploadToUploadcare(
+      imageBuffer, 
+      `voting_results_${id}_${Date.now()}.jpg`,
+      'image/jpeg'
+    );
+
+    console.log('Image uploaded to Uploadcare:', uploadResult.url);
     
-    const imgbbResponse = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
+    // Сохраняем URL изображения в Airtable
+    try {
+      const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+        fields: { 
+          ResultsImage: uploadResult.url
+        }
+      }, {
+        headers: { 
+          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json' 
+        }
+      });
+      
+      console.log('ResultsImage saved to Airtable successfully');
+    } catch (updateError) {
+      console.error('Error saving ResultsImage to Airtable:', updateError.message);
+      // Продолжаем выполнение даже если сохранение не удалось
+    }
+
+    res.json({ 
+      success: true, 
+      imageUrl: uploadResult.url,
+      fileId: uploadResult.fileId
     });
 
-    if (imgbbResponse.data.success) {
-      console.log('Image uploaded to ImgBB:', imgbbResponse.data.data.url);
-      
-      // СОХРАНЯЕМ URL ИЗОБРАЖЕНИЯ В AIRTABLE
-      const imageUrl = imgbbResponse.data.data.url;
-      
-      try {
-        const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
-          fields: { 
-            ResultsImage: imageUrl
-          }
-        }, {
-          headers: { 
-            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            'Content-Type': 'application/json' 
-          }
-        });
-        
-        console.log('ResultsImage saved to Airtable successfully');
-      } catch (updateError) {
-        console.error('Error saving ResultsImage to Airtable:', updateError.message);
-        // Продолжаем выполнение даже если сохранение не удалось
-      }
-
-      res.json({ 
-        success: true, 
-        imageUrl: imageUrl,
-        imageId: imgbbResponse.data.data.id
-      });
-    } else {
-      console.error('ImgBB upload failed:', imgbbResponse.data);
-      res.status(500).json({ error: 'Failed to upload image to ImgBB' });
-    }
   } catch (error) {
     console.error('Generate results image error:', error.message);
     if (error.response) {
-      console.error('Airtable/ImgBB response:', error.response.data);
+      console.error('Airtable/Uploadcare response:', error.response.data);
     }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Тестовый эндпоинт для проверки сохранения ResultsImage
-app.post('/api/votings/:id/test-save', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const testUrl = 'https://via.placeholder.com/600x400/0000FF/FFFFFF?text=Test+Image';
-    
-    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
-      fields: { 
-        ResultsImage: testUrl
-      }
-    }, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
-    
-    console.log('Test save response:', updateResponse.data);
-    res.json({ success: true, data: updateResponse.data });
-  } catch (error) {
-    console.error('Test save error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Упрощенная версия для тестирования
-app.post('/api/votings/:id/generate-results-simple', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Просто возвращаем тестовое изображение
-    const testImageUrl = 'https://via.placeholder.com/800x600/007bff/ffffff?text=Results+Placeholder';
-    
-    // Сохраняем в Airtable
-    await axios.patch(`${VOTINGS_URL}/${id}`, {
-      fields: { 
-        ResultsImage: testImageUrl
-      }
-    }, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
-    
-    res.json({ 
-      success: true, 
-      imageUrl: testImageUrl,
-      message: 'Test image saved successfully'
-    });
-    
-  } catch (error) {
-    console.error('Simple generate error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -716,24 +749,24 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     }
     
     const filePath = req.file.path;
-    const formData = new FormData();
-    formData.append('image', fs.createReadStream(filePath));
+    const fileBuffer = fs.readFileSync(filePath);
     
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
-    });
+    // Загружаем в Uploadcare
+    const uploadResult = await uploadToUploadcare(
+      fileBuffer,
+      req.file.originalname || `option_image_${Date.now()}.jpg`,
+      req.file.mimetype
+    );
     
     fs.unlinkSync(filePath);
     
-    if (response.data.success) {
-      // Для Attachment поля возвращаем объект с url
-      res.json({ 
-        url: response.data.data.url,
-        filename: response.data.data.image.filename || `option_image_${Date.now()}.jpg`
-      });
-    } else {
-      res.status(500).json({ error: 'ImgBB upload failed' });
-    }
+    // Для Attachment поля возвращаем объект с url
+    res.json({ 
+      url: uploadResult.url,
+      filename: uploadResult.filename,
+      fileId: uploadResult.fileId
+    });
+    
   } catch (error) {
     console.error('Option image upload error:', error.message);
     if (req.file) fs.unlinkSync(req.file.path);
@@ -741,28 +774,50 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
   }
 });
 
-// ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
+// ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ (Uploadcare) ====================
 
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
+    
     const filePath = req.file.path;
-    const formData = new FormData();
-    formData.append('image', fs.createReadStream(filePath));
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, formData, {
-      headers: formData.getHeaders()
-    });
+    const fileBuffer = fs.readFileSync(filePath);
+    
+    // Загружаем в Uploadcare
+    const uploadResult = await uploadToUploadcare(
+      fileBuffer,
+      req.file.originalname || `upload_${Date.now()}.jpg`,
+      req.file.mimetype
+    );
+    
     fs.unlinkSync(filePath);
-    if (response.data.success) {
-      res.json({ url: response.data.data.url });
-    } else {
-      res.status(500).json({ error: 'ImgBB upload failed' });
-    }
+    
+    res.json({ 
+      url: uploadResult.url,
+      fileId: uploadResult.fileId,
+      filename: uploadResult.filename
+    });
+    
   } catch (error) {
     console.error('Upload error:', error.message);
     if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Новый эндпоинт для удаления изображений из Uploadcare
+app.delete('/api/upload/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    
+    await deleteFromUploadcare(fileId);
+    
+    res.json({ success: true, message: `File ${fileId} deleted successfully` });
+    
+  } catch (error) {
+    console.error('Delete file error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -995,6 +1050,7 @@ app.listen(port, () => {
   console.log(`Events URL: ${EVENTS_URL}`);
   console.log(`Ads URL: ${ADS_URL}`);
   console.log(`Votings URL: ${VOTINGS_URL}`);
+  console.log(`Uploadcare CDN: https://${UPLOADCARE_CDN_SUBDOMAIN}`);
   console.log('Make sure you have these columns in Airtable:');
   console.log('- Events: AttendeesIDs, AttendeesCount');
   console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results, OptionImages, ResultsImage');
