@@ -449,16 +449,55 @@
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
+    // ==================== ФУНКЦИИ ДЛЯ РАБОТЫ С ПРОКСИ ИЗОБРАЖЕНИЙ ====================
+
+    // Функция для получения URL через прокси
+    function getImageUrl(originalUrl) {
+        if (!originalUrl) return 'https://via.placeholder.com/150';
+        
+        // Если это уже прокси-URL или placeholder, возвращаем как есть
+        if (originalUrl.includes('/api/proxy/image') || originalUrl.includes('via.placeholder.com')) {
+            return originalUrl;
+        }
+        
+        // Для изображений с нашего CDN используем прокси
+        if (originalUrl.includes('62wb4q8n36.ucarecd.net')) {
+            const encodedUrl = encodeURIComponent(originalUrl);
+            return `${BACKEND_URL}/api/proxy/image?url=${encodedUrl}`;
+        }
+        
+        // Для других изображений (например, из внешних источников) оставляем как есть
+        return originalUrl;
+    }
+
+    // Функция для обработки ошибок загрузки изображений
+    function handleImageError(img) {
+        const originalSrc = img.src;
+        
+        // Если это прокси-URL и произошла ошибка, попробуем оригинальный URL
+        if (originalSrc.includes('/api/proxy/image')) {
+            const urlParams = new URLSearchParams(originalSrc.split('?')[1]);
+            const originalUrl = urlParams.get('url');
+            if (originalUrl) {
+                img.src = originalUrl;
+            } else {
+                img.src = 'https://via.placeholder.com/150';
+            }
+        } else {
+            img.src = 'https://via.placeholder.com/150';
+        }
+        
+        img.onerror = null; // Предотвращаем бесконечный цикл
+    }
+
+    // ==================== ТЕМА И ОСНОВНЫЕ ФУНКЦИИ ====================
+
     // Применение темы Telegram с адаптацией под системные настройки
     function applyTheme() {
-      // Проверяем системные предпочтения
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      
-      // Приоритет: тема Telegram -> системная тема -> светлая тема по умолчанию
       const theme = tg.themeParams;
       
       if (theme.bg_color) {
-        // Используем тему Telegram
         document.documentElement.style.setProperty('--bg-color', theme.bg_color || '#ffffff');
         document.documentElement.style.setProperty('--text-color', theme.text_color || '#000000');
         document.documentElement.style.setProperty('--hint-color', theme.hint_color || '#707579');
@@ -467,14 +506,11 @@
         document.documentElement.style.setProperty('--button-text-color', theme.button_text_color || '#ffffff');
         document.documentElement.style.setProperty('--secondary-bg-color', theme.secondary_bg_color || '#f4f4f5');
       } else if (prefersDark) {
-        // Темная тема по системным настройкам
         applyDarkTheme();
       } else {
-        // Светлая тема по умолчанию
         applyLightTheme();
       }
       
-      // Слушаем изменения системной темы
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
         if (!tg.themeParams.bg_color) {
           if (e.matches) {
@@ -530,6 +566,8 @@
       return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
     }
 
+    // ==================== ОТОБРАЖЕНИЕ СОБЫТИЙ, РЕКЛАМЫ И ГОЛОСОВАНИЙ ====================
+
     async function renderEvents() {
       const eventsContainer = document.getElementById('events');
       eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
@@ -559,7 +597,6 @@
         let events = [];
         let ads = [];
 
-        // Собираем активные голосования (всегда первые)
         if (votingsData.records) {
           activeVotings = votingsData.records
             .filter(record => record.fields.Status !== 'Completed')
@@ -570,7 +607,6 @@
             }));
         }
 
-        // Собираем события и сортируем по дате (от ближайших к будущим)
         if (eventsData.records) {
           events = eventsData.records
             .map(record => ({
@@ -581,7 +617,6 @@
             .sort((a, b) => a.date - b.date);
         }
 
-        // Собираем рекламу
         if (adsData.records) {
           ads = adsData.records.map(record => ({
             type: 'ad',
@@ -590,7 +625,6 @@
           }));
         }
 
-        // Формируем итоговый список: голосования первые, затем события, реклама каждые 2 события
         let allItems = [...activeVotings];
 
         let adIndex = 0;
@@ -622,6 +656,183 @@
       }
     }
 
+    function renderEventItem(record) {
+      const eventsContainer = document.getElementById('events');
+      const event = record.fields || {};
+      const attendeesCount = event.AttendeesCount || 0;
+      
+      const div = document.createElement('div');
+      div.className = 'event-card p-2 fade-in';
+      div.innerHTML = `
+        <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
+        <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
+        <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
+        <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
+        <img src="${getImageUrl(event.Image?.[0]?.url)}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy" onerror="handleImageError(this)">
+      `;
+      div.addEventListener('click', () => showEventModal(record));
+      eventsContainer.appendChild(div);
+    }
+
+    function renderAdItem(record) {
+      const eventsContainer = document.getElementById('events');
+      const ad = record.fields || {};
+      
+      const div = document.createElement('div');
+      div.className = 'ad-card p-2 fade-in relative';
+      div.innerHTML = `
+        <div class="ad-badge">Реклама</div>
+        <h3 class="text-sm font-bold">${ad.Title || 'Реклама'}</h3>
+        <p class="text-xs">${ad.Description || 'Специальное предложение'}</p>
+        <img src="${getImageUrl(ad.IMG?.[0]?.url)}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy" onerror="handleImageError(this)">
+      `;
+      div.addEventListener('click', () => showAdModal(record));
+      eventsContainer.appendChild(div);
+    }
+
+    async function renderVotingItem(record) {
+      const eventsContainer = document.getElementById('events');
+      const voting = record.fields || {};
+      const isCompleted = voting.Status === 'Completed';
+      const eventTitle = voting.EventID ? await getEventTitleById(voting.EventID) : '';
+      
+      const div = document.createElement('div');
+      div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
+      
+      if (isCompleted) {
+        div.style.background = 'var(--voting-completed-bg)';
+        div.style.borderColor = 'var(--voting-completed-border)';
+        div.style.color = 'var(--voting-completed-text)';
+      }
+      
+      div.innerHTML = `
+        <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
+        <h3 class="text-sm font-bold">${voting.Title || 'Без названия'}</h3>
+        <p class="text-xs">${voting.Description || ''}</p>
+        ${voting.EventID ? `<p class="text-xs text-[var(--hint-color)]">Для мероприятия: ${eventTitle}</p>` : ''}
+        <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'} mt-1">
+          ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
+        </p>
+      `;
+      
+      div.addEventListener('click', () => showVotingModal(record));
+      eventsContainer.appendChild(div);
+    }
+
+    // ==================== МОДАЛЬНЫЕ ОКНА ====================
+
+    async function showEventModal(record) {
+      const modal = document.getElementById('eventModal');
+      const event = record.fields || {};
+      currentEventRecord = record;
+      currentAttendeesCount = event.AttendeesCount || 0;
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events/${record.id}/attend-status/${user.id}`);
+        if (response.ok) {
+          const status = await response.json();
+          isUserAttending = status.isAttending;
+        } else {
+          isUserAttending = false;
+        }
+      } catch (err) {
+        console.error('Error checking attend status:', err);
+        isUserAttending = false;
+      }
+      
+      document.getElementById('modalTitle').textContent = event.Title || 'Без названия';
+      document.getElementById('modalDate').textContent = formatDate(event.Date) || 'Без даты';
+      document.getElementById('modalLocation').textContent = event.Location || 'Без места';
+      document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
+      document.getElementById('modalImage').src = getImageUrl(event.Image?.[0]?.url);
+      document.getElementById('modalImage').onerror = function() { handleImageError(this); };
+      document.getElementById('attendeesCount').textContent = currentAttendeesCount;
+      
+      const mapButtonContainer = document.getElementById('modalMapButtonContainer');
+      const mapButton = document.getElementById('modalMapButton');
+      
+      if (event.MapLink) {
+        mapButtonContainer.classList.remove('hidden');
+        mapButton.onclick = () => tg.openLink(event.MapLink);
+      } else {
+        mapButtonContainer.classList.add('hidden');
+      }
+      
+      const attendButton = document.getElementById('attendButton');
+      if (isUserAttending) {
+        attendButton.textContent = 'Не пойду';
+        attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+        attendButton.onclick = () => unattendEvent();
+      } else {
+        attendButton.textContent = 'Я пойду!';
+        attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+        attendButton.onclick = () => attendEvent();
+      }
+      
+      modal.classList.remove('hidden');
+      tg.BackButton.show();
+      tg.BackButton.onClick(closeEventModal);
+    }
+
+    function showAdModal(record) {
+      const modal = document.getElementById('adModal');
+      const ad = record.fields || {};
+      
+      document.getElementById('adModalTitle').textContent = ad.Title || 'Реклама';
+      document.getElementById('adModalDescription').textContent = ad.Description || 'Специальное предложение';
+      document.getElementById('adModalImage').src = getImageUrl(ad.IMG?.[0]?.url);
+      document.getElementById('adModalImage').onerror = function() { handleImageError(this); };
+      
+      const adButton = document.getElementById('adModalButton');
+      if (ad.URL) {
+        adButton.onclick = () => tg.openLink(ad.URL);
+        adButton.style.display = 'block';
+      } else {
+        adButton.style.display = 'none';
+      }
+      
+      modal.classList.remove('hidden');
+      tg.BackButton.show();
+      tg.BackButton.onClick(closeAdModal);
+    }
+
+    function showVotingModal(record) {
+      const modal = document.getElementById('votingModal');
+      const voting = record.fields || {};
+      currentVotingRecord = record;
+
+      document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
+      document.getElementById('votingModalDescription').textContent = voting.Description || '';
+
+      try {
+        fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
+          .then(response => {
+            if (response.ok) {
+              return response.json();
+            }
+            throw new Error('Ошибка проверки статуса голосования');
+          })
+          .then(status => {
+            if (status.hasVoted || voting.Status === 'Completed') {
+              showVotingResults(voting, status.userVote, record.id);
+            } else {
+              showVotingOptions(voting);
+            }
+          })
+          .catch(err => {
+            console.error('Error checking vote status:', err);
+            showVotingOptions(voting);
+          });
+      } catch (err) {
+        console.error('Error in showVotingModal:', err);
+        showVotingOptions(voting);
+      }
+
+      modal.classList.remove('hidden');
+      tg.BackButton.show();
+      tg.BackButton.onClick(closeVotingModal);
+    }
+
     function showVotingOptions(voting) {
       const optionsContainer = document.getElementById('votingOptions');
       optionsContainer.innerHTML = '<h4 class="font-bold mb-2 text-[var(--text-color)]">Выберите номинанта:</h4>';
@@ -641,8 +852,8 @@
           if (optionImages[index] && optionImages[index].url) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
-                <img src="${optionImages[index].url}" alt="${option}" 
-                     class="w-24 h-24 object-cover rounded-lg border">
+                <img src="${getImageUrl(optionImages[index].url)}" alt="${option}" 
+                     class="w-24 h-24 object-cover rounded-lg border" onerror="handleImageError(this)">
               </div>
             `;
           }
@@ -666,6 +877,229 @@
         updateVoteButtons();
       }
     }
+
+    async function showVotingResults(voting, userVote, votingId) {
+      const optionsContainer = document.getElementById('votingOptions');
+      const isCompleted = voting.Status === 'Completed';
+      
+      optionsContainer.innerHTML = isCompleted ? 
+        '<h4 class="font-bold mb-2 text-[var(--text-color)]">Финальные результаты:</h4>' : 
+        '<h4 class="font-bold mb-2 text-[var(--text-color)]">Текущие результаты:</h4>';
+      
+      document.getElementById('getLocationBtn').style.display = 'none';
+      
+      if (voting.ResultsImageProxy || voting.ResultsImage) {
+        const imageContainer = document.getElementById('votingResultsImageContainer');
+        const resultsImage = document.getElementById('votingResultsImage');
+        const downloadBtn = document.getElementById('downloadResultsBtn');
+        const generateBtn = document.getElementById('generateResultsBtn');
+        
+        resultsImage.src = getImageUrl(voting.ResultsImageProxy || voting.ResultsImage);
+        resultsImage.onerror = function() { handleImageError(this); };
+        imageContainer.classList.remove('hidden');
+        
+        downloadBtn.onclick = () => {
+          const link = document.createElement('a');
+          link.href = voting.ResultsImage || voting.ResultsImageProxy;
+          link.download = `results_${votingId}_${Date.now()}.jpg`;
+          link.click();
+        };
+        
+        generateBtn.onclick = () => generateResultsImage(votingId);
+      } else {
+        document.getElementById('votingResultsImageContainer').classList.add('hidden');
+      }
+      
+      if (voting.Options && voting.Options.split(',').length > 0) {
+        const optionsArray = voting.Options.split(',');
+        const optionImages = voting.OptionImages || [];
+        
+        const results = {};
+        optionsArray.forEach((option, index) => {
+          results[index] = {
+            option: option,
+            count: 0,
+            percentage: 0,
+            image: optionImages[index] ? optionImages[index].url : null
+          };
+        });
+        
+        if (voting.Votes) {
+          const votes = typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes;
+          Object.values(votes).forEach(voteIndex => {
+            if (results[voteIndex]) {
+              results[voteIndex].count++;
+            }
+          });
+        }
+        
+        const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
+        Object.values(results).forEach(result => {
+          result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
+        });
+        
+        Object.values(results).forEach((result, index) => {
+          const isUserChoice = userVote === index;
+          
+          const resultDiv = document.createElement('div');
+          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-[var(--bg-color)] voting-option';
+          
+          let imageHtml = '';
+          if (result.image) {
+            imageHtml = `
+              <div class="flex-shrink-0 mr-3">
+                <img src="${getImageUrl(result.image)}" alt="${result.option}" 
+                     class="w-24 h-24 object-cover rounded-lg border" onerror="handleImageError(this)">
+              </div>
+            `;
+          }
+          
+          resultDiv.innerHTML = `
+            <div class="flex items-start">
+              ${imageHtml}
+              <div class="flex-grow">
+                <div class="flex justify-between items-start mb-2">
+                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-[var(--text-color)]'}">
+                    ${result.option}
+                  </span>
+                  <span class="text-sm text-[var(--hint-color)] whitespace-nowrap">
+                    ${result.count} голосов (${result.percentage}%)
+                  </span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                  <div class="bg-blue-600 h-2 rounded-full" style="width: ${result.percentage}%"></div>
+                </div>
+                ${isUserChoice ? '<div class="text-xs text-blue-600">✓ Ваш выбор</div>' : ''}
+              </div>
+            </div>
+          `;
+          
+          optionsContainer.appendChild(resultDiv);
+        });
+        
+        if (isCompleted) {
+          optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
+        }
+
+        if (isCompleted && voting.Results) {
+          const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
+          let resultsHtml = '<h4 class="font-bold mb-2 mt-4 text-[var(--text-color)]">Итоги:</h4>';
+          Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
+            resultsHtml += `
+              <p class="text-[var(--text-color)]">${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
+            `;
+          });
+          optionsContainer.innerHTML += resultsHtml;
+        }
+      }
+    }
+
+    function closeEventModal() {
+      document.getElementById('eventModal').classList.add('hidden');
+      tg.BackButton.hide();
+      currentEventRecord = null;
+    }
+
+    function closeAdModal() {
+      document.getElementById('adModal').classList.add('hidden');
+      tg.BackButton.hide();
+    }
+
+    function closeVotingModal() {
+      document.getElementById('votingModal').classList.add('hidden');
+      document.getElementById('votingResultsImageContainer').classList.add('hidden');
+      tg.BackButton.hide();
+      currentVotingRecord = null;
+      currentResultsImageUrl = null;
+    }
+
+    // ==================== ФУНКЦИОНАЛ "Я ПОЙДУ!" ====================
+
+    async function attendEvent() {
+      if (!currentEventRecord) return;
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/attend`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: user.id
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          currentAttendeesCount = result.count;
+          isUserAttending = true;
+          
+          document.getElementById('attendeesCount').textContent = result.count;
+          
+          const attendButton = document.getElementById('attendButton');
+          attendButton.textContent = 'Не пойду';
+          attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+          attendButton.onclick = () => unattendEvent();
+          
+          alert('Отлично! Вы идете на мероприятие!');
+        } else {
+          const error = await response.json();
+          if (error.error === 'User already attending') {
+            alert('Вы уже записаны на это мероприятие!');
+            isUserAttending = true;
+            const attendButton = document.getElementById('attendButton');
+            attendButton.textContent = 'Не пойду';
+            attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+            attendButton.onclick = () => unattendEvent();
+          } else {
+            throw new Error(error.error || 'Ошибка при записи');
+          }
+        }
+      } catch (err) {
+        console.error('Attend error:', err);
+        alert('Ошибка при записи на мероприятие: ' + err.message);
+      }
+    }
+
+    async function unattendEvent() {
+      if (!currentEventRecord) return;
+      
+      if (!confirm('Вы действительно не пойдете на мероприятие?')) return;
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/unattend`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: user.id
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          currentAttendeesCount = result.count;
+          isUserAttending = false;
+          
+          document.getElementById('attendeesCount').textContent = result.count;
+          
+          const attendButton = document.getElementById('attendButton');
+          attendButton.textContent = 'Я пойду!';
+          attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+          attendButton.onclick = () => attendEvent();
+          
+          alert('Вы больше не идете на мероприятие');
+        } else {
+          throw new Error('Ошибка при отмене записи');
+        }
+      } catch (err) {
+        console.error('Unattend error:', err);
+        alert('Ошибка при отмене записи: ' + err.message);
+      }
+    }
+
+    // ==================== ГОЛОСОВАНИЕ ====================
 
     function updateVoteButtons() {
       const voteButtons = document.querySelectorAll('.vote-button');
@@ -762,159 +1196,6 @@
       );
     });
 
-    function showVotingModal(record) {
-      const modal = document.getElementById('votingModal');
-      const voting = record.fields || {};
-      currentVotingRecord = record;
-
-      document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
-      document.getElementById('votingModalDescription').textContent = voting.Description || '';
-
-      try {
-        fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
-          .then(response => {
-            if (response.ok) {
-              return response.json();
-            }
-            throw new Error('Ошибка проверки статуса голосования');
-          })
-          .then(status => {
-            if (status.hasVoted || voting.Status === 'Completed') {
-              showVotingResults(voting, status.userVote, record.id);
-            } else {
-              showVotingOptions(voting);
-            }
-          })
-          .catch(err => {
-            console.error('Error checking vote status:', err);
-            showVotingOptions(voting);
-          });
-      } catch (err) {
-        console.error('Error in showVotingModal:', err);
-        showVotingOptions(voting);
-      }
-
-      modal.classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeVotingModal);
-    }
-
-    async function showVotingResults(voting, userVote, votingId) {
-      const optionsContainer = document.getElementById('votingOptions');
-      const isCompleted = voting.Status === 'Completed';
-      
-      optionsContainer.innerHTML = isCompleted ? 
-        '<h4 class="font-bold mb-2 text-[var(--text-color)]">Финальные результаты:</h4>' : 
-        '<h4 class="font-bold mb-2 text-[var(--text-color)]">Текущие результаты:</h4>';
-      
-      document.getElementById('getLocationBtn').style.display = 'none';
-      
-      // Отображение изображения результатов
-      if (voting.ResultsImage) {
-        const imageContainer = document.getElementById('votingResultsImageContainer');
-        const resultsImage = document.getElementById('votingResultsImage');
-        const downloadBtn = document.getElementById('downloadResultsBtn');
-        const generateBtn = document.getElementById('generateResultsBtn');
-        
-        resultsImage.src = voting.ResultsImage;
-        imageContainer.classList.remove('hidden');
-        
-        downloadBtn.onclick = () => {
-          const link = document.createElement('a');
-          link.href = voting.ResultsImage;
-          link.download = `results_${votingId}_${Date.now()}.jpg`;
-          link.click();
-        };
-        
-        generateBtn.onclick = () => generateResultsImage(votingId);
-      } else {
-        document.getElementById('votingResultsImageContainer').classList.add('hidden');
-      }
-      
-      if (voting.Options && voting.Options.split(',').length > 0) {
-        const optionsArray = voting.Options.split(',');
-        const optionImages = voting.OptionImages || [];
-        
-        const results = {};
-        optionsArray.forEach((option, index) => {
-          results[index] = {
-            option: option,
-            count: 0,
-            percentage: 0,
-            image: optionImages[index] ? optionImages[index].url : null
-          };
-        });
-        
-        if (voting.Votes) {
-          const votes = typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes;
-          Object.values(votes).forEach(voteIndex => {
-            if (results[voteIndex]) {
-              results[voteIndex].count++;
-            }
-          });
-        }
-        
-        const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
-        Object.values(results).forEach(result => {
-          result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
-        });
-        
-        Object.values(results).forEach((result, index) => {
-          const isUserChoice = userVote === index;
-          
-          const resultDiv = document.createElement('div');
-          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-[var(--bg-color)] voting-option';
-          
-          let imageHtml = '';
-          if (result.image) {
-            imageHtml = `
-              <div class="flex-shrink-0 mr-3">
-                <img src="${result.image}" alt="${result.option}" 
-                     class="w-24 h-24 object-cover rounded-lg border">
-              </div>
-            `;
-          }
-          
-          resultDiv.innerHTML = `
-            <div class="flex items-start">
-              ${imageHtml}
-              <div class="flex-grow">
-                <div class="flex justify-between items-start mb-2">
-                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-[var(--text-color)]'}">
-                    ${result.option}
-                  </span>
-                  <span class="text-sm text-[var(--hint-color)] whitespace-nowrap">
-                    ${result.count} голосов (${result.percentage}%)
-                  </span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <div class="bg-blue-600 h-2 rounded-full" style="width: ${result.percentage}%"></div>
-                </div>
-                ${isUserChoice ? '<div class="text-xs text-blue-600">✓ Ваш выбор</div>' : ''}
-              </div>
-            </div>
-          `;
-          
-          optionsContainer.appendChild(resultDiv);
-        });
-        
-        if (isCompleted) {
-          optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
-        }
-
-        if (isCompleted && voting.Results) {
-          const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
-          let resultsHtml = '<h4 class="font-bold mb-2 mt-4 text-[var(--text-color)]">Итоги:</h4>';
-          Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
-            resultsHtml += `
-              <p class="text-[var(--text-color)]">${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
-            `;
-          });
-          optionsContainer.innerHTML += resultsHtml;
-        }
-      }
-    }
-
     async function generateResultsImage(votingId) {
       try {
         const response = await fetch(`${BACKEND_URL}/api/votings/${votingId}/generate-results`, {
@@ -924,20 +1205,19 @@
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
-            currentResultsImageUrl = data.imageUrl;
+            currentResultsImageUrl = data.proxyUrl || data.imageUrl;
             
-            // Сохраняем URL изображения в базе данных
             await fetch(`${BACKEND_URL}/api/votings/${votingId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 fields: {
-                  ResultsImage: data.imageUrl
+                  ResultsImage: data.imageUrl,
+                  ResultsImageProxy: data.proxyUrl
                 }
               })
             });
             
-            // Обновляем отображение
             showVotingModal(currentVotingRecord);
             alert('Изображение с результатами успешно сгенерировано!');
           } else {
@@ -953,215 +1233,219 @@
       }
     }
 
-    function closeVotingModal() {
-      document.getElementById('votingModal').classList.add('hidden');
-      document.getElementById('votingResultsImageContainer').classList.add('hidden');
-      tg.BackButton.hide();
-      currentVotingRecord = null;
-      currentResultsImageUrl = null;
-    }
+    // ==================== АДМИН-ПАНЕЛЬ ====================
 
-    function renderEventItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const event = record.fields || {};
-      const attendeesCount = event.AttendeesCount || 0;
-      
-      const div = document.createElement('div');
-      div.className = 'event-card p-2 fade-in';
-      div.innerHTML = `
-        <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
-        <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
-        <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
-        <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
-        <img src="${event.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
-      `;
-      div.addEventListener('click', () => showEventModal(record));
-      eventsContainer.appendChild(div);
-    }
-
-    async function showEventModal(record) {
-      const modal = document.getElementById('eventModal');
-      const event = record.fields || {};
-      currentEventRecord = record;
-      currentAttendeesCount = event.AttendeesCount || 0;
-      
+    async function checkIsAdmin(userId) {
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${record.id}/attend-status/${user.id}`);
-        if (response.ok) {
-          const status = await response.json();
-          isUserAttending = status.isAttending;
+        const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
+        const data = await response.json();
+        return data.isAdmin;
+      } catch (err) {
+        console.error('Error checking admin:', err);
+        return false;
+      }
+    }
+
+    async function initAdmin() {
+      try {
+        const isAdmin = await checkIsAdmin(user.id);
+        console.log('Is Admin:', isAdmin);
+        if (isAdmin) {
+          document.getElementById('adminBtn').classList.remove('hidden');
         } else {
-          isUserAttending = false;
+          console.log('Admin panel hidden - not admin');
+          document.getElementById('adminBtn').classList.add('hidden');
         }
       } catch (err) {
-        console.error('Error checking attend status:', err);
-        isUserAttending = false;
+        console.error('Admin init error:', err);
+        document.getElementById('adminBtn').classList.add('hidden');
       }
-      
-      document.getElementById('modalTitle').textContent = event.Title || 'Без названия';
-      document.getElementById('modalDate').textContent = formatDate(event.Date) || 'Без даты';
-      document.getElementById('modalLocation').textContent = event.Location || 'Без места';
-      document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
-      document.getElementById('modalImage').src = event.Image?.[0]?.url || 'https://via.placeholder.com/150';
-      document.getElementById('attendeesCount').textContent = currentAttendeesCount;
-      
-      const mapButtonContainer = document.getElementById('modalMapButtonContainer');
-      const mapButton = document.getElementById('modalMapButton');
-      
-      if (event.MapLink) {
-        mapButtonContainer.classList.remove('hidden');
-        mapButton.onclick = () => tg.openLink(event.MapLink);
-      } else {
-        mapButtonContainer.classList.add('hidden');
-      }
-      
-      const attendButton = document.getElementById('attendButton');
-      if (isUserAttending) {
-        attendButton.textContent = 'Не пойду';
-        attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-        attendButton.onclick = () => unattendEvent();
-      } else {
-        attendButton.textContent = 'Я пойду!';
-        attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
-        attendButton.onclick = () => attendEvent();
-      }
-      
-      modal.classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeEventModal);
     }
 
-    async function attendEvent() {
-      if (!currentEventRecord) return;
+    function showTab(tabId) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
       
+      if (tabId === 'tab-list') {
+        renderAdminEvents();
+      } else if (tabId === 'tab-ads-list') {
+        loadAds();
+      } else if (tabId === 'tab-votings-list') {
+        loadVotings();
+      }
+    }
+
+    function showAdminModal() {
+      showTab('tab-list');
+      clearForm();
+      clearAdForm();
+      loadEventsForVoting();
+      document.getElementById('adminModal').classList.remove('hidden');
+      tg.BackButton.show();
+      tg.BackButton.onClick(closeAdminModal);
+    }
+
+    function closeAdminModal() {
+      document.getElementById('adminModal').classList.add('hidden');
+      tg.BackButton.hide();
+    }
+
+    async function renderAdminEvents() {
+      const eventList = document.getElementById('eventList');
+      eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/attend`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id
-          })
-        });
+        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Ошибка загрузки ивентов');
+        }
         
-        if (response.ok) {
-          const result = await response.json();
-          currentAttendeesCount = result.count;
-          isUserAttending = true;
-          
-          document.getElementById('attendeesCount').textContent = result.count;
-          
-          const attendButton = document.getElementById('attendButton');
-          attendButton.textContent = 'Не пойду';
-          attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-          attendButton.onclick = () => unattendEvent();
-          
-          alert('Отлично! Вы идете на мероприятие!');
+        const data = await response.json();
+        eventList.innerHTML = '';
+        
+        if (data.records && data.records.length > 0) {
+          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
+          data.records.forEach(record => {
+            const event = record.fields || {};
+            const safeTitle = event.Title ? event.Title.replace(/'/g, "\\'") : '';
+            const safeLocation = event.Location ? event.Location.replace(/'/g, "\\'") : '';
+            const safeDescription = event.Description ? event.Description.replace(/'/g, "\\'") : '';
+            const safeMapLink = event.MapLink ? event.MapLink.replace(/'/g, "\\'") : '';
+            const safeImageUrl = event.Image?.[0]?.url ? event.Image[0].url.replace(/'/g, "\\'") : '';
+            
+            const div = document.createElement('div');
+            div.className = 'p-2 border-b border-[var(--hint-color)]';
+            div.innerHTML = `
+              <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
+              <p class="text-xs">Идут: ${event.AttendeesCount || 0} человек</p>
+              <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
+              <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
+            `;
+            eventList.appendChild(div);
+          });
         } else {
-          const error = await response.json();
-          if (error.error === 'User already attending') {
-            alert('Вы уже записаны на это мероприятие!');
-            isUserAttending = true;
-            const attendButton = document.getElementById('attendButton');
-            attendButton.textContent = 'Не пойду';
-            attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-            attendButton.onclick = () => unattendEvent();
+          eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Ивенты не найдены</p>';
+        }
+      } catch (err) {
+        alert(`Ошибка: ${err.message}`);
+      }
+    }
+
+    function clearForm() {
+      document.getElementById('eventRecordId').value = '';
+      document.getElementById('eventId').value = '';
+      document.getElementById('eventTitle').value = '';
+      document.getElementById('eventType').value = '';
+      document.getElementById('eventDate').value = '';
+      document.getElementById('eventLocation').value = '';
+      document.getElementById('eventDescription').value = '';
+      document.getElementById('eventMapLink').value = '';
+      document.getElementById('eventImage').value = '';
+    }
+
+    function editEvent(recordId, id, title, type, date, location, description, mapLink, imageUrl) {
+      document.getElementById('eventRecordId').value = recordId;
+      document.getElementById('eventId').value = id;
+      document.getElementById('eventTitle').value = title;
+      document.getElementById('eventType').value = type;
+      document.getElementById('eventDate').value = date;
+      document.getElementById('eventLocation').value = location;
+      document.getElementById('eventDescription').value = description;
+      document.getElementById('eventMapLink').value = mapLink || '';
+      if (imageUrl && imageUrl.includes('62wb4q8n36.ucarecd.net')) {
+        alert('Текущее изображение: ' + getImageUrl(imageUrl));
+      } else {
+        alert('Текущее изображение: ' + imageUrl);
+      }
+      showTab('tab-form');
+    }
+
+    async function deleteEvent(recordId) {
+      if (!confirm('Удалить ивент?')) return;
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events/${recordId}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Ошибка удаления');
+        alert('Ивент удален');
+        renderAdminEvents();
+        renderEvents();
+      } catch (err) {
+        alert(`Ошибка: ${err.message}`);
+      }
+    }
+
+    document.getElementById('eventForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      let eventId = document.getElementById('eventId').value;
+      if (!eventId) eventId = String(Math.floor(Math.random() * 1000000));
+      
+      const recordId = document.getElementById('eventRecordId').value;
+      const eventData = {
+        fields: {
+          ID: eventId,
+          Title: document.getElementById('eventTitle').value,
+          Type: document.getElementById('eventType').value,
+          Date: document.getElementById('eventDate').value,
+          Location: document.getElementById('eventLocation').value,
+          Description: document.getElementById('eventDescription').value,
+          AttendeesCount: 0,
+          AttendeesIDs: ''
+        }
+      };
+      
+      const mapLink = document.getElementById('eventMapLink').value;
+      if (mapLink) eventData.fields.MapLink = mapLink;
+      
+      const imageFile = document.getElementById('eventImage').files[0];
+      if (imageFile) {
+        try {
+          const uploadForm = new FormData();
+          uploadForm.append('image', imageFile);
+          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
+            method: 'POST',
+            body: uploadForm
+          });
+          const uploadData = await uploadResponse.json();
+          if (uploadData.url) {
+            eventData.fields.Image = [{ 
+              url: uploadData.url,
+              filename: `event_image_${Date.now()}.jpg`
+            }];
           } else {
-            throw new Error(error.error || 'Ошибка при записи');
+            throw new Error('Ошибка загрузки изображения');
           }
+        } catch (err) {
+          alert(`Ошибка загрузки изображения: ${err.message}`);
+          return;
         }
-      } catch (err) {
-        console.error('Attend error:', err);
-        alert('Ошибка при записи на мероприятие: ' + err.message);
       }
-    }
-
-    async function unattendEvent() {
-      if (!currentEventRecord) return;
-      
-      if (!confirm('Вы действительно не пойдете на мероприятие?')) return;
       
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/unattend`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id
-          })
+        const method = recordId ? 'PATCH' : 'POST';
+        const url = recordId ? `${BACKEND_URL}/api/events/${recordId}` : `${BACKEND_URL}/api/events`;
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData)
         });
         
-        if (response.ok) {
-          const result = await response.json();
-          currentAttendeesCount = result.count;
-          isUserAttending = false;
-          
-          document.getElementById('attendeesCount').textContent = result.count;
-          
-          const attendButton = document.getElementById('attendButton');
-          attendButton.textContent = 'Я пойду!';
-          attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
-          attendButton.onclick = () => attendEvent();
-          
-          alert('Вы больше не идете на мероприятие');
-        } else {
-          throw new Error('Ошибка при отмене записи');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Ошибка сохранения события');
         }
+        
+        alert('Событие сохранено');
+        clearForm();
+        renderAdminEvents();
+        renderEvents();
+        showTab('tab-list');
       } catch (err) {
-        console.error('Unattend error:', err);
-        alert('Ошибка при отмене записи: ' + err.message);
+        alert(`Ошибка сохранения: ${err.message}`);
       }
-    }
-
-    function closeEventModal() {
-      document.getElementById('eventModal').classList.add('hidden');
-      tg.BackButton.hide();
-      currentEventRecord = null;
-    }
-
-    function renderAdItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const ad = record.fields || {};
-      
-      const div = document.createElement('div');
-      div.className = 'ad-card p-2 fade-in relative';
-      div.innerHTML = `
-        <div class="ad-badge">Реклама</div>
-        <h3 class="text-sm font-bold">${ad.Title || 'Реклама'}</h3>
-        <p class="text-xs">${ad.Description || 'Специальное предложение'}</p>
-        <img src="${ad.IMG?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
-      `;
-      div.addEventListener('click', () => showAdModal(record));
-      eventsContainer.appendChild(div);
-    }
-
-    function showAdModal(record) {
-      const modal = document.getElementById('adModal');
-      const ad = record.fields || {};
-      
-      document.getElementById('adModalTitle').textContent = ad.Title || 'Реклама';
-      document.getElementById('adModalDescription').textContent = ad.Description || 'Специальное предложение';
-      document.getElementById('adModalImage').src = ad.IMG?.[0]?.url || 'https://via.placeholder.com/150';
-      
-      const adButton = document.getElementById('adModalButton');
-      if (ad.URL) {
-        adButton.onclick = () => tg.openLink(ad.URL);
-        adButton.style.display = 'block';
-      } else {
-        adButton.style.display = 'none';
-      }
-      
-      modal.classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeAdModal);
-    }
-
-    function closeAdModal() {
-      document.getElementById('adModal').classList.add('hidden');
-      tg.BackButton.hide();
-    }
+    });
 
     async function loadAds() {
       const adsList = document.getElementById('adsList');
@@ -1208,7 +1492,11 @@
       document.getElementById('adTitle').value = title || '';
       document.getElementById('adDescription').value = description || '';
       document.getElementById('adUrl').value = url || '';
-      alert('Текущее изображение: ' + (imageUrl || 'отсутствует'));
+      if (imageUrl && imageUrl.includes('62wb4q8n36.ucarecd.net')) {
+        alert('Текущее изображение: ' + getImageUrl(imageUrl));
+      } else {
+        alert('Текущее изображение: ' + imageUrl);
+      }
       showTab('tab-ad-form');
     }
 
@@ -1359,7 +1647,6 @@
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
-            // Открываем изображение в новой вкладке
             window.open(data.imageUrl, '_blank');
             alert('Изображение с результатами успешно сгенерировано!');
           } else {
@@ -1425,7 +1712,7 @@
       
       const fileInput = newOption.querySelector('.option-image');
       fileInput.addEventListener('change', function(e) {
-        handleImageUpload(e, this);
+        handleOptionImageUpload(e, this);
       });
     }
 
@@ -1434,7 +1721,7 @@
       fileInput.click();
     }
 
-    async function handleImageUpload(event, fileInput) {
+    async function handleOptionImageUpload(event, fileInput) {
       const file = event.target.files[0];
       if (!file) return;
       
@@ -1543,7 +1830,7 @@
             currentItem.querySelector('.option-name').value = option;
             if (imagesArray[index] && imagesArray[index].url) {
               optionImages[index] = imagesArray[index].url;
-              currentItem.querySelector('.option-preview').src = imagesArray[index].url;
+              currentItem.querySelector('.option-preview').src = getImageUrl(imagesArray[index].url);
               currentItem.querySelector('.option-preview').classList.remove('hidden');
               currentItem.querySelector('.image-status').textContent = 'Фото загружено';
             }
@@ -1703,247 +1990,14 @@
       return eventRecord ? eventRecord.fields.Title : eventId;
     }
 
-    async function renderVotingItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const voting = record.fields || {};
-      const isCompleted = voting.Status === 'Completed';
-      const eventTitle = voting.EventID ? await getEventTitleById(voting.EventID) : '';
-      
-      const div = document.createElement('div');
-      div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
-      
-      if (isCompleted) {
-        div.style.background = 'var(--voting-completed-bg)';
-        div.style.borderColor = 'var(--voting-completed-border)';
-        div.style.color = 'var(--voting-completed-text)';
-      }
-      
-      div.innerHTML = `
-        <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
-        <h3 class="text-sm font-bold">${voting.Title || 'Без названия'}</h3>
-        <p class="text-xs">${voting.Description || ''}</p>
-        ${voting.EventID ? `<p class="text-xs text-[var(--hint-color)]">Для мероприятия: ${eventTitle}</p>` : ''}
-        <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'} mt-1">
-          ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
-        </p>
-      `;
-      
-      div.addEventListener('click', () => showVotingModal(record));
-      eventsContainer.appendChild(div);
-    }
-
-    async function checkIsAdmin(userId) {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
-        const data = await response.json();
-        return data.isAdmin;
-      } catch (err) {
-        console.error('Error checking admin:', err);
-        return false;
-      }
-    }
-
-    async function initAdmin() {
-      try {
-        const isAdmin = await checkIsAdmin(user.id);
-        console.log('Is Admin:', isAdmin);
-        if (isAdmin) {
-          document.getElementById('adminBtn').classList.remove('hidden');
-        } else {
-          console.log('Admin panel hidden - not admin');
-          document.getElementById('adminBtn').classList.add('hidden');
-        }
-      } catch (err) {
-        console.error('Admin init error:', err);
-        document.getElementById('adminBtn').classList.add('hidden');
-      }
-    }
-
-    function showTab(tabId) {
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-      document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
-      document.getElementById(tabId).classList.add('active');
-      
-      if (tabId === 'tab-list') {
-        renderAdminEvents();
-      } else if (tabId === 'tab-ads-list') {
-        loadAds();
-      } else if (tabId === 'tab-votings-list') {
-        loadVotings();
-      }
-    }
-
-    async function renderAdminEvents() {
-      const eventList = document.getElementById('eventList');
-      eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки ивентов');
-        }
-        
-        const data = await response.json();
-        eventList.innerHTML = '';
-        
-        if (data.records && data.records.length > 0) {
-          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
-          data.records.forEach(record => {
-            const event = record.fields || {};
-            const safeTitle = event.Title ? event.Title.replace(/'/g, "\\'") : '';
-            const safeLocation = event.Location ? event.Location.replace(/'/g, "\\'") : '';
-            const safeDescription = event.Description ? event.Description.replace(/'/g, "\\'") : '';
-            const safeMapLink = event.MapLink ? event.MapLink.replace(/'/g, "\\'") : '';
-            const safeImageUrl = event.Image?.[0]?.url ? event.Image[0].url.replace(/'/g, "\\'") : '';
-            
-            const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)]';
-            div.innerHTML = `
-              <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
-              <p class="text-xs">Идут: ${event.AttendeesCount || 0} человек</p>
-              <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
-              <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
-            `;
-            eventList.appendChild(div);
-          });
-        } else {
-          eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Ивенты не найдены</p>';
-        }
-      } catch (err) {
-        alert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    function showAdminModal() {
-      showTab('tab-list');
-      clearForm();
-      clearAdForm();
-      loadEventsForVoting();
-      document.getElementById('adminModal').classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeAdminModal);
-    }
-
-    function closeAdminModal() {
-      document.getElementById('adminModal').classList.add('hidden');
-      tg.BackButton.hide();
-    }
-
-    function clearForm() {
-      document.getElementById('eventRecordId').value = '';
-      document.getElementById('eventId').value = '';
-      document.getElementById('eventTitle').value = '';
-      document.getElementById('eventType').value = '';
-      document.getElementById('eventDate').value = '';
-      document.getElementById('eventLocation').value = '';
-      document.getElementById('eventDescription').value = '';
-      document.getElementById('eventMapLink').value = '';
-      document.getElementById('eventImage').value = '';
-    }
-
-    function editEvent(recordId, id, title, type, date, location, description, mapLink, imageUrl) {
-      document.getElementById('eventRecordId').value = recordId;
-      document.getElementById('eventId').value = id;
-      document.getElementById('eventTitle').value = title;
-      document.getElementById('eventType').value = type;
-      document.getElementById('eventDate').value = date;
-      document.getElementById('eventLocation').value = location;
-      document.getElementById('eventDescription').value = description;
-      document.getElementById('eventMapLink').value = mapLink || '';
-      alert('Текущее изображение: ' + imageUrl);
-      showTab('tab-form');
-    }
-
-    async function deleteEvent(recordId) {
-      if (!confirm('Удалить ивент?')) return;
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${recordId}`, {
-          method: 'DELETE'
-        });
-        if (!response.ok) throw new Error('Ошибка удаления');
-        alert('Ивент удален');
-        renderAdminEvents();
-        renderEvents();
-      } catch (err) {
-        alert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    document.getElementById('eventForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      let eventId = document.getElementById('eventId').value;
-      if (!eventId) eventId = String(Math.floor(Math.random() * 1000000));
-      
-      const recordId = document.getElementById('eventRecordId').value;
-      const eventData = {
-        fields: {
-          ID: eventId,
-          Title: document.getElementById('eventTitle').value,
-          Type: document.getElementById('eventType').value,
-          Date: document.getElementById('eventDate').value,
-          Location: document.getElementById('eventLocation').value,
-          Description: document.getElementById('eventDescription').value,
-          AttendeesCount: 0,
-          AttendeesIDs: ''
-        }
-      };
-      
-      const mapLink = document.getElementById('eventMapLink').value;
-      if (mapLink) eventData.fields.MapLink = mapLink;
-      
-      const imageFile = document.getElementById('eventImage').files[0];
-      if (imageFile) {
-        try {
-          const uploadForm = new FormData();
-          uploadForm.append('image', imageFile);
-          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
-            method: 'POST',
-            body: uploadForm
-          });
-          const uploadData = await uploadResponse.json();
-          if (uploadData.url) {
-            eventData.fields.Image = [{ 
-              url: uploadData.url,
-              filename: `event_image_${Date.now()}.jpg`
-            }];
-          } else {
-            throw new Error('Ошибка загрузки изображения');
-          }
-        } catch (err) {
-          alert(`Ошибка загрузки изображения: ${err.message}`);
-          return;
-        }
-      }
-      
-      try {
-        const method = recordId ? 'PATCH' : 'POST';
-        const url = recordId ? `${BACKEND_URL}/api/events/${recordId}` : `${BACKEND_URL}/api/events`;
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(eventData)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения события');
-        }
-        
-        alert('Событие сохранено');
-        clearForm();
-        renderAdminEvents();
-        renderEvents();
-        showTab('tab-list');
-      } catch (err) {
-        alert(`Ошибка сохранения: ${err.message}`);
-      }
-    });
+    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
     // Инициализация приложения
     applyTheme();
     initAdmin();
     renderEvents();
+
+    // Инициализация формы голосования
     addOption();
   </script>
 </body>
