@@ -57,11 +57,16 @@ app.get('/', (req, res) => {
 
 /**
  * Генерирует CDN URL согласно документации Uploadcare CDN
- * Формат: https://cdn.mydomain.com/{uuid}/{operation1}/{operation2}/.../{filename}
  */
 function generateUploadcareCDNUrl(fileId, operations = [], filename = null) {
-  // Базовый URL с кастомным CDN доменом
-  let cdnUrl = `${UPLOADCARE_CDN_BASE}/${fileId}`;
+  // Нормализуем CDN base URL
+  let cdnBase = UPLOADCARE_CDN_BASE.trim();
+  
+  // Убираем слеши в конце
+  cdnBase = cdnBase.replace(/\/+$/, '');
+  
+  // Строим URL
+  let cdnUrl = `${cdnBase}/${fileId}`;
   
   // Добавляем операции
   if (operations && operations.length > 0) {
@@ -76,60 +81,6 @@ function generateUploadcareCDNUrl(fileId, operations = [], filename = null) {
   }
   
   return cdnUrl;
-}
-
-/**
- * Генерирует URL для операций с изображениями
- */
-function generateImageUrlWithOperations(fileId, operations = {}) {
-  const ops = [];
-  
-  // Ресайз
-  if (operations.resize) {
-    ops.push(`-/resize/${operations.resize}/`);
-  }
-  
-  // Кроп
-  if (operations.crop) {
-    ops.push(`-/crop/${operations.crop}/`);
-  }
-  
-  // Формат
-  if (operations.format) {
-    ops.push(`-/format/${operations.format}/`);
-  }
-  
-  // Качество
-  if (operations.quality) {
-    ops.push(`-/quality/${operations.quality}/`);
-  }
-  
-  // Превью
-  if (operations.preview) {
-    ops.push(`-/preview/${operations.preview}/`);
-  }
-  
-  // Умный ресайз
-  if (operations.smartResize) {
-    ops.push(`-/smart_resize/${operations.smartResize}/`);
-  }
-  
-  // Установить размер
-  if (operations.setSize) {
-    ops.push(`-/set_size/${operations.setSize}/`);
-  }
-  
-  // Обрезать по размеру
-  if (operations.cropSize) {
-    ops.push(`-/crop_size/${operations.cropSize}/`);
-  }
-  
-  // Масштабировать
-  if (operations.scale) {
-    ops.push(`-/scale_crop/${operations.scale}/`);
-  }
-  
-  return generateUploadcareCDNUrl(fileId, ops, operations.filename);
 }
 
 /**
@@ -166,7 +117,7 @@ async function uploadToUploadcare(fileBuffer, filename, contentType = 'image/jpe
       const fileId = response.data.file;
       console.log('File uploaded successfully, file ID:', fileId);
       
-      // Генерируем CDN URL с кастомным доменом
+      // Генерируем CDN URL
       const cdnUrl = generateUploadcareCDNUrl(fileId, [], filename);
       
       console.log('Generated CDN URL:', cdnUrl);
@@ -232,6 +183,62 @@ async function deleteFromUploadcare(fileId) {
   }
 }
 
+// ==================== ПРОКСИ ДЛЯ ИЗОБРАЖЕНИЙ ====================
+
+/**
+ * Прокси-эндпоинт для обхода блокировок мобильных операторов
+ */
+app.get('/api/proxy/image', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    
+    if (!imageUrl) {
+      return res.status(400).json({ error: 'URL parameter is required' });
+    }
+
+    console.log('Proxying image:', imageUrl);
+
+    // Проверяем, что URL принадлежит нашему CDN (безопасность)
+    if (!imageUrl.includes(UPLOADCARE_CDN_BASE.replace('https://', ''))) {
+      return res.status(400).json({ error: 'Invalid image URL' });
+    }
+
+    const response = await axios.get(imageUrl, {
+      responseType: 'stream',
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    // Устанавливаем правильные заголовки
+    res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Кешируем на 1 день
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // Если есть заголовок Content-Length, передаем его
+    if (response.headers['content-length']) {
+      res.setHeader('Content-Length', response.headers['content-length']);
+    }
+
+    response.data.pipe(res);
+    
+  } catch (error) {
+    console.error('Proxy image error:', error.message);
+    
+    // Более информативные ошибки
+    if (error.code === 'ECONNREFUSED') {
+      res.status(502).json({ error: 'Cannot connect to CDN' });
+    } else if (error.code === 'ETIMEDOUT') {
+      res.status(504).json({ error: 'CDN timeout' });
+    } else if (error.response) {
+      res.status(error.response.status).json({ error: `CDN error: ${error.response.status}` });
+    } else {
+      res.status(500).json({ error: 'Failed to fetch image' });
+    }
+  }
+});
+
 // ==================== API ДЛЯ АДМИНА ====================
 
 app.get('/api/is-admin', (req, res) => {
@@ -265,10 +272,16 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     
     fs.unlinkSync(filePath);
     
-    console.log('Upload successful, URL:', uploadResult.url);
+    // Генерируем прокси URL
+    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.url)}`;
+    
+    console.log('Upload successful:');
+    console.log('- Direct URL:', uploadResult.url);
+    console.log('- Proxy URL:', proxyUrl);
     
     res.json({ 
-      url: uploadResult.url,
+      url: uploadResult.url, // прямой URL для совместимости
+      proxyUrl: proxyUrl,    // прокси URL для мобильных
       fileId: uploadResult.fileId,
       filename: uploadResult.filename
     });
@@ -309,10 +322,16 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     
     fs.unlinkSync(filePath);
     
-    console.log('Option image upload successful, URL:', uploadResult.url);
+    // Генерируем прокси URL
+    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.url)}`;
+    
+    console.log('Option image upload successful:');
+    console.log('- Direct URL:', uploadResult.url);
+    console.log('- Proxy URL:', proxyUrl);
     
     res.json({ 
-      url: uploadResult.url,
+      url: uploadResult.url, // прямой URL для совместимости
+      proxyUrl: proxyUrl,    // прокси URL для мобильных
       filename: uploadResult.filename,
       fileId: uploadResult.fileId
     });
@@ -326,50 +345,6 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
         console.error('Error deleting temp file:', unlinkError.message);
       }
     }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Новый эндпоинт для генерации URL с операциями над изображением
-app.get('/api/upload/:fileId/url', (req, res) => {
-  try {
-    const { fileId } = req.params;
-    const { 
-      resize, 
-      crop, 
-      format, 
-      quality, 
-      preview, 
-      smartResize,
-      setSize,
-      cropSize,
-      scale,
-      filename 
-    } = req.query;
-    
-    const operations = {
-      ...(resize && { resize }),
-      ...(crop && { crop }),
-      ...(format && { format }),
-      ...(quality && { quality }),
-      ...(preview && { preview }),
-      ...(smartResize && { smartResize }),
-      ...(setSize && { setSize }),
-      ...(cropSize && { cropSize }),
-      ...(scale && { scale }),
-      ...(filename && { filename })
-    };
-    
-    const url = generateImageUrlWithOperations(fileId, operations);
-    
-    res.json({
-      fileId: fileId,
-      url: url,
-      operations: operations,
-      cdnBase: UPLOADCARE_CDN_BASE
-    });
-  } catch (error) {
-    console.error('Generate URL error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -389,51 +364,33 @@ app.delete('/api/upload/:fileId', async (req, res) => {
   }
 });
 
-// ==================== ПРИМЕРЫ CDN ОПЕРАЦИЙ ====================
-
-app.get('/api/upload/examples/:fileId', (req, res) => {
-  const { fileId } = req.params;
-  
-  const examples = {
-    original: generateUploadcareCDNUrl(fileId),
+// Эндпоинт для проверки доступности CDN
+app.get('/api/cdn-status', async (req, res) => {
+  try {
+    const testFileId = '15c1dba1-ae9b-4d74-8045-decb53fd4a39'; // Используем уже загруженный файл
+    const testUrl = generateUploadcareCDNUrl(testFileId);
     
-    // Ресайз
-    resize_800x600: generateImageUrlWithOperations(fileId, { resize: '800x600' }),
-    resize_50percent: generateImageUrlWithOperations(fileId, { resize: '50x/' }),
+    // Пробуем получить маленький заголовок (HEAD запрос)
+    const startTime = Date.now();
+    const response = await axios.head(testUrl, { timeout: 5000 });
+    const responseTime = Date.now() - startTime;
     
-    // Кроп
-    crop_300x300: generateImageUrlWithOperations(fileId, { crop: '300x300' }),
-    crop_center: generateImageUrlWithOperations(fileId, { crop: '300x300/center' }),
+    res.json({
+      cdnAvailable: true,
+      responseTime: responseTime,
+      status: response.status,
+      directUrl: testUrl,
+      proxyUrl: `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(testUrl)}`
+    });
     
-    // Форматы
-    webp: generateImageUrlWithOperations(fileId, { format: 'webp' }),
-    avif: generateImageUrlWithOperations(fileId, { format: 'avif' }),
-    
-    // Качество
-    quality_light: generateImageUrlWithOperations(fileId, { quality: 'lightest' }),
-    quality_best: generateImageUrlWithOperations(fileId, { quality: 'best' }),
-    
-    // Превью
-    preview_100x100: generateImageUrlWithOperations(fileId, { preview: '100x100' }),
-    
-    // Комбинированные операции
-    optimized_web: generateImageUrlWithOperations(fileId, { 
-      resize: '1200x630',
-      format: 'webp',
-      quality: 'smart'
-    }),
-    
-    thumbnail: generateImageUrlWithOperations(fileId, {
-      smartResize: '300x300',
-      format: 'webp'
-    })
-  };
-  
-  res.json({
-    fileId: fileId,
-    cdnBase: UPLOADCARE_CDN_BASE,
-    examples: examples
-  });
+  } catch (error) {
+    console.log('CDN check failed:', error.message);
+    res.json({
+      cdnAvailable: false,
+      error: error.message,
+      recommendation: 'use_proxy'
+    });
+  }
 });
 
 // ==================== API ДЛЯ СОБЫТИЙ ====================
@@ -677,6 +634,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Получаем данные голосования
     const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
@@ -692,6 +650,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       return res.status(400).json({ error: 'Voting is completed' });
     }
 
+    // Проверяем, голосовал ли уже пользователь
     const votedUserIds = voting.fields.VotedUserIDs || '';
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
     
@@ -700,6 +659,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
     }
 
+    // Проверяем геолокацию
     const votingLat = voting.fields.Latitude;
     const votingLon = voting.fields.Longitude;
     
@@ -712,14 +672,18 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       }
     }
 
+    // Обновляем результаты голосования
     let currentVotes = voting.fields.Votes ? JSON.parse(voting.fields.Votes) : {};
     console.log('Current votes:', currentVotes);
 
+    // Добавляем голос пользователя
     currentVotes[userId] = optionIndex;
     console.log('Updated votes:', currentVotes);
 
+    // Добавляем пользователя в список проголосовавших
     const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
 
+    // Обновляем запись в Airtable
     const updateData = {
       fields: { 
         Votes: JSON.stringify(currentVotes),
@@ -783,6 +747,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Получаем данные голосования
     const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
@@ -792,6 +757,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
+    // Подсчитываем финальные результаты
     const votes = voting.fields.Votes ? 
       (typeof voting.fields.Votes === 'string' ? JSON.parse(voting.fields.Votes) : voting.fields.Votes) 
       : {};
@@ -801,6 +767,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
     if (voting.fields.Options) {
       const options = voting.fields.Options.split(',');
       
+      // Считаем голоса для каждого варианта
       const voteCounts = {};
       options.forEach((option, index) => {
         voteCounts[index] = 0;
@@ -812,8 +779,10 @@ app.post('/api/votings/:id/complete', async (req, res) => {
         }
       });
 
+      // Считаем проценты
       const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
       
+      // Создаем массив результатов
       options.forEach((option, index) => {
         const count = voteCounts[index] || 0;
         const percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
@@ -826,6 +795,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
       });
     }
 
+    // Обновляем голосование
     const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
       fields: { 
         Status: 'Completed',
@@ -850,6 +820,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Получаем данные голосования
     const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
@@ -863,6 +834,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       return res.status(400).json({ error: 'Результаты голосования недоступны' });
     }
 
+    // Парсим результаты
     let results;
     try {
       if (typeof voting.fields.Results === 'string') {
@@ -875,6 +847,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       return res.status(400).json({ error: 'Неверный формат результатов голосования' });
     }
 
+    // Преобразуем результаты в массив
     let resultsArray = [];
     if (Array.isArray(results)) {
       resultsArray = results;
@@ -887,9 +860,11 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     const title = voting.fields.Title || 'Результаты голосования';
     const description = voting.fields.Description || '';
     
+    // Обрабатываем изображения номинантов
     const optionImages = voting.fields.OptionImages || [];
     console.log('OptionImages from Airtable:', JSON.stringify(optionImages, null, 2));
 
+    // Генерируем SVG
     let height = 600;
     const hasImages = optionImages && optionImages.length > 0;
     if (hasImages) height += Math.ceil(resultsArray.length / 3) * 110;
@@ -921,6 +896,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       y += 50;
     });
 
+    // Добавляем изображения номинантов, если они есть
     if (hasImages) {
       y += 20;
       svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
@@ -946,6 +922,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     svg += `</svg>`;
 
+    // Конвертируем SVG в JPG
     const svgBuffer = Buffer.from(svg);
     const imageBuffer = await sharp(svgBuffer)
       .resize(800, height, {
@@ -958,6 +935,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       })
       .toBuffer();
 
+    // Загружаем в Uploadcare
     const uploadResult = await uploadToUploadcare(
       imageBuffer, 
       `voting_results_${id}_${Date.now()}.jpg`,
@@ -966,6 +944,10 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     console.log('Results image uploaded to Uploadcare:', uploadResult.url);
     
+    // Генерируем прокси URL для результатов
+    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.url)}`;
+    
+    // Сохраняем URL изображения в Airtable
     try {
       const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
         fields: { 
@@ -986,11 +968,15 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     res.json({ 
       success: true, 
       imageUrl: uploadResult.url,
+      proxyUrl: proxyUrl,
       fileId: uploadResult.fileId
     });
 
   } catch (error) {
     console.error('Generate results image error:', error.message);
+    if (error.response) {
+      console.error('Airtable/Uploadcare response:', error.response.data);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -1008,6 +994,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
+    // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
@@ -1024,6 +1011,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     console.log('Current attendees:', currentAttendees);
     console.log('Current count:', currentCount);
 
+    // Обрабатываем разные форматы данных
     let attendeesArray = [];
     
     if (Array.isArray(currentAttendees)) {
@@ -1032,12 +1020,14 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
     }
 
+    // Проверяем, не записан ли уже пользователь
     const userIdStr = userId.toString();
     if (attendeesArray.includes(userIdStr)) {
       console.log('User already attending');
       return res.status(400).json({ error: 'User already attending' });
     }
 
+    // Добавляем пользователя
     attendeesArray.push(userIdStr);
     const newAttendees = attendeesArray.join(',');
     const newCount = currentCount + 1;
@@ -1045,6 +1035,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     console.log('New attendees:', newAttendees);
     console.log('New count:', newCount);
 
+    // Обновляем запись
     const updateData = {
       fields: {
         AttendeesIDs: newAttendees,
@@ -1085,6 +1076,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
+    // Получаем текущее событие
     const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
@@ -1101,6 +1093,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     console.log('Current attendees:', currentAttendees);
     console.log('Current count:', currentCount);
 
+    // Обрабатываем разные форматы данных
     let attendeesArray = [];
     
     if (Array.isArray(currentAttendees)) {
@@ -1109,6 +1102,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
     }
 
+    // Удаляем пользователя
     const userIdStr = userId.toString();
     const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
     const newAttendees = newAttendeesArray.join(',');
@@ -1117,6 +1111,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     console.log('New attendees:', newAttendees);
     console.log('New count:', newCount);
 
+    // Обновляем запись
     const updateData = {
       fields: {
         AttendeesIDs: newAttendees,
@@ -1186,7 +1181,7 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
+  const R = 6371000; // Earth radius in meters
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
   const a = 
@@ -1194,7 +1189,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
     Math.sin(dLon/2) * Math.sin(dLon/2); 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  return R * c;
+  const distance = R * c;
+  return distance;
 }
 
 function deg2rad(deg) {
@@ -1211,9 +1207,9 @@ if (!fs.existsSync(uploadsDir)) {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   console.log(`Uploadcare CDN Base: ${UPLOADCARE_CDN_BASE}`);
-  console.log('CDN URL format: ' + UPLOADCARE_CDN_BASE + '/{file_id}/{operations}/{filename}');
-  console.log('Examples:');
-  console.log('- Original: ' + UPLOADCARE_CDN_BASE + '/{file_id}');
-  console.log('- Resized: ' + UPLOADCARE_CDN_BASE + '/{file_id}/-/resize/800x600/');
-  console.log('- WebP: ' + UPLOADCARE_CDN_BASE + '/{file_id}/-/format/webp/');
+  console.log(`Image proxy available at: /api/proxy/image?url=CDN_URL`);
+  console.log(`CDN status check: /api/cdn-status`);
+  console.log('Make sure you have these columns in Airtable:');
+  console.log('- Events: AttendeesIDs, AttendeesCount');
+  console.log('- Votings: Options, Votes, VotedUserIDs, Latitude, Longitude, Status, Results, OptionImages, ResultsImage');
 });
