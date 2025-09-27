@@ -449,50 +449,23 @@
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
-    // ==================== ФУНКЦИИ ДЛЯ РАБОТЫ С ПРОКСИ ИЗОБРАЖЕНИЙ ====================
+    // ==================== ФУНКЦИИ ДЛЯ ИЗОБРАЖЕНИЙ ====================
 
-    // Функция для получения URL через прокси
     function getImageUrl(originalUrl) {
-        if (!originalUrl) return 'https://via.placeholder.com/150';
-        
-        // Если это уже прокси-URL или placeholder, возвращаем как есть
-        if (originalUrl.includes('/api/proxy/image') || originalUrl.includes('via.placeholder.com')) {
-            return originalUrl;
+        if (!originalUrl) {
+            return 'https://via.placeholder.com/150';
         }
-        
-        // Для изображений с нашего CDN используем прокси
-        if (originalUrl.includes('62wb4q8n36.ucarecd.net')) {
-            const encodedUrl = encodeURIComponent(originalUrl);
-            return `${BACKEND_URL}/api/proxy/image?url=${encodedUrl}`;
-        }
-        
-        // Для других изображений (например, из внешних источников) оставляем как есть
         return originalUrl;
     }
 
-    // Функция для обработки ошибок загрузки изображений
     function handleImageError(img) {
-        const originalSrc = img.src;
-        
-        // Если это прокси-URL и произошла ошибка, попробуем оригинальный URL
-        if (originalSrc.includes('/api/proxy/image')) {
-            const urlParams = new URLSearchParams(originalSrc.split('?')[1]);
-            const originalUrl = urlParams.get('url');
-            if (originalUrl) {
-                img.src = originalUrl;
-            } else {
-                img.src = 'https://via.placeholder.com/150';
-            }
-        } else {
-            img.src = 'https://via.placeholder.com/150';
-        }
-        
-        img.onerror = null; // Предотвращаем бесконечный цикл
+        console.error('Image failed to load:', img.src);
+        img.src = 'https://via.placeholder.com/150';
+        img.onerror = null;
     }
 
     // ==================== ТЕМА И ОСНОВНЫЕ ФУНКЦИИ ====================
 
-    // Применение темы Telegram с адаптацией под системные настройки
     function applyTheme() {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const theme = tg.themeParams;
@@ -510,16 +483,6 @@
       } else {
         applyLightTheme();
       }
-      
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-        if (!tg.themeParams.bg_color) {
-          if (e.matches) {
-            applyDarkTheme();
-          } else {
-            applyLightTheme();
-          }
-        }
-      });
     }
 
     function applyDarkTheme() {
@@ -566,7 +529,7 @@
       return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
     }
 
-    // ==================== ОТОБРАЖЕНИЕ СОБЫТИЙ, РЕКЛАМЫ И ГОЛОСОВАНИЙ ====================
+    // ==================== ОТОБРАЖЕНИЕ СОБЫТИЙ ====================
 
     async function renderEvents() {
       const eventsContainer = document.getElementById('events');
@@ -888,19 +851,19 @@
       
       document.getElementById('getLocationBtn').style.display = 'none';
       
-      if (voting.ResultsImageProxy || voting.ResultsImage) {
+      if (voting.ResultsImage) {
         const imageContainer = document.getElementById('votingResultsImageContainer');
         const resultsImage = document.getElementById('votingResultsImage');
         const downloadBtn = document.getElementById('downloadResultsBtn');
         const generateBtn = document.getElementById('generateResultsBtn');
         
-        resultsImage.src = getImageUrl(voting.ResultsImageProxy || voting.ResultsImage);
+        resultsImage.src = getImageUrl(voting.ResultsImage);
         resultsImage.onerror = function() { handleImageError(this); };
         imageContainer.classList.remove('hidden');
         
         downloadBtn.onclick = () => {
           const link = document.createElement('a');
-          link.href = voting.ResultsImage || voting.ResultsImageProxy;
+          link.href = voting.ResultsImage;
           link.download = `results_${votingId}_${Date.now()}.jpg`;
           link.click();
         };
@@ -1121,25 +1084,15 @@
     async function castVote(optionIndex) {
       if (!currentVotingRecord) {
         alert('Ошибка: голосование не выбрано');
-        console.error('castVote: No currentVotingRecord');
         return;
       }
 
       if (!userLocation) {
         alert('Сначала необходимо определить ваше местоположение');
-        console.error('castVote: No userLocation');
         return;
       }
 
       try {
-        console.log('Attempting to cast vote:', {
-          votingId: currentVotingRecord.id,
-          userId: user.id,
-          optionIndex,
-          userLat: userLocation.latitude,
-          userLon: userLocation.longitude
-        });
-
         const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
           method: 'POST',
           headers: {
@@ -1154,12 +1107,10 @@
         });
 
         if (response.ok) {
-          console.log('Vote cast successfully');
           alert('Ваш голос учтен!');
           showVotingModal(currentVotingRecord);
         } else {
           const error = await response.json();
-          console.error('Vote error:', error);
           alert(error.error || 'Ошибка при голосовании');
         }
       } catch (err) {
@@ -1171,7 +1122,6 @@
     document.getElementById('getLocationBtn').addEventListener('click', () => {
       if (!navigator.geolocation) {
         alert('Геолокация не поддерживается вашим браузером');
-        console.error('Geolocation not supported');
         return;
       }
 
@@ -1181,7 +1131,6 @@
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           };
-          console.log('Geolocation obtained:', userLocation);
           alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
           document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
           document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
@@ -1205,15 +1154,14 @@
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
-            currentResultsImageUrl = data.proxyUrl || data.imageUrl;
+            currentResultsImageUrl = data.imageUrl;
             
             await fetch(`${BACKEND_URL}/api/votings/${votingId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 fields: {
-                  ResultsImage: data.imageUrl,
-                  ResultsImageProxy: data.proxyUrl
+                  ResultsImage: data.imageUrl
                 }
               })
             });
@@ -1249,16 +1197,11 @@
     async function initAdmin() {
       try {
         const isAdmin = await checkIsAdmin(user.id);
-        console.log('Is Admin:', isAdmin);
         if (isAdmin) {
           document.getElementById('adminBtn').classList.remove('hidden');
-        } else {
-          console.log('Admin panel hidden - not admin');
-          document.getElementById('adminBtn').classList.add('hidden');
         }
       } catch (err) {
         console.error('Admin init error:', err);
-        document.getElementById('adminBtn').classList.add('hidden');
       }
     }
 
@@ -1298,8 +1241,7 @@
       try {
         const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки ивентов');
+          throw new Error('Ошибка загрузки ивентов');
         }
         
         const data = await response.json();
@@ -1354,11 +1296,6 @@
       document.getElementById('eventLocation').value = location;
       document.getElementById('eventDescription').value = description;
       document.getElementById('eventMapLink').value = mapLink || '';
-      if (imageUrl && imageUrl.includes('62wb4q8n36.ucarecd.net')) {
-        alert('Текущее изображение: ' + getImageUrl(imageUrl));
-      } else {
-        alert('Текущее изображение: ' + imageUrl);
-      }
       showTab('tab-form');
     }
 
@@ -1492,11 +1429,6 @@
       document.getElementById('adTitle').value = title || '';
       document.getElementById('adDescription').value = description || '';
       document.getElementById('adUrl').value = url || '';
-      if (imageUrl && imageUrl.includes('62wb4q8n36.ucarecd.net')) {
-        alert('Текущее изображение: ' + getImageUrl(imageUrl));
-      } else {
-        alert('Текущее изображение: ' + imageUrl);
-      }
       showTab('tab-ad-form');
     }
 
@@ -1595,8 +1527,7 @@
       try {
         const response = await fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' });
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки голосований');
+          throw new Error('Ошибка загрузки голосований');
         }
         
         const data = await response.json();
