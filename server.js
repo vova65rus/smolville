@@ -32,6 +32,7 @@ const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
 const UPLOADCARE_PUB_KEY = process.env.UPLOADCARE_PUB_KEY;
 const UPLOADCARE_SECRET_KEY = process.env.UPLOADCARE_SECRET_KEY;
 const UPLOADCARE_CDN_BASE = process.env.UPLOADCARE_CDN_BASE || 'https://62wb4q8n36.ucarecd.net';
+const UPLOADCARE_PROXY_DOMAIN = process.env.UPLOADCARE_PROXY_DOMAIN || '1c19330c987ab700fe4e.ucr.io';
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
@@ -40,6 +41,12 @@ if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !UPLOADCARE_PUB_KEY || !UPLOADCARE
   console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, UPLOADCARE_PUB_KEY, UPLOADCARE_SECRET_KEY in Render');
   process.exit(1);
 }
+
+console.log('Uploadcare configuration:', {
+  cdnBase: UPLOADCARE_CDN_BASE,
+  proxyDomain: UPLOADCARE_PROXY_DOMAIN,
+  pubKey: UPLOADCARE_PUB_KEY ? 'Set' : 'Missing'
+});
 
 const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
 const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
@@ -56,12 +63,28 @@ app.get('/', (req, res) => {
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ UPLOADCARE ====================
 
 /**
- * Генерирует CDN URL согласно документации Uploadcare CDN
+ * Генерирует CDN URL с поддержкой Proxy Domain
  */
-function generateUploadcareCDNUrl(fileId, filename = null) {
-  let cdnBase = UPLOADCARE_CDN_BASE.trim();
+function generateUploadcareCDNUrl(fileId, filename = null, useProxy = true) {
+  let cdnBase;
+  
+  if (useProxy && UPLOADCARE_PROXY_DOMAIN) {
+    // Используем Proxy Domain для обхода блокировок
+    cdnBase = `https://${UPLOADCARE_PROXY_DOMAIN}`;
+  } else {
+    cdnBase = UPLOADCARE_CDN_BASE.trim();
+  }
+  
   cdnBase = cdnBase.replace(/\/+$/, '');
-  return `${cdnBase}/${fileId}${filename ? `/${encodeURIComponent(filename)}` : ''}`;
+  
+  // Добавляем параметры для лучшей совместимости
+  const params = new URLSearchParams({
+    'format': 'auto',
+    'quality': 'smart',
+    'progressive': 'yes'
+  });
+  
+  return `${cdnBase}/${fileId}${filename ? `/${encodeURIComponent(filename)}` : ''}?${params.toString()}`;
 }
 
 /**
@@ -84,11 +107,21 @@ async function uploadToUploadcare(fileBuffer, filename, contentType = 'image/jpe
 
     if (response.data.file) {
       const fileId = response.data.file;
-      const cdnUrl = generateUploadcareCDNUrl(fileId, filename);
+      
+      // Генерируем оба URL: основной и через proxy
+      const directUrl = generateUploadcareCDNUrl(fileId, filename, false);
+      const proxyUrl = generateUploadcareCDNUrl(fileId, filename, true);
+      
+      console.log('Upload result:', {
+        fileId: fileId,
+        directUrl: directUrl,
+        proxyUrl: proxyUrl
+      });
       
       return {
         fileId: fileId,
-        url: cdnUrl,
+        url: directUrl,
+        proxyUrl: proxyUrl,
         filename: filename
       };
     } else {
@@ -110,31 +143,79 @@ async function uploadToUploadcare(fileBuffer, filename, contentType = 'image/jpe
  */
 app.get('/api/proxy/image', async (req, res) => {
   try {
-    const imageUrl = req.query.url;
+    let imageUrl = req.query.url;
     
     if (!imageUrl) {
       return res.status(400).json({ error: 'URL parameter is required' });
     }
 
-    // Проверяем, что URL принадлежит нашему CDN
-    if (!imageUrl.includes('62wb4q8n36.ucarecd.net')) {
-      return res.status(400).json({ error: 'Invalid image URL' });
+    // Декодируем URL
+    imageUrl = decodeURIComponent(imageUrl);
+
+    // Разрешаем оба домена: основной CDN и Proxy Domain
+    const allowedDomains = [
+      '62wb4q8n36.ucarecd.net',
+      '1c19330c987ab700fe4e.ucr.io',
+      'ucarecdn.com'
+    ];
+    
+    let urlObj;
+    try {
+      urlObj = new URL(imageUrl);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid URL format' });
     }
+
+    const isAllowed = allowedDomains.some(domain => urlObj.hostname.includes(domain));
+    
+    if (!isAllowed) {
+      return res.status(400).json({ error: 'Domain not allowed' });
+    }
+
+    console.log('Proxy fetching image from:', imageUrl);
 
     const response = await axios.get(imageUrl, {
       responseType: 'stream',
-      timeout: 15000
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*'
+      }
     });
 
     // Устанавливаем правильные заголовки
-    res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    
+    const headers = {
+      'Content-Type': response.headers['content-type'] || 'image/jpeg',
+      'Cache-Control': 'public, max-age=86400', // 24 часа
+      'Access-Control-Allow-Origin': '*',
+    };
+
+    // Копируем Content-Length если есть
+    if (response.headers['content-length']) {
+      headers['Content-Length'] = response.headers['content-length'];
+    }
+
+    // Устанавливаем заголовки
+    Object.keys(headers).forEach(key => {
+      if (headers[key]) {
+        res.setHeader(key, headers[key]);
+      }
+    });
+
     response.data.pipe(res);
     
   } catch (error) {
     console.error('Proxy image error:', error.message);
+    
+    if (error.code === 'ENOTFOUND') {
+      return res.status(502).json({ error: 'Cannot resolve CDN host' });
+    }
+    if (error.response) {
+      console.error('CDN response status:', error.response.status);
+      console.error('CDN response headers:', error.response.headers);
+      return res.status(error.response.status).json({ error: 'Failed to fetch image from CDN' });
+    }
+    
     res.status(500).json({ error: 'Failed to fetch image' });
   }
 });
@@ -674,12 +755,12 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       'image/jpeg'
     );
 
-    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.url)}`;
+    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.proxyUrl)}`;
     
     try {
       const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
         fields: { 
-          ResultsImage: uploadResult.url
+          ResultsImage: uploadResult.proxyUrl // Сохраняем URL через Proxy Domain
         }
       }, {
         headers: { 
@@ -695,7 +776,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     res.json({ 
       success: true, 
-      imageUrl: uploadResult.url,
+      imageUrl: uploadResult.proxyUrl, // Возвращаем URL через Proxy Domain
       proxyUrl: proxyUrl,
       fileId: uploadResult.fileId
     });
@@ -725,10 +806,11 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     
     fs.unlinkSync(filePath);
     
-    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.url)}`;
+    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.proxyUrl)}`;
     
     res.json({ 
-      url: uploadResult.url,
+      url: uploadResult.proxyUrl, // Отдаем URL через Proxy Domain
+      directUrl: uploadResult.url, // На всякий случай сохраняем прямой URL
       proxyUrl: proxyUrl,
       fileId: uploadResult.fileId,
       filename: uploadResult.filename
@@ -759,10 +841,11 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     
     fs.unlinkSync(filePath);
     
-    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.url)}`;
+    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(uploadResult.proxyUrl)}`;
     
     res.json({ 
-      url: uploadResult.url,
+      url: uploadResult.proxyUrl, // Отдаем URL через Proxy Domain
+      directUrl: uploadResult.url,
       proxyUrl: proxyUrl,
       filename: uploadResult.filename,
       fileId: uploadResult.fileId
@@ -981,6 +1064,73 @@ function deg2rad(deg) {
   return deg * (Math.PI/180);
 }
 
+// ==================== ТЕСТОВЫЕ ЭНДПОИНТЫ ====================
+
+// Тестовый эндпоинт для проверки изображений
+app.get('/api/test-image', async (req, res) => {
+  try {
+    const testImageUrl = 'https://62wb4q8n36.ucarecd.net/bd69393f-ec57-4661-b279-5b196fb5ebb5/-/preview/783x391/';
+    const proxyUrl = `${req.protocol}://${req.get('host')}/api/proxy/image?url=${encodeURIComponent(testImageUrl)}`;
+    
+    res.json({
+      directUrl: testImageUrl,
+      proxyUrl: proxyUrl,
+      htmlExample: `
+        <html>
+          <body>
+            <h2>Direct URL (может не работать из-за CORS):</h2>
+            <img src="${testImageUrl}" style="max-width: 400px;" onerror="console.log('Direct failed')"/>
+            
+            <h2>Proxy URL (должен работать):</h2>
+            <img src="${proxyUrl}" style="max-width: 400px;" onerror="console.log('Proxy failed')"/>
+            
+            <script>
+              document.addEventListener('DOMContentLoaded', function() {
+                console.log('Page loaded');
+                const images = document.querySelectorAll('img');
+                images.forEach((img, i) => {
+                  img.onload = () => console.log('Image ' + i + ' loaded');
+                  img.onerror = () => console.log('Image ' + i + ' failed');
+                });
+              });
+            </script>
+          </body>
+        </html>
+      `
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Тестовый эндпоинт для проверки Proxy Domain
+app.get('/api/test-proxy', async (req, res) => {
+  try {
+    const testFileId = 'bd69393f-ec57-4661-b279-5b196fb5ebb5';
+    
+    const directUrl = generateUploadcareCDNUrl(testFileId, 'test.jpg', false);
+    const proxyUrl = generateUploadcareCDNUrl(testFileId, 'test.jpg', true);
+    
+    res.json({
+      directUrl: directUrl,
+      proxyUrl: proxyUrl,
+      testHtml: `
+        <html>
+          <body>
+            <h3>Direct URL (может не работать в приложении):</h3>
+            <img src="${directUrl}" width="400" onerror="console.log('Direct failed')"/>
+            
+            <h3>Proxy Domain URL (должен работать):</h3>
+            <img src="${proxyUrl}" width="400" onerror="console.log('Proxy failed')"/>
+          </body>
+        </html>
+      `
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Создание папки uploads
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -991,5 +1141,9 @@ if (!fs.existsSync(uploadsDir)) {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   console.log(`Uploadcare CDN Base: ${UPLOADCARE_CDN_BASE}`);
+  console.log(`Uploadcare Proxy Domain: ${UPLOADCARE_PROXY_DOMAIN}`);
   console.log(`Image proxy available at: /api/proxy/image?url=CDN_URL`);
+  console.log(`Test endpoints:`);
+  console.log(`  - /api/test-image - тест изображений`);
+  console.log(`  - /api/test-proxy - тест Proxy Domain`);
 });
