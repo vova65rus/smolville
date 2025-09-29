@@ -298,6 +298,12 @@
     <div class="modal-content">
       <h2 id="votingModalTitle" class="text-lg font-bold"></h2>
       <p id="votingModalDescription"></p>
+       <div class="mt-4 pt-3 border-t">
+        <p class="text-sm text-[var(--hint-color)]">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
+        <button id="getLocationBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3">
+          Определить мое местоположение
+        </button>
+      </div>
       <div id="votingOptions" class="my-4"></div>
       <div id="votingResultsImageContainer" class="hidden mt-4">
         <h3 class="font-bold mb-2">Изображение с результатами:</h3>
@@ -308,12 +314,6 @@
             Сгенерировать новое
           </button>
         </div>
-      </div>
-      <div class="mt-4 pt-3 border-t">
-        <p class="text-sm text-[var(--hint-color)]">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
-        <button id="getLocationBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3">
-          Определить мое местоположение
-        </button>
       </div>
     </div>
   </div>
