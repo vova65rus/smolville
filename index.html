@@ -8,16 +8,13 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {
-      --bg-color: var(--tg-theme-bg-color, #ffffff);
-      --text-color: var(--tg-theme-text-color, #000000);
-      --hint-color: var(--tg-theme-hint-color, #707579);
-      --link-color: var(--tg-theme-link-color, #3390ec);
-      --button-color: var(--tg-theme-button-color, #3390ec);
-      --button-text-color: var(--tg-theme-button-text-color, #ffffff);
-      --secondary-bg-color: var(--tg-theme-secondary-bg-color, #f4f4f5);
-      --section-bg-color: var(--tg-theme-secondary-bg-color, #f8f9fa);
-      --card-bg-color: var(--tg-theme-bg-color, #ffffff);
-      --border-color: rgba(255, 255, 255, 0.1);
+      --bg-color: #ffffff;
+      --text-color: #000000;
+      --hint-color: #707579;
+      --link-color: #3390ec;
+      --button-color: #3390ec;
+      --button-text-color: #ffffff;
+      --secondary-bg-color: #f4f4f5;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -29,9 +26,6 @@
         --button-color: #4da6ff;
         --button-text-color: #ffffff;
         --secondary-bg-color: #2d2d2d;
-        --section-bg-color: #2d2d2d;
-        --card-bg-color: #1f1f1f;
-        --border-color: rgba(255, 255, 255, 0.1);
       }
     }
 
@@ -39,144 +33,57 @@
       background-color: var(--bg-color);
       color: var(--text-color);
       transition: background-color 0.3s ease, color 0.3s ease;
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
 
     .card {
-      background: var(--card-bg-color);
+      background: var(--secondary-bg-color);
       border-radius: 12px;
-      margin-bottom: 12px;
+      border: 1px solid var(--hint-color);
+      padding: 12px;
       transition: all 0.2s ease;
-      border: 1px solid var(--border-color);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
     }
 
     .card:hover {
-      transform: translateY(-1px);
+      transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
-    .event-card {
-      background: var(--card-bg-color);
-    }
-
-    .ad-card {
-      background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-      border: 2px solid #ffeaa7;
-      color: #856404;
-    }
-
-    .ad-card:hover {
-      background: linear-gradient(135deg, #ffeaa7 0%, #ffde7d 100%);
-      transform: scale(1.02);
-    }
-
-    .voting-card {
-      background: linear-gradient(135deg, #fff0f0 0%, #ffcccc 100%);
-      border: 2px solid #ffcccc;
-      color: #8b0000;
-    }
-
-    .voting-card:hover {
-      background: linear-gradient(135deg, #ffcccc 0%, #ffb3b3 100%);
-      transform: scale(1.02);
-    }
-
-    .voting-card.completed {
-      background: linear-gradient(135deg, #f0fff0 0%, #ccffcc 100%);
-      border-color: #ccffcc;
-      color: #006400;
-    }
-
     .badge {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: 500;
+      margin-bottom: 8px;
     }
 
-    .ad-badge {
-      background: rgba(255, 193, 7, 0.2);
-      color: #856404;
-      border: 1px solid rgba(255, 193, 7, 0.3);
-    }
-
-    .voting-badge {
-      background: rgba(220, 53, 69, 0.2);
-      color: #8b0000;
-      border: 1px solid rgba(220, 53, 69, 0.3);
-    }
-
-    .completed-badge {
-      background: rgba(40, 167, 69, 0.2);
-      color: #006400;
-      border: 1px solid rgba(40, 167, 69, 0.3);
-    }
-
-    .hidden {
-      display: none;
-    }
+    .badge-event { background: #10b981; color: white; }
+    .badge-ad { background: #f59e0b; color: white; }
+    .badge-vote { background: #3b82f6; color: white; }
 
     .modal {
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.6);
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      inset: 0;
       display: flex;
       justify-content: center;
       align-items: center;
       z-index: 1000;
-      padding: 16px;
     }
 
     .modal-content {
-      background: var(--card-bg-color);
+      background: var(--secondary-bg-color);
       color: var(--text-color);
-      padding: 24px;
+      padding: 20px;
       border-radius: 16px;
-      width: 100%;
-      max-width: 400px;
-      max-height: 85vh;
+      max-width: 95%;
+      max-height: 85%;
       overflow-y: auto;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--border-color);
-    }
-
-    .admin-modal-content {
-      max-width: 500px;
-      max-height: 90vh;
-    }
-
-    .modal-header {
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .modal-title {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-
-    .modal-subtitle {
-      font-size: 14px;
-      color: var(--hint-color);
-    }
-
-    .fade-in {
-      animation: fadeIn 0.3s ease-in;
+      animation: fadeIn 0.3s ease;
     }
 
     @keyframes fadeIn {
@@ -184,236 +91,8 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    input, textarea, select {
-      background: var(--secondary-bg-color);
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 12px;
-      width: 100%;
-      transition: all 0.2s ease;
-      font-size: 16px;
-    }
-
-    input:focus, textarea:focus, select:focus {
-      outline: none;
-      border-color: var(--button-color);
-      box-shadow: 0 0 0 2px rgba(51, 144, 236, 0.2);
-    }
-
-    input::placeholder, textarea::placeholder {
-      color: var(--hint-color);
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 12px 20px;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 16px;
-      text-decoration: none;
-      border: none;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      min-height: 48px;
-    }
-
-    .btn-primary {
-      background: var(--button-color);
-      color: var(--button-text-color);
-    }
-
-    .btn-primary:hover {
-      opacity: 0.9;
-      transform: translateY(-1px);
-    }
-
-    .btn-secondary {
-      background: var(--secondary-bg-color);
-      color: var(--text-color);
-    }
-
-    .btn-success {
-      background: #28a745;
-      color: white;
-    }
-
-    .btn-danger {
-      background: #dc3545;
-      color: white;
-    }
-
-    .btn-warning {
-      background: #ffc107;
-      color: #212529;
-    }
-
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none !important;
-    }
-
-    .tab-container {
-      display: flex;
-      background: var(--secondary-bg-color);
-      border-radius: 12px;
-      padding: 4px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .tab {
-      flex: 1;
-      padding: 12px 8px;
-      text-align: center;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s ease;
+    button {
       font-weight: 500;
-      font-size: 13px;
-      min-width: 80px;
-    }
-
-    .tab.active {
-      background: var(--card-bg-color);
-      color: var(--text-color);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    .voting-option {
-      color: var(--text-color) !important;
-    }
-
-    .vote-button {
-      pointer-events: none;
-      opacity: 0.5;
-    }
-
-    .vote-button.enabled {
-      pointer-events: auto;
-      opacity: 1;
-    }
-
-    .results-image {
-      max-width: 100%;
-      border-radius: 12px;
-      margin: 16px 0;
-      border: 1px solid var(--border-color);
-    }
-
-    .option-preview {
-      max-width: 100px;
-      max-height: 100px;
-      object-fit: cover;
-      border-radius: 8px;
-      margin-top: 8px;
-    }
-
-    .location-section {
-      background: var(--secondary-bg-color);
-      border-radius: 12px;
-      padding: 16px;
-      margin: 20px 0;
-    }
-
-    .location-info {
-      font-size: 14px;
-      color: var(--hint-color);
-      margin-bottom: 12px;
-      line-height: 1.4;
-    }
-
-    .admin-item {
-      background: var(--secondary-bg-color);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 12px;
-      border: 1px solid var(--border-color);
-    }
-
-    .admin-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-
-    .admin-btn {
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    /* Адаптивные улучшения */
-    @media (max-width: 480px) {
-      .modal-content {
-        padding: 20px;
-        margin: 8px;
-      }
-      
-      .tab {
-        padding: 10px 6px;
-        font-size: 12px;
-        min-width: 70px;
-      }
-      
-      .admin-actions {
-        flex-direction: column;
-      }
-      
-      .admin-btn {
-        width: 100%;
-      }
-    }
-
-    /* Специфические стили для голосования */
-    .voting-option-card {
-      background: var(--secondary-bg-color);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 12px;
-      border: 1px solid var(--border-color);
-      transition: all 0.2s ease;
-    }
-
-    .voting-option-card:hover {
-      background: var(--card-bg-color);
-      border-color: var(--button-color);
-    }
-
-    .progress-bar {
-      background: var(--border-color);
-      border-radius: 10px;
-      height: 6px;
-      overflow: hidden;
-      margin: 8px 0;
-    }
-
-    .progress-fill {
-      background: var(--button-color);
-      height: 100%;
-      border-radius: 10px;
-      transition: width 0.3s ease;
-    }
-
-    .option-item {
-      background: var(--secondary-bg-color);
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-      border: 1px solid var(--border-color);
     }
   </style>
 </head>
@@ -423,381 +102,117 @@
       <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
     </a>
     <h1 class="text-2xl font-bold text-center mb-6">Автособытия Сахалина</h1>
-    <div id="events" class="grid grid-cols-1 gap-3"></div>
-    <button id="adminBtn" class="hidden fixed bottom-6 right-6 btn btn-primary shadow-lg" onclick="showAdminModal()">Админ</button>
-  </div>
 
-  <!-- Модальное окно голосования (обновленная версия) -->
-  <div id="votingModal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="votingModalTitle" class="modal-title"></h2>
-        <p id="votingModalDescription" class="modal-subtitle"></p>
-      </div>
-      
-      <!-- Секция определения местоположения ПЕРЕД вариантами голосования -->
-      <div class="location-section">
-        <p class="location-info">
-          📍 Для голосования необходимо находиться в радиусе 1000м от указанного места
-        </p>
-        <button id="getLocationBtn" class="btn btn-primary w-full">
-          📡 Определить мое местоположение
-        </button>
+    <div id="events" class="grid grid-cols-1 gap-4">
+      <!-- Пример карточки события -->
+      <div class="card">
+        <span class="badge badge-event">Событие</span>
+        <img src="event.jpg" alt="Event" class="w-full h-40 object-cover rounded-lg mb-3">
+        <h3 class="text-lg font-bold mb-1">Название события</h3>
+        <p class="text-sm text-[var(--hint-color)] mb-2">Дата • Место</p>
+        <button class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">Подробнее</button>
       </div>
 
-      <div id="votingOptions" class="my-4"></div>
-      
-      <div id="votingResultsImageContainer" class="hidden mt-4">
-        <h3 class="font-bold mb-3 text-lg">Результаты голосования:</h3>
-        <img id="votingResultsImage" class="results-image" loading="lazy">
-        <div class="flex space-x-3 mt-4">
-          <button id="downloadResultsBtn" class="btn btn-secondary flex-1">📥 Скачать</button>
-          <button id="generateResultsBtn" class="btn btn-primary flex-1">
-            🎨 Сгенерировать новое
-          </button>
-        </div>
+      <!-- Пример карточки рекламы -->
+      <div class="card">
+        <span class="badge badge-ad">Реклама</span>
+        <img src="ad.jpg" alt="Ad" class="w-full h-40 object-cover rounded-lg mb-3">
+        <h3 class="text-lg font-bold mb-1">Заголовок рекламы</h3>
+        <p class="text-sm text-[var(--hint-color)] mb-2">Краткое описание</p>
+        <button class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">Перейти</button>
+      </div>
+
+      <!-- Пример карточки голосования -->
+      <div class="card">
+        <span class="badge badge-vote">Голосование</span>
+        <img src="vote.jpg" alt="Vote" class="w-full h-40 object-cover rounded-lg mb-3">
+        <h3 class="text-lg font-bold mb-1">Название голосования</h3>
+        <p class="text-sm text-[var(--hint-color)] mb-2">Описание голосования</p>
+        <button class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">Проголосовать</button>
       </div>
     </div>
+
+    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-full shadow-lg transition" onclick="showAdminModal()">
+      ⚙️
+    </button>
   </div>
 
-  <!-- Модальное окно события -->
+  <!-- Модальные окна (событие, реклама, голосование, админка) -->
   <div id="eventModal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="modalTitle" class="modal-title"></h2>
-        <div class="modal-subtitle">
-          <p id="modalDate"></p>
-          <p id="modalLocation"></p>
-        </div>
-      </div>
-      
+    <div class="modal-content w-full md:w-[500px]">
+      <h2 id="modalTitle" class="text-xl font-bold mb-2"></h2>
+      <p id="modalDate" class="text-sm text-[var(--hint-color)]"></p>
+      <p id="modalLocation" class="mb-2"></p>
       <p id="modalDescription" class="mb-4"></p>
-      <img id="modalImage" class="w-full h-48 object-cover rounded-xl mb-4" loading="lazy">
-      
+      <img id="modalImage" class="w-full h-40 object-cover rounded-lg mb-4" loading="lazy">
       <div id="modalMapButtonContainer" class="hidden mb-4">
-        <button id="modalMapButton" class="btn btn-secondary w-full">
-          🗺️ Посмотреть на карте
-        </button>
+        <button id="modalMapButton" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">На карте</button>
       </div>
-      
-      <div class="pt-4 border-t border-[var(--border-color)]">
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium">
-            👥 Идут: <span id="attendeesCount">0</span> человек
-          </span>
-          <button id="attendButton" class="btn btn-success">
-            Я пойду!
-          </button>
+      <div class="flex items-center justify-between border-t pt-3">
+        <span class="text-sm">Идут: <span id="attendeesCount">0</span> человек</span>
+        <button id="attendButton" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">Я пойду!</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="adModal" class="modal hidden">
+    <div class="modal-content w-full md:w-[500px]">
+      <h2 id="adModalTitle" class="text-xl font-bold mb-2"></h2>
+      <p id="adModalDescription" class="mb-4"></p>
+      <img id="adModalImage" class="w-full h-40 object-cover rounded-lg mb-4" loading="lazy">
+      <button id="adModalButton" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">Перейти</button>
+    </div>
+  </div>
+
+  <div id="votingModal" class="modal hidden">
+    <div class="modal-content w-full md:w-[500px]">
+      <h2 id="votingModalTitle" class="text-xl font-bold mb-2"></h2>
+      <p id="votingModalDescription" class="mb-4"></p>
+      <div class="mb-4">
+        <p class="text-sm text-[var(--hint-color)] mb-2">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
+        <button id="getLocationBtn" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full transition">Определить мое местоположение</button>
+      </div>
+      <div id="votingOptions" class="my-4"></div>
+      <div id="votingResultsImageContainer" class="hidden mt-4">
+        <h3 class="font-bold mb-2">Изображение с результатами:</h3>
+        <img id="votingResultsImage" class="w-full rounded-lg border mb-3" loading="lazy">
+        <div class="flex space-x-2">
+          <button id="downloadResultsBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition">Скачать</button>
+          <button id="generateResultsBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg transition">Сгенерировать новое</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Модальное окно рекламы -->
-  <div id="adModal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="adModalTitle" class="modal-title"></h2>
-      </div>
-      <p id="adModalDescription" class="mb-4"></p>
-      <img id="adModalImage" class="w-full h-48 object-cover rounded-xl mb-4" loading="lazy">
-      <button id="adModalButton" class="btn btn-warning w-full">
-        🔗 Перейти
-      </button>
-    </div>
-  </div>
-
-  <!-- Админ-панель (ПОЛНАЯ ВЕРСИЯ) -->
   <div id="adminModal" class="modal hidden">
-    <div class="modal-content admin-modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title">Админ-панель</h2>
+    <div class="modal-content w-full md:w-[700px]">
+      <h2 class="text-xl font-bold mb-4">Админ-панель</h2>
+      <div class="flex mb-4 overflow-x-auto space-x-2">
+        <div class="tab active bg-[var(--button-color)] text-[var(--button-text-color)] px-4 py-2 rounded-lg cursor-pointer" onclick="showTab('tab-list')">События</div>
+        <div class="tab bg-[var(--secondary-bg-color)] text-[var(--text-color)] px-4 py-2 rounded-lg cursor-pointer" onclick="showTab('tab-form')">Добавить событие</div>
+        <div class="tab bg-[var(--secondary-bg-color)] text-[var(--text-color)] px-4 py-2 rounded-lg cursor-pointer" onclick="showTab('tab-ads-list')">Реклама</div>
+        <div class="tab bg-[var(--secondary-bg-color)] text-[var(--text-color)] px-4 py-2 rounded-lg cursor-pointer" onclick="showTab('tab-ad-form')">Добавить рекламу</div>
+        <div class="tab bg-[var(--secondary-bg-color)] text-[var(--text-color)] px-4 py-2 rounded-lg cursor-pointer" onclick="showTab('tab-votings-list')">Голосования</div>
+        <div class="tab bg-[var(--secondary-bg-color)] text-[var(--text-color)] px-4 py-2 rounded-lg cursor-pointer" onclick="showTab('tab-voting-form')">Добавить голосование</div>
       </div>
-      
-      <div class="tab-container">
-        <div class="tab active" onclick="showTab('tab-list')">События</div>
-        <div class="tab" onclick="showTab('tab-form')">Добавить событие</div>
-        <div class="tab" onclick="showTab('tab-ads-list')">Реклама</div>
-        <div class="tab" onclick="showTab('tab-ad-form')">Добавить рекламу</div>
-        <div class="tab" onclick="showTab('tab-votings-list')">Голосования</div>
-        <div class="tab" onclick="showTab('tab-voting-form')">Добавить голосование</div>
-      </div>
-      
-      <!-- Вкладка списка событий -->
       <div id="tab-list" class="tab-content active">
-        <h3 class="text-lg font-bold mb-3">Список событий</h3>
-        <div id="eventList" class="mb-4 space-y-3"></div>
-        <button onclick="renderAdminEvents()" class="btn btn-secondary w-full">🔄 Обновить список</button>
+        <h3 class="text-md font-bold mb-2">Список событий</h3>
+        <div id="eventList"></div>
       </div>
-      
-      <!-- Вкладка формы события -->
-      <div id="tab-form" class="tab-content">
-        <h3 class="text-lg font-bold mb-3">Добавить/Редактировать событие</h3>
-        <form id="eventForm" class="space-y-3">
+      <div id="tab-form" class="tab-content hidden">
+        <h3 class="text-md font-bold mb-2">Добавить/Редактировать событие</h3>
+        <form id="eventForm" class="space-y-2">
           <input type="hidden" id="eventRecordId">
-          <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="w-full">
-          <input type="text" id="eventTitle" placeholder="Название события" required class="w-full">
-          <select id="eventType" required class="w-full">
-            <option value="">Выберите тип</option>
-            <option value="Спорт">Спорт</option>
-            <option value="Выставки">Выставки</option>
-          </select>
-          <input type="date" id="eventDate" required class="w-full">
-          <input type="text" id="eventLocation" placeholder="Место проведения" required class="w-full">
-          <textarea id="eventDescription" placeholder="Описание" rows="3" class="w-full"></textarea>
-          <input type="text" id="eventMapLink" placeholder="Ссылка на карту (2GIS)" class="w-full">
-          <input type="file" id="eventImage" accept="image/*" class="w-full">
-          <button type="submit" class="btn btn-primary w-full">💾 Сохранить событие</button>
-        </form>
-      </div>
-      
-      <!-- Вкладка списка рекламы -->
-      <div id="tab-ads-list" class="tab-content">
-        <h3 class="text-lg font-bold mb-3">Список рекламных блоков</h3>
-        <div id="adsList" class="mb-4 space-y-3"></div>
-        <button onclick="loadAds()" class="btn btn-secondary w-full">🔄 Обновить список</button>
-      </div>
-      
-      <!-- Вкладка формы рекламы -->
-      <div id="tab-ad-form" class="tab-content">
-        <h3 class="text-lg font-bold mb-3">Добавить/Редактировать рекламу</h3>
-        <form id="adForm" class="space-y-3">
-          <input type="hidden" id="adRecordId">
-          <input type="text" id="adTitle" placeholder="Заголовок рекламы" required class="w-full">
-          <textarea id="adDescription" placeholder="Описание рекламы" rows="3" class="w-full"></textarea>
-          <input type="url" id="adUrl" placeholder="Ссылка (URL)" class="w-full">
-          <input type="file" id="adImage" accept="image/*" class="w-full">
-          <div class="flex space-x-2">
-            <button type="submit" class="btn btn-success flex-1">💾 Сохранить рекламу</button>
-            <button type="button" onclick="clearAdForm()" class="btn btn-secondary">🗑️ Очистить</button>
-          </div>
-        </form>
-      </div>
-      
-      <!-- Вкладка списка голосований -->
-      <div id="tab-votings-list" class="tab-content">
-        <h3 class="text-lg font-bold mb-3">Список голосований</h3>
-        <div id="votingsList" class="mb-4 space-y-3"></div>
-        <button onclick="loadVotings()" class="btn btn-secondary w-full">🔄 Обновить список</button>
-      </div>
-      
-      <!-- Вкладка формы голосования -->
-      <div id="tab-voting-form" class="tab-content">
-        <h3 class="text-lg font-bold mb-3">Добавить/Редактировать голосование</h3>
-        <form id="votingForm" class="space-y-3">
-          <input type="hidden" id="votingRecordId">
-          <input type="text" id="votingTitle" placeholder="Название голосования" required class="w-full">
-          <textarea id="votingDescription" placeholder="Описание голосования" rows="3" class="w-full"></textarea>
-          <select id="votingEventId" class="w-full">
-            <option value="">Выберите мероприятие (опционально)</option>
-          </select>
-          
-          <div id="votingOptionsContainer" class="space-y-3">
-            <div class="option-item">
-              <div class="flex mb-2">
-                <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2" required>
-                <button type="button" onclick="removeOption(this)" class="btn btn-danger admin-btn">-</button>
-              </div>
-              <div class="flex items-center mb-2">
-                <input type="file" class="option-image hidden" accept="image/*">
-                <button type="button" onclick="triggerImageUpload(this)" class="btn btn-primary admin-btn">
-                  📷 Выбрать фото
-                </button>
-                <span class="image-status text-xs text-[var(--hint-color)] ml-2"></span>
-              </div>
-              <img class="option-preview hidden">
-            </div>
-          </div>
-          
-          <button type="button" onclick="addOption()" class="btn btn-secondary w-full">+ Добавить номинанта</button>
-          
-          <input type="number" id="votingLatitude" placeholder="Широта места голосования" step="any" class="w-full">
-          <input type="number" id="votingLongitude" placeholder="Долгота места голосования" step="any" class="w-full">
-          
-          <div class="flex space-x-2">
-            <button type="submit" class="btn btn-primary flex-1">💾 Сохранить голосование</button>
-            <button type="button" id="completeVotingBtn" class="btn btn-success hidden">✅ Завершить</button>
-            <button type="button" id="generateImageBtn" class="btn btn-warning hidden">🎨 Сгенерировать</button>
-          </div>
+          <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full rounded" required>
+          <input type="date" id="eventDate" class="border p-2 w-full rounded" required>
+          <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full rounded" required>
+          <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full rounded"></textarea>
+          <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg w-full">Сохранить</button>
         </form>
       </div>
     </div>
   </div>
 
-  <script>
-    // Основной JavaScript код остается таким же как в вашем оригинале
-    const BACKEND_URL = 'https://smolville.onrender.com';
-    const tg = window.Telegram?.WebApp;
-    if (!tg) {
-      document.body.innerHTML = '<p class="text-center text-[var(--text-color)]">Ошибка: Запустите в Telegram WebApp</p>';
-      throw new Error('Telegram WebApp not found');
-    }
-    tg.ready();
-    tg.expand();
-
-    let currentEventRecord = null;
-    let currentAttendeesCount = 0;
-    let isUserAttending = false;
-    let currentVotingRecord = null;
-    let userLocation = null;
-    let optionImages = {};
-    let eventsData = null;
-    let currentResultsImageUrl = null;
-
-    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-
-    // Применяем тему Telegram
-    function applyTheme() {
-      const theme = tg.themeParams;
-      
-      if (theme.bg_color) {
-        document.documentElement.style.setProperty('--bg-color', theme.bg_color);
-        document.documentElement.style.setProperty('--text-color', theme.text_color);
-        document.documentElement.style.setProperty('--hint-color', theme.hint_color);
-        document.documentElement.style.setProperty('--link-color', theme.link_color);
-        document.documentElement.style.setProperty('--button-color', theme.button_color);
-        document.documentElement.style.setProperty('--button-text-color', theme.button_text_color);
-        document.documentElement.style.setProperty('--secondary-bg-color', theme.secondary_bg_color);
-      }
-      
-      document.body.style.backgroundColor = theme.bg_color || 'var(--bg-color)';
-    }
-
-    // [ЗДЕСЬ ДОЛЖЕН БЫТЬ ВЕСЬ ВАШ ОРИГИНАЛЬНЫЙ JAVASCRIPT КОД]
-    // Включая функции:
-    // - formatDate, renderEvents, showVotingModal, showVotingOptions, updateVoteButtons
-    // - castVote, showVotingResults, generateResultsImage, renderEventItem
-    // - showEventModal, attendEvent, unattendEvent, renderAdItem, showAdModal
-    // - loadAds, editAd, deleteAd, clearAdForm, loadVotings, loadEventsForVoting
-    // - addOption, triggerImageUpload, handleImageUpload, removeOption, editVoting
-    // - completeVoting, deleteVoting, checkIsAdmin, initAdmin, showTab
-    // - renderAdminEvents, showAdminModal, closeAdminModal, clearForm, editEvent, deleteEvent
-    // - и все обработчики событий
-
-    // Для краткости я не вставляю весь JS код, но он должен быть таким же как в вашем оригинале
-    // с небольшими изменениями для работы с новыми CSS классами
-
-    // Пример обновленной функции renderAdminEvents для нового дизайна
-    async function renderAdminEvents() {
-      const eventList = document.getElementById('eventList');
-      eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки ивентов');
-        }
-        
-        const data = await response.json();
-        eventList.innerHTML = '';
-        
-        if (data.records && data.records.length > 0) {
-          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
-          data.records.forEach(record => {
-            const event = record.fields || {};
-            const safeTitle = event.Title ? event.Title.replace(/'/g, "\\'") : '';
-            const safeLocation = event.Location ? event.Location.replace(/'/g, "\\'") : '';
-            const safeDescription = event.Description ? event.Description.replace(/'/g, "\\'") : '';
-            const safeMapLink = event.MapLink ? event.MapLink.replace(/'/g, "\\'") : '';
-            const safeImageUrl = event.Image?.[0]?.url ? event.Image[0].url.replace(/'/g, "\\'") : '';
-            
-            const div = document.createElement('div');
-            div.className = 'admin-item';
-            div.innerHTML = `
-              <p class="font-bold text-sm">${event.Title || 'Без названия'}</p>
-              <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)} • ${event.Location || 'Без места'}</p>
-              <p class="text-xs mt-1">👥 Идут: ${event.AttendeesCount || 0} человек</p>
-              <div class="admin-actions">
-                <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="btn btn-warning admin-btn">
-                  ✏️ Редактировать
-                </button>
-                <button onclick="deleteEvent('${record.id}')" class="btn btn-danger admin-btn">
-                  🗑️ Удалить
-                </button>
-              </div>
-            `;
-            eventList.appendChild(div);
-          });
-        } else {
-          eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Ивенты не найдены</p>';
-        }
-      } catch (err) {
-        eventList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
-      }
-    }
-
-    // Обновленная функция для отображения списка голосований в админке
-    async function loadVotings() {
-      const votingsList = document.getElementById('votingsList');
-      votingsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки голосований');
-        }
-        
-        const data = await response.json();
-        votingsList.innerHTML = '';
-        
-        if (data.records && data.records.length > 0) {
-          data.records.forEach(record => {
-            const voting = record.fields || {};
-            const safeTitle = voting.Title ? voting.Title.replace(/'/g, "\\'") : '';
-            const safeDescription = voting.Description ? voting.Description.replace(/'/g, "\\'") : '';
-            const options = voting.Options ? voting.Options.split(',') : [];
-            const status = voting.Status || 'Active';
-            
-            const div = document.createElement('div');
-            div.className = 'admin-item';
-            div.innerHTML = `
-              <p class="font-bold text-sm">${voting.Title || 'Без названия'}</p>
-              <p class="text-xs text-[var(--hint-color)]">
-                Статус: <span class="${status === 'Completed' ? 'text-green-500' : 'text-red-500'}">
-                  ${status === 'Completed' ? 'Завершено' : 'Активно'}
-                </span>
-              </p>
-              <p class="text-xs">Номинантов: ${options.length}</p>
-              <p class="text-xs text-[var(--hint-color)]">
-                Проголосовало: ${voting.VotedUserIDs ? voting.VotedUserIDs.split(',').length : 0} человек
-              </p>
-              <div class="admin-actions">
-                <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || ''}, ${voting.Longitude || ''}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}', '${JSON.stringify(voting.OptionImages || [])}')" 
-                        class="btn btn-warning admin-btn">
-                  ✏️ Редактировать
-                </button>
-                ${status === 'Active' ? `
-                  <button onclick="completeVoting('${record.id}')" class="btn btn-success admin-btn">
-                    ✅ Завершить
-                  </button>
-                ` : ''}
-                <button onclick="generateResultsImageAdmin('${record.id}')" class="btn btn-primary admin-btn">
-                  🎨 Ген. изображение
-                </button>
-                <button onclick="deleteVoting('${record.id}')" class="btn btn-danger admin-btn">
-                  🗑️ Удалить
-                </button>
-              </div>
-            `;
-            votingsList.appendChild(div);
-          });
-        } else {
-          votingsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Голосования не найдены</p>';
-        }
-      } catch (err) {
-        votingsList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
-      }
-    }
-
-    // Инициализация приложения
-    applyTheme();
-    initAdmin();
-    renderEvents();
-    if (document.getElementById('votingOptionsContainer')) {
-      addOption();
-    }
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
