@@ -32,7 +32,6 @@ const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
 const UPLOADCARE_PUB_KEY = process.env.UPLOADCARE_PUB_KEY;
 const UPLOADCARE_SECRET_KEY = process.env.UPLOADCARE_SECRET_KEY;
 const UPLOADCARE_CDN_BASE = process.env.UPLOADCARE_CDN_BASE || 'https://62wb4q8n36.ucarecd.net';
-const UPLOADCARE_PROXY_DOMAIN = process.env.UPLOADCARE_PROXY_DOMAIN || '1c19330c987ab700fe4e.ucr.io';
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
@@ -41,12 +40,6 @@ if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !UPLOADCARE_PUB_KEY || !UPLOADCARE
   console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, UPLOADCARE_PUB_KEY, UPLOADCARE_SECRET_KEY in Render');
   process.exit(1);
 }
-
-console.log('Uploadcare configuration:', {
-  cdnBase: UPLOADCARE_CDN_BASE,
-  proxyDomain: UPLOADCARE_PROXY_DOMAIN,
-  pubKey: UPLOADCARE_PUB_KEY ? 'Set' : 'Missing'
-});
 
 const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
 const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
@@ -60,31 +53,83 @@ app.get('/', (req, res) => {
   res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
 });
 
-// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ UPLOADCARE ====================
 
 /**
- * Генерирует CDN URL с поддержкой Proxy Domain
+ * Генерирует CDN URL согласно документации Uploadcare CDN
+ * Формат: https://cdn.mydomain.com/{uuid}/{operation1}/{operation2}/.../{filename}
  */
-function generateUploadcareCDNUrl(fileId, filename = null, useProxy = true) {
-  let cdnBase;
+function generateUploadcareCDNUrl(fileId, operations = [], filename = null) {
+  // Базовый URL с кастомным CDN доменом
+  let cdnUrl = `${UPLOADCARE_CDN_BASE}/${fileId}`;
   
-  if (useProxy && UPLOADCARE_PROXY_DOMAIN) {
-    // Используем Proxy Domain для обхода блокировок
-    cdnBase = `https://${UPLOADCARE_PROXY_DOMAIN}`;
-  } else {
-    cdnBase = UPLOADCARE_CDN_BASE.trim();
+  // Добавляем операции
+  if (operations && operations.length > 0) {
+    operations.forEach(operation => {
+      cdnUrl += `/${operation}`;
+    });
   }
   
-  cdnBase = cdnBase.replace(/\/+$/, '');
+  // Добавляем имя файла если указано
+  if (filename) {
+    cdnUrl += `/${encodeURIComponent(filename)}`;
+  }
   
-  // Добавляем параметры для лучшей совместимости
-  const params = new URLSearchParams({
-    'format': 'auto',
-    'quality': 'smart',
-    'progressive': 'yes'
-  });
+  return cdnUrl;
+}
+
+/**
+ * Генерирует URL для операций с изображениями
+ */
+function generateImageUrlWithOperations(fileId, operations = {}) {
+  const ops = [];
   
-  return `${cdnBase}/${fileId}${filename ? `/${encodeURIComponent(filename)}` : ''}?${params.toString()}`;
+  // Ресайз
+  if (operations.resize) {
+    ops.push(`-/resize/${operations.resize}/`);
+  }
+  
+  // Кроп
+  if (operations.crop) {
+    ops.push(`-/crop/${operations.crop}/`);
+  }
+  
+  // Формат
+  if (operations.format) {
+    ops.push(`-/format/${operations.format}/`);
+  }
+  
+  // Качество
+  if (operations.quality) {
+    ops.push(`-/quality/${operations.quality}/`);
+  }
+  
+  // Превью
+  if (operations.preview) {
+    ops.push(`-/preview/${operations.preview}/`);
+  }
+  
+  // Умный ресайз
+  if (operations.smartResize) {
+    ops.push(`-/smart_resize/${operations.smartResize}/`);
+  }
+  
+  // Установить размер
+  if (operations.setSize) {
+    ops.push(`-/set_size/${operations.setSize}/`);
+  }
+  
+  // Обрезать по размеру
+  if (operations.cropSize) {
+    ops.push(`-/crop_size/${operations.cropSize}/`);
+  }
+  
+  // Масштабировать
+  if (operations.scale) {
+    ops.push(`-/scale_crop/${operations.scale}/`);
+  }
+  
+  return generateUploadcareCDNUrl(fileId, ops, operations.filename);
 }
 
 /**
@@ -92,6 +137,11 @@ function generateUploadcareCDNUrl(fileId, filename = null, useProxy = true) {
  */
 async function uploadToUploadcare(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
+    console.log('Starting Uploadcare upload...');
+    console.log('Filename:', filename);
+    console.log('Content type:', contentType);
+    console.log('File size:', fileBuffer.length, 'bytes');
+    
     const formData = new FormData();
     formData.append('file', fileBuffer, {
       filename: filename,
@@ -99,30 +149,33 @@ async function uploadToUploadcare(fileBuffer, filename, contentType = 'image/jpe
     });
     formData.append('UPLOADCARE_PUB_KEY', UPLOADCARE_PUB_KEY);
     formData.append('UPLOADCARE_STORE', '1');
+    
+    console.log('Uploadcare Public Key:', UPLOADCARE_PUB_KEY ? 'Set' : 'Missing');
+    console.log('CDN Base:', UPLOADCARE_CDN_BASE);
 
     const response = await axios.post(UPLOADCARE_UPLOAD_URL, formData, {
-      headers: formData.getHeaders(),
+      headers: {
+        ...formData.getHeaders(),
+      },
       timeout: 30000
     });
 
+    console.log('Uploadcare upload response:', response.data);
+
     if (response.data.file) {
       const fileId = response.data.file;
+      console.log('File uploaded successfully, file ID:', fileId);
       
-      // Генерируем оба URL: основной и через proxy
-      const directUrl = generateUploadcareCDNUrl(fileId, filename, false);
-      const proxyUrl = generateUploadcareCDNUrl(fileId, filename, true);
+      // Генерируем CDN URL с кастомным доменом
+      const cdnUrl = generateUploadcareCDNUrl(fileId, [], filename);
       
-      console.log('Upload result:', {
-        fileId: fileId,
-        directUrl: directUrl,
-        proxyUrl: proxyUrl
-      });
+      console.log('Generated CDN URL:', cdnUrl);
       
       return {
         fileId: fileId,
-        url: directUrl,
-        proxyUrl: proxyUrl,
-        filename: filename
+        url: cdnUrl,
+        filename: filename,
+        cdnUrl: cdnUrl
       };
     } else {
       throw new Error('Uploadcare response missing file ID');
@@ -130,26 +183,62 @@ async function uploadToUploadcare(fileBuffer, filename, contentType = 'image/jpe
   } catch (error) {
     console.error('Uploadcare upload error:', error.message);
     if (error.response) {
-      console.error('Uploadcare response:', error.response.data);
+      console.error('Uploadcare response status:', error.response.status);
+      console.error('Uploadcare response data:', error.response.data);
     }
     throw error;
   }
 }
 
 /**
- * Создает объект attachment для Airtable
+ * Получает информацию о файле из Uploadcare
  */
-function createAirtableAttachment(url, filename = null) {
-  const attachment = {
-    url: url
-  };
-  
-  if (filename) {
-    attachment.filename = filename;
+async function getUploadcareFileInfo(fileId) {
+  try {
+    console.log('Getting file info for:', fileId);
+    
+    const response = await axios.get(`${UPLOADCARE_FILES_URL}${fileId}/`, {
+      headers: {
+        'Authorization': `Uploadcare.Simple ${UPLOADCARE_PUB_KEY}:${UPLOADCARE_SECRET_KEY}`,
+        'Accept': 'application/vnd.uploadcare-v0.7+json'
+      }
+    });
+    
+    console.log('File info retrieved successfully');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting file info from Uploadcare:', error.message);
+    if (error.response) {
+      console.error('File info error response:', error.response.data);
+    }
+    throw error;
   }
-  
-  return [attachment];
 }
+
+/**
+ * Удаляет файл из Uploadcare
+ */
+async function deleteFromUploadcare(fileId) {
+  try {
+    await axios.delete(`${UPLOADCARE_FILES_URL}${fileId}/storage/`, {
+      headers: {
+        'Authorization': `Uploadcare.Simple ${UPLOADCARE_PUB_KEY}:${UPLOADCARE_SECRET_KEY}`,
+        'Accept': 'application/vnd.uploadcare-v0.7+json'
+      }
+    });
+    console.log(`File ${fileId} deleted from Uploadcare`);
+  } catch (error) {
+    console.error('Error deleting file from Uploadcare:', error.message);
+  }
+}
+
+// ==================== API ДЛЯ АДМИНА ====================
+
+app.get('/api/is-admin', (req, res) => {
+  const userId = parseInt(req.query.userId, 10);
+  const isAdmin = userId === ADMIN_ID;
+  res.json({ isAdmin });
+});
 
 // ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
 
@@ -159,9 +248,15 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
     
+    console.log('Upload request received');
+    console.log('Original filename:', req.file.originalname);
+    console.log('Mimetype:', req.file.mimetype);
+    console.log('File size:', req.file.size, 'bytes');
+    
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     
+    // Загружаем в Uploadcare
     const uploadResult = await uploadToUploadcare(
       fileBuffer,
       req.file.originalname || `upload_${Date.now()}.jpg`,
@@ -170,20 +265,23 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     
     fs.unlinkSync(filePath);
     
-    // Создаем объект attachment для Airtable
-    const attachment = createAirtableAttachment(uploadResult.proxyUrl, uploadResult.filename);
+    console.log('Upload successful, URL:', uploadResult.url);
     
     res.json({ 
-      url: uploadResult.proxyUrl,
-      directUrl: uploadResult.url,
+      url: uploadResult.url,
       fileId: uploadResult.fileId,
-      filename: uploadResult.filename,
-      attachment: attachment // Добавляем готовый объект для Airtable
+      filename: uploadResult.filename
     });
     
   } catch (error) {
     console.error('Upload error:', error.message);
-    if (req.file) fs.unlinkSync(req.file.path);
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Error deleting temp file:', unlinkError.message);
+      }
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -195,9 +293,14 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
       return res.status(400).json({ error: 'No image file uploaded' });
     }
     
+    console.log('Option image upload request received');
+    console.log('Original filename:', req.file.originalname);
+    console.log('Mimetype:', req.file.mimetype);
+    
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     
+    // Загружаем в Uploadcare
     const uploadResult = await uploadToUploadcare(
       fileBuffer,
       req.file.originalname || `option_image_${Date.now()}.jpg`,
@@ -206,22 +309,131 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     
     fs.unlinkSync(filePath);
     
-    // Создаем объект attachment для Airtable
-    const attachment = createAirtableAttachment(uploadResult.proxyUrl, uploadResult.filename);
+    console.log('Option image upload successful, URL:', uploadResult.url);
     
     res.json({ 
-      url: uploadResult.proxyUrl,
-      directUrl: uploadResult.url,
+      url: uploadResult.url,
       filename: uploadResult.filename,
-      fileId: uploadResult.fileId,
-      attachment: attachment // Добавляем готовый объект для Airtable
+      fileId: uploadResult.fileId
     });
     
   } catch (error) {
     console.error('Option image upload error:', error.message);
-    if (req.file) fs.unlinkSync(req.file.path);
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Error deleting temp file:', unlinkError.message);
+      }
+    }
     res.status(500).json({ error: error.message });
   }
+});
+
+// Новый эндпоинт для генерации URL с операциями над изображением
+app.get('/api/upload/:fileId/url', (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { 
+      resize, 
+      crop, 
+      format, 
+      quality, 
+      preview, 
+      smartResize,
+      setSize,
+      cropSize,
+      scale,
+      filename 
+    } = req.query;
+    
+    const operations = {
+      ...(resize && { resize }),
+      ...(crop && { crop }),
+      ...(format && { format }),
+      ...(quality && { quality }),
+      ...(preview && { preview }),
+      ...(smartResize && { smartResize }),
+      ...(setSize && { setSize }),
+      ...(cropSize && { cropSize }),
+      ...(scale && { scale }),
+      ...(filename && { filename })
+    };
+    
+    const url = generateImageUrlWithOperations(fileId, operations);
+    
+    res.json({
+      fileId: fileId,
+      url: url,
+      operations: operations,
+      cdnBase: UPLOADCARE_CDN_BASE
+    });
+  } catch (error) {
+    console.error('Generate URL error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Эндпоинт для удаления изображений
+app.delete('/api/upload/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    
+    await deleteFromUploadcare(fileId);
+    
+    res.json({ success: true, message: `File ${fileId} deleted successfully` });
+    
+  } catch (error) {
+    console.error('Delete file error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== ПРИМЕРЫ CDN ОПЕРАЦИЙ ====================
+
+app.get('/api/upload/examples/:fileId', (req, res) => {
+  const { fileId } = req.params;
+  
+  const examples = {
+    original: generateUploadcareCDNUrl(fileId),
+    
+    // Ресайз
+    resize_800x600: generateImageUrlWithOperations(fileId, { resize: '800x600' }),
+    resize_50percent: generateImageUrlWithOperations(fileId, { resize: '50x/' }),
+    
+    // Кроп
+    crop_300x300: generateImageUrlWithOperations(fileId, { crop: '300x300' }),
+    crop_center: generateImageUrlWithOperations(fileId, { crop: '300x300/center' }),
+    
+    // Форматы
+    webp: generateImageUrlWithOperations(fileId, { format: 'webp' }),
+    avif: generateImageUrlWithOperations(fileId, { format: 'avif' }),
+    
+    // Качество
+    quality_light: generateImageUrlWithOperations(fileId, { quality: 'lightest' }),
+    quality_best: generateImageUrlWithOperations(fileId, { quality: 'best' }),
+    
+    // Превью
+    preview_100x100: generateImageUrlWithOperations(fileId, { preview: '100x100' }),
+    
+    // Комбинированные операции
+    optimized_web: generateImageUrlWithOperations(fileId, { 
+      resize: '1200x630',
+      format: 'webp',
+      quality: 'smart'
+    }),
+    
+    thumbnail: generateImageUrlWithOperations(fileId, {
+      smartResize: '300x300',
+      format: 'webp'
+    })
+  };
+  
+  res.json({
+    fileId: fileId,
+    cdnBase: UPLOADCARE_CDN_BASE,
+    examples: examples
+  });
 });
 
 // ==================== API ДЛЯ СОБЫТИЙ ====================
@@ -231,17 +443,6 @@ app.get('/api/events', async (req, res) => {
     const response = await axios.get(EVENTS_URL, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
-    
-    // Логирование для отладки
-    const events = response.data.records;
-    console.log(`Fetched ${events.length} events`);
-    
-    events.forEach(event => {
-      if (event.fields && event.fields.Image) {
-        console.log(`Event ${event.id} image:`, event.fields.Image);
-      }
-    });
-    
     res.json(response.data);
   } catch (error) {
     console.error('Events GET error:', error.message);
@@ -255,14 +456,6 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
-    
-    // Если в запросе есть поле imageUrl, преобразуем его в формат attachment
-    if (req.body.fields && req.body.fields.imageUrl) {
-      req.body.fields.Image = createAirtableAttachment(req.body.fields.imageUrl);
-      delete req.body.fields.imageUrl; // Удаляем временное поле
-    }
-    
-    console.log('Processed event data for Airtable:', JSON.stringify(req.body, null, 2));
     
     const response = await axios.post(EVENTS_URL, req.body, {
       headers: { 
@@ -280,17 +473,24 @@ app.post('/api/events', async (req, res) => {
   }
 });
 
+app.get('/api/events/:id', async (req, res) => {
+  try {
+    const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Event GET error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.patch('/api/events/:id', async (req, res) => {
   try {
     console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
-    
-    // Если в запросе есть поле imageUrl, преобразуем его в формат attachment
-    if (req.body.fields && req.body.fields.imageUrl) {
-      req.body.fields.Image = createAirtableAttachment(req.body.fields.imageUrl);
-      delete req.body.fields.imageUrl; // Удаляем временное поле
-    }
-    
-    console.log('Processed event update data for Airtable:', JSON.stringify(req.body, null, 2));
     
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
       headers: { 
@@ -301,6 +501,21 @@ app.patch('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event PATCH error:', error.message);
+    if (error.response) {
+      console.error('Airtable response:', error.response.data);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Event DELETE error:', error.message);
     if (error.response) {
       console.error('Airtable response:', error.response.data);
     }
@@ -327,16 +542,6 @@ app.get('/api/ads', async (req, res) => {
 
 app.post('/api/ads', async (req, res) => {
   try {
-    console.log('Creating ad with data:', JSON.stringify(req.body, null, 2));
-    
-    // Если в запросе есть поле imageUrl, преобразуем его в формат attachment
-    if (req.body.fields && req.body.fields.imageUrl) {
-      req.body.fields.Image = createAirtableAttachment(req.body.fields.imageUrl);
-      delete req.body.fields.imageUrl;
-    }
-    
-    console.log('Processed ad data for Airtable:', JSON.stringify(req.body, null, 2));
-    
     const response = await axios.post(ADS_URL, req.body, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
@@ -355,16 +560,6 @@ app.post('/api/ads', async (req, res) => {
 
 app.patch('/api/ads/:id', async (req, res) => {
   try {
-    console.log('Updating ad with data:', JSON.stringify(req.body, null, 2));
-    
-    // Если в запросе есть поле imageUrl, преобразуем его в формат attachment
-    if (req.body.fields && req.body.fields.imageUrl) {
-      req.body.fields.Image = createAirtableAttachment(req.body.fields.imageUrl);
-      delete req.body.fields.imageUrl;
-    }
-    
-    console.log('Processed ad update data for Airtable:', JSON.stringify(req.body, null, 2));
-    
     const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
@@ -374,243 +569,6 @@ app.patch('/api/ads/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads PATCH error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== API ДЛЯ ГОЛОСОВАНИЙ ====================
-
-app.post('/api/votings', async (req, res) => {
-  try {
-    console.log('Creating voting with data:', JSON.stringify(req.body, null, 2));
-    
-    // Обрабатываем OptionImages если они есть
-    if (req.body.fields && req.body.fields.OptionImages && Array.isArray(req.body.fields.OptionImages)) {
-      req.body.fields.OptionImages = req.body.fields.OptionImages.map(url => 
-        createAirtableAttachment(url)[0]
-      );
-    }
-    
-    console.log('Processed voting data for Airtable:', JSON.stringify(req.body, null, 2));
-    
-    const response = await axios.post(VOTINGS_URL, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Votings POST error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.patch('/api/votings/:id', async (req, res) => {
-  try {
-    console.log('Updating voting with data:', JSON.stringify(req.body, null, 2));
-    
-    // Обрабатываем OptionImages если они есть
-    if (req.body.fields && req.body.fields.OptionImages && Array.isArray(req.body.fields.OptionImages)) {
-      req.body.fields.OptionImages = req.body.fields.OptionImages.map(url => 
-        createAirtableAttachment(url)[0]
-      );
-    }
-    
-    console.log('Processed voting update data for Airtable:', JSON.stringify(req.body, null, 2));
-    
-    const response = await axios.patch(`${VOTINGS_URL}/${req.params.id}`, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Votings PATCH error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Генерация изображения с результатами голосования
-app.post('/api/votings/:id/generate-results', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const voting = votingResponse.data;
-    if (!voting.fields) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    if (!voting.fields.Results) {
-      return res.status(400).json({ error: 'Результаты голосования недоступны' });
-    }
-
-    let results;
-    try {
-      if (typeof voting.fields.Results === 'string') {
-        results = JSON.parse(voting.fields.Results);
-      } else {
-        results = voting.fields.Results;
-      }
-    } catch (parseError) {
-      console.error('Error parsing results:', parseError);
-      return res.status(400).json({ error: 'Неверный формат результатов голосования' });
-    }
-
-    let resultsArray = [];
-    if (Array.isArray(results)) {
-      resultsArray = results;
-    } else if (results && typeof results === 'object') {
-      resultsArray = Object.values(results);
-    } else {
-      return res.status(400).json({ error: 'Неверный формат результатов' });
-    }
-
-    const title = voting.fields.Title || 'Результаты голосования';
-    const description = voting.fields.Description || '';
-    
-    const optionImages = voting.fields.OptionImages || [];
-
-    let height = 600;
-    const hasImages = optionImages && optionImages.length > 0;
-    if (hasImages) height += Math.ceil(resultsArray.length / 3) * 110;
-
-    let svg = `
-      <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
-        <style>
-          .title { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #000; }
-          .description { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
-          .option { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #000; }
-          .stats { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
-        </style>
-        <rect width="800" height="${height}" fill="#ffffff"/>
-        <text x="400" y="50" class="title" text-anchor="middle">${title}</text>
-        <text x="400" y="80" class="description" text-anchor="middle">${description}</text>
-    `;
-
-    let y = 120;
-    resultsArray.forEach((result, index) => {
-      const barWidth = (result.percentage / 100) * 400;
-      const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
-      
-      svg += `
-        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0" rx="5"/>
-        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="5"/>
-        <text x="20" y="${y + 25}" class="option">${result.option}</text>
-        <text x="520" y="${y + 25}" class="stats" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
-      `;
-      y += 50;
-    });
-
-    if (hasImages) {
-      y += 20;
-      svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
-      y += 30;
-      
-      resultsArray.forEach((result, index) => {
-        let imageUrl = null;
-        if (optionImages[index]) {
-          if (typeof optionImages[index] === 'object' && optionImages[index].url) {
-            imageUrl = optionImages[index].url;
-          } else if (Array.isArray(optionImages) && optionImages[index] && optionImages[index].url) {
-            imageUrl = optionImages[index].url;
-          }
-        }
-        
-        if (imageUrl) {
-          const col = index % 3;
-          const row = Math.floor(index / 3);
-          svg += `<image x="${100 + col * 200}" y="${y + row * 110}" width="150" height="100" href="${imageUrl}" preserveAspectRatio="xMidYMid meet"/>`;
-        }
-      });
-    }
-
-    svg += `</svg>`;
-
-    const svgBuffer = Buffer.from(svg);
-    const imageBuffer = await sharp(svgBuffer)
-      .resize(800, height, {
-        fit: 'fill',
-        background: { r: 255, g: 255, b: 255, alpha: 1 }
-      })
-      .jpeg({ 
-        quality: 90,
-        chromaSubsampling: '4:4:4'
-      })
-      .toBuffer();
-
-    const uploadResult = await uploadToUploadcare(
-      imageBuffer, 
-      `voting_results_${id}_${Date.now()}.jpg`,
-      'image/jpeg'
-    );
-
-    // Создаем attachment для Airtable
-    const resultsImageAttachment = createAirtableAttachment(uploadResult.proxyUrl, `results_${id}.jpg`);
-
-    try {
-      const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
-        fields: { 
-          ResultsImage: resultsImageAttachment
-        }
-      }, {
-        headers: { 
-          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          'Content-Type': 'application/json' 
-        }
-      });
-      
-      console.log('ResultsImage saved to Airtable:', resultsImageAttachment);
-    } catch (updateError) {
-      console.error('Error saving ResultsImage to Airtable:', updateError.message);
-    }
-
-    res.json({ 
-      success: true, 
-      imageUrl: uploadResult.proxyUrl,
-      attachment: resultsImageAttachment,
-      fileId: uploadResult.fileId
-    });
-
-  } catch (error) {
-    console.error('Generate results image error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== ОСТАЛЬНЫЕ ЭНДПОИНТЫ (без изменений) ====================
-
-app.get('/api/events/:id', async (req, res) => {
-  try {
-    const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Event GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/events/:id', async (req, res) => {
-  try {
-    const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Event DELETE error:', error.message);
     if (error.response) {
       console.error('Airtable response:', error.response.data);
     }
@@ -633,6 +591,8 @@ app.delete('/api/ads/:id', async (req, res) => {
   }
 });
 
+// ==================== API ДЛЯ ГОЛОСОВАНИЙ ====================
+
 app.get('/api/votings', async (req, res) => {
   try {
     const response = await axios.get(VOTINGS_URL, {
@@ -641,6 +601,36 @@ app.get('/api/votings', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Votings GET error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/votings', async (req, res) => {
+  try {
+    const response = await axios.post(VOTINGS_URL, req.body, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Votings POST error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/votings/:id', async (req, res) => {
+  try {
+    const response = await axios.patch(`${VOTINGS_URL}/${req.params.id}`, req.body, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Votings PATCH error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -855,6 +845,156 @@ app.post('/api/votings/:id/complete', async (req, res) => {
   }
 });
 
+// Генерация изображения с результатами голосования
+app.post('/api/votings/:id/generate-results', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+
+    const voting = votingResponse.data;
+    if (!voting.fields) {
+      return res.status(404).json({ error: 'Голосование не найдено' });
+    }
+
+    if (!voting.fields.Results) {
+      return res.status(400).json({ error: 'Результаты голосования недоступны' });
+    }
+
+    let results;
+    try {
+      if (typeof voting.fields.Results === 'string') {
+        results = JSON.parse(voting.fields.Results);
+      } else {
+        results = voting.fields.Results;
+      }
+    } catch (parseError) {
+      console.error('Error parsing results:', parseError);
+      return res.status(400).json({ error: 'Неверный формат результатов голосования' });
+    }
+
+    let resultsArray = [];
+    if (Array.isArray(results)) {
+      resultsArray = results;
+    } else if (results && typeof results === 'object') {
+      resultsArray = Object.values(results);
+    } else {
+      return res.status(400).json({ error: 'Неверный формат результатов' });
+    }
+
+    const title = voting.fields.Title || 'Результаты голосования';
+    const description = voting.fields.Description || '';
+    
+    const optionImages = voting.fields.OptionImages || [];
+    console.log('OptionImages from Airtable:', JSON.stringify(optionImages, null, 2));
+
+    let height = 600;
+    const hasImages = optionImages && optionImages.length > 0;
+    if (hasImages) height += Math.ceil(resultsArray.length / 3) * 110;
+
+    let svg = `
+      <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <style>
+          .title { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #000; }
+          .description { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+          .option { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #000; }
+          .stats { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+        </style>
+        <rect width="800" height="${height}" fill="#ffffff"/>
+        <text x="400" y="50" class="title" text-anchor="middle">${title}</text>
+        <text x="400" y="80" class="description" text-anchor="middle">${description}</text>
+    `;
+
+    let y = 120;
+    resultsArray.forEach((result, index) => {
+      const barWidth = (result.percentage / 100) * 400;
+      const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
+      
+      svg += `
+        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0" rx="5"/>
+        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="5"/>
+        <text x="20" y="${y + 25}" class="option">${result.option}</text>
+        <text x="520" y="${y + 25}" class="stats" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
+      `;
+      y += 50;
+    });
+
+    if (hasImages) {
+      y += 20;
+      svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
+      y += 30;
+      
+      resultsArray.forEach((result, index) => {
+        let imageUrl = null;
+        if (optionImages[index]) {
+          if (typeof optionImages[index] === 'object' && optionImages[index].url) {
+            imageUrl = optionImages[index].url;
+          } else if (Array.isArray(optionImages) && optionImages[index] && optionImages[index].url) {
+            imageUrl = optionImages[index].url;
+          }
+        }
+        
+        if (imageUrl) {
+          const col = index % 3;
+          const row = Math.floor(index / 3);
+          svg += `<image x="${100 + col * 200}" y="${y + row * 110}" width="150" height="100" href="${imageUrl}" preserveAspectRatio="xMidYMid meet"/>`;
+        }
+      });
+    }
+
+    svg += `</svg>`;
+
+    const svgBuffer = Buffer.from(svg);
+    const imageBuffer = await sharp(svgBuffer)
+      .resize(800, height, {
+        fit: 'fill',
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      })
+      .jpeg({ 
+        quality: 90,
+        chromaSubsampling: '4:4:4'
+      })
+      .toBuffer();
+
+    const uploadResult = await uploadToUploadcare(
+      imageBuffer, 
+      `voting_results_${id}_${Date.now()}.jpg`,
+      'image/jpeg'
+    );
+
+    console.log('Results image uploaded to Uploadcare:', uploadResult.url);
+    
+    try {
+      const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+        fields: { 
+          ResultsImage: uploadResult.url
+        }
+      }, {
+        headers: { 
+          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json' 
+        }
+      });
+      
+      console.log('ResultsImage saved to Airtable successfully');
+    } catch (updateError) {
+      console.error('Error saving ResultsImage to Airtable:', updateError.message);
+    }
+
+    res.json({ 
+      success: true, 
+      imageUrl: uploadResult.url,
+      fileId: uploadResult.fileId
+    });
+
+  } catch (error) {
+    console.error('Generate results image error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== API ДЛЯ "Я ПОЙДУ!" ====================
 
 app.post('/api/events/:eventId/attend', async (req, res) => {
@@ -1043,14 +1183,6 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
   }
 });
 
-// ==================== API ДЛЯ АДМИНА ====================
-
-app.get('/api/is-admin', (req, res) => {
-  const userId = parseInt(req.query.userId, 10);
-  const isAdmin = userId === ADMIN_ID;
-  res.json({ isAdmin });
-});
-
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -1079,5 +1211,9 @@ if (!fs.existsSync(uploadsDir)) {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   console.log(`Uploadcare CDN Base: ${UPLOADCARE_CDN_BASE}`);
-  console.log(`Uploadcare Proxy Domain: ${UPLOADCARE_PROXY_DOMAIN}`);
+  console.log('CDN URL format: ' + UPLOADCARE_CDN_BASE + '/{file_id}/{operations}/{filename}');
+  console.log('Examples:');
+  console.log('- Original: ' + UPLOADCARE_CDN_BASE + '/{file_id}');
+  console.log('- Resized: ' + UPLOADCARE_CDN_BASE + '/{file_id}/-/resize/800x600/');
+  console.log('- WebP: ' + UPLOADCARE_CDN_BASE + '/{file_id}/-/format/webp/');
 });
