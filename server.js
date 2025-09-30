@@ -28,9 +28,9 @@ const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
 
-// Radikal API конфигурация
-const RADIKAL_API_URL = 'https://radikal.cloud/api-v1';
-const X-API-Key = process.env.X-API-Key;
+// Radikal API конфигурация (Chevereto-совместимое)
+const RADIKAL_API_URL = 'https://radikal.cloud/api/1';
+const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY; // ← ИМЕННО ТАК!
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
@@ -51,7 +51,7 @@ app.get('/', (req, res) => {
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ RADIKAL API ====================
 
 /**
- * Загружает файл в Radikal API
+ * Загружает файл в Radikal API (Chevereto-совместимое)
  */
 async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
@@ -59,18 +59,19 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
     console.log('Filename:', filename);
     console.log('Content type:', contentType);
     console.log('File size:', fileBuffer.length, 'bytes');
-    
+
     const formData = new FormData();
-    formData.append('image', fileBuffer, {
+    formData.append('source', fileBuffer, {
       filename: filename,
       contentType: contentType
     });
 
     console.log('Radikal API Key:', RADIKAL_API_KEY ? 'Set' : 'Missing');
+    console.log('API URL:', `${RADIKAL_API_URL}/upload`);
 
     const response = await axios.post(`${RADIKAL_API_URL}/upload`, formData, {
       headers: {
-        'Authorization': `Bearer ${RADIKAL_API_KEY}`,
+        'X-API-Key': RADIKAL_API_KEY, // ← ЗДЕСЬ используем X-API-Key как заголовок!
         ...formData.getHeaders(),
       },
       timeout: 30000
@@ -78,18 +79,18 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
 
     console.log('Radikal API upload response:', response.data);
 
-    if (response.data.status === 'success' && response.data.data) {
-      const fileData = response.data.data;
-      console.log('File uploaded successfully, file ID:', fileData.id);
-      console.log('File URL:', fileData.url);
+    if (response.data.status_code === 200 && response.data.image) {
+      const imageData = response.data.image;
+      console.log('File uploaded successfully, URL:', imageData.url);
       
       return {
-        fileId: fileData.id,
-        url: fileData.url,
-        filename: filename
+        fileId: imageData.id_encoded || imageData.name,
+        url: imageData.url,
+        filename: filename,
+        imageData: response.data.image
       };
     } else {
-      throw new Error('Radikal API response missing file data');
+      throw new Error(response.data.error ? response.data.error.message : (response.data.status_txt || 'Upload failed'));
     }
   } catch (error) {
     console.error('Radikal API upload error:', error.message);
@@ -110,7 +111,7 @@ async function getRadikalFileInfo(fileId) {
     
     const response = await axios.get(`${RADIKAL_API_URL}/files/${fileId}`, {
       headers: {
-        'Authorization': `Bearer ${RADIKAL_API_KEY}`
+        'X-API-Key': RADIKAL_API_KEY
       }
     });
     
@@ -118,8 +119,9 @@ async function getRadikalFileInfo(fileId) {
     return response.data;
   } catch (error) {
     console.error('Error getting file info from Radikal API:', error.message);
-    if (error.response) {
-      console.error('File info error response:', error.response.data);
+    if (error.response && error.response.status === 404) {
+      console.log('File info endpoint not available in Radikal Cloud');
+      return null;
     }
     throw error;
   }
@@ -132,12 +134,17 @@ async function deleteFromRadikal(fileId) {
   try {
     await axios.delete(`${RADIKAL_API_URL}/files/${fileId}`, {
       headers: {
-        'Authorization': `Bearer ${RADIKAL_API_KEY}`
+        'X-API-Key': RADIKAL_API_KEY
       }
     });
     console.log(`File ${fileId} deleted from Radikal API`);
   } catch (error) {
     console.error('Error deleting file from Radikal API:', error.message);
+    if (error.response && error.response.status === 404) {
+      console.log('Delete endpoint not available in Radikal Cloud');
+      return;
+    }
+    throw error;
   }
 }
 
@@ -165,14 +172,17 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     
-    // Загружаем в Radikal API
     const uploadResult = await uploadToRadikal(
       fileBuffer,
       req.file.originalname || `upload_${Date.now()}.jpg`,
       req.file.mimetype
     );
     
-    fs.unlinkSync(filePath);
+    try {
+      fs.unlinkSync(filePath);
+    } catch (unlinkError) {
+      console.error('Error deleting temp file:', unlinkError.message);
+    }
     
     console.log('Upload successful, URL:', uploadResult.url);
     
@@ -209,14 +219,17 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     
-    // Загружаем в Radikal API
     const uploadResult = await uploadToRadikal(
       fileBuffer,
       req.file.originalname || `option_image_${Date.now()}.jpg`,
       req.file.mimetype
     );
     
-    fs.unlinkSync(filePath);
+    try {
+      fs.unlinkSync(filePath);
+    } catch (unlinkError) {
+      console.error('Error deleting temp file:', unlinkError.message);
+    }
     
     console.log('Option image upload successful, URL:', uploadResult.url);
     
@@ -254,8 +267,10 @@ app.delete('/api/upload/:fileId', async (req, res) => {
   }
 });
 
-// ==================== API ДЛЯ СОБЫТИЙ ====================
+// ==================== ОСТАЛЬНЫЕ API (без изменений) ====================
 
+// [Здесь остальной код без изменений - события, реклама, голосования и т.д.]
+// Events API
 app.get('/api/events', async (req, res) => {
   try {
     const response = await axios.get(EVENTS_URL, {
@@ -264,9 +279,6 @@ app.get('/api/events', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Events GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -274,7 +286,6 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
-    
     const response = await axios.post(EVENTS_URL, req.body, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
@@ -284,9 +295,6 @@ app.post('/api/events', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Events POST error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -299,9 +307,6 @@ app.get('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -309,7 +314,6 @@ app.get('/api/events/:id', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   try {
     console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
-    
     const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
@@ -319,9 +323,6 @@ app.patch('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event PATCH error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -334,15 +335,11 @@ app.delete('/api/events/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Event DELETE error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
 
-// ==================== API ДЛЯ РЕКЛАМЫ ====================
-
+// Ads API
 app.get('/api/ads', async (req, res) => {
   try {
     const response = await axios.get(ADS_URL, {
@@ -351,9 +348,6 @@ app.get('/api/ads', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads GET error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -369,9 +363,6 @@ app.post('/api/ads', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads POST error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -387,9 +378,6 @@ app.patch('/api/ads/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ads PATCH error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -402,15 +390,11 @@ app.delete('/api/ads/:id', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Ad DELETE error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
 
-// ==================== API ДЛЯ ГОЛОСОВАНИЙ ====================
-
+// Votings API
 app.get('/api/votings', async (req, res) => {
   try {
     const response = await axios.get(VOTINGS_URL, {
@@ -558,9 +542,6 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     res.json({ success: true, voting: updateResponse.data });
   } catch (error) {
     console.error('Vote error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -884,10 +865,6 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     
   } catch (error) {
     console.error('Attend error:', error.message);
-    if (error.response) {
-      console.error('Airtable response status:', error.response.status);
-      console.error('Airtable response data:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -954,9 +931,6 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     
   } catch (error) {
     console.error('Unattend error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -994,9 +968,6 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
     
   } catch (error) {
     console.error('Attend status error:', error.message);
-    if (error.response) {
-      console.error('Airtable response:', error.response.data);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -1029,4 +1000,5 @@ if (!fs.existsSync(uploadsDir)) {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
   console.log(`Radikal API URL: ${RADIKAL_API_URL}`);
+  console.log('Make sure RADIKAL_API_KEY is set in environment variables');
 });
