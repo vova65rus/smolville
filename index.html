@@ -631,17 +631,29 @@
 
       if (voting.Options && voting.Options.split(',').length > 0) {
         const optionsArray = voting.Options.split(',');
-        const optionImages = voting.OptionImages || [];
+        let optionImages = [];
+        
+        // Парсим изображения опций
+        if (voting.OptionImages) {
+          try {
+            optionImages = typeof voting.OptionImages === 'string' 
+              ? JSON.parse(voting.OptionImages) 
+              : voting.OptionImages;
+          } catch (e) {
+            console.error('Error parsing option images:', e);
+            optionImages = [];
+          }
+        }
 
         optionsArray.forEach((option, index) => {
           const optionDiv = document.createElement('div');
           optionDiv.className = 'mb-3 p-3 border rounded-lg bg-[var(--bg-color)] transition voting-option';
 
           let imageHtml = '';
-          if (optionImages[index] && optionImages[index].url) {
+          if (optionImages[index]) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
-                <img src="${optionImages[index].url}" alt="${option}" 
+                <img src="${optionImages[index]}" alt="${option}" 
                      class="w-24 h-24 object-cover rounded-lg border">
               </div>
             `;
@@ -833,7 +845,19 @@
       
       if (voting.Options && voting.Options.split(',').length > 0) {
         const optionsArray = voting.Options.split(',');
-        const optionImages = voting.OptionImages || [];
+        let optionImages = [];
+        
+        // Парсим изображения опций
+        if (voting.OptionImages) {
+          try {
+            optionImages = typeof voting.OptionImages === 'string' 
+              ? JSON.parse(voting.OptionImages) 
+              : voting.OptionImages;
+          } catch (e) {
+            console.error('Error parsing option images:', e);
+            optionImages = [];
+          }
+        }
         
         const results = {};
         optionsArray.forEach((option, index) => {
@@ -841,7 +865,7 @@
             option: option,
             count: 0,
             percentage: 0,
-            image: optionImages[index] ? optionImages[index].url : null
+            image: optionImages[index] || null
           };
         });
         
@@ -973,7 +997,7 @@
         <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
         <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
         <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
-        <img src="${event.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+        <img src="${event.Image || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
       `;
       div.addEventListener('click', () => showEventModal(record));
       eventsContainer.appendChild(div);
@@ -1002,7 +1026,7 @@
       document.getElementById('modalDate').textContent = formatDate(event.Date) || 'Без даты';
       document.getElementById('modalLocation').textContent = event.Location || 'Без места';
       document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
-      document.getElementById('modalImage').src = event.Image?.[0]?.url || 'https://via.placeholder.com/150';
+      document.getElementById('modalImage').src = event.Image || 'https://via.placeholder.com/150';
       document.getElementById('attendeesCount').textContent = currentAttendeesCount;
       
       const mapButtonContainer = document.getElementById('modalMapButtonContainer');
@@ -1131,7 +1155,7 @@
         <div class="ad-badge">Реклама</div>
         <h3 class="text-sm font-bold">${ad.Title || 'Реклама'}</h3>
         <p class="text-xs">${ad.Description || 'Специальное предложение'}</p>
-        <img src="${ad.IMG?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+        <img src="${ad.Image || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
       `;
       div.addEventListener('click', () => showAdModal(record));
       eventsContainer.appendChild(div);
@@ -1143,7 +1167,7 @@
       
       document.getElementById('adModalTitle').textContent = ad.Title || 'Реклама';
       document.getElementById('adModalDescription').textContent = ad.Description || 'Специальное предложение';
-      document.getElementById('adModalImage').src = ad.IMG?.[0]?.url || 'https://via.placeholder.com/150';
+      document.getElementById('adModalImage').src = ad.Image || 'https://via.placeholder.com/150';
       
       const adButton = document.getElementById('adModalButton');
       if (ad.URL) {
@@ -1180,7 +1204,7 @@
             const safeTitle = ad.Title ? ad.Title.replace(/'/g, "\\'") : '';
             const safeDescription = ad.Description ? ad.Description.replace(/'/g, "\\'") : '';
             const safeUrl = ad.URL ? ad.URL.replace(/'/g, "\\'") : '';
-            const safeImageUrl = ad.IMG?.[0]?.url ? ad.IMG[0].url.replace(/'/g, "\\'") : '';
+            const safeImageUrl = ad.Image ? ad.Image.replace(/'/g, "\\'") : '';
             
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
@@ -1266,7 +1290,7 @@
           });
           const uploadData = await uploadResponse.json();
           if (uploadData.url) {
-            adData.fields.IMG = [{ url: uploadData.url, filename: `ad_image_${Date.now()}.jpg` }];
+            adData.fields.Image = uploadData.url;
           } else {
             throw new Error('Ошибка загрузки изображения');
           }
@@ -1459,7 +1483,7 @@
         const formData = new FormData();
         formData.append('image', file);
         
-        const response = await fetch(`${BACKEND_URL}/api/votings/upload-option-image`, {
+        const response = await fetch(`${BACKEND_URL}/api/upload`, {
           method: 'POST',
           body: formData
         });
@@ -1534,16 +1558,26 @@
       
       try {
         const optionsArray = typeof options === 'string' ? JSON.parse(options) : options;
-        const imagesArray = typeof optionImagesJson === 'string' ? JSON.parse(optionImagesJson) : [];
+        let imagesArray = [];
+        
+        if (optionImagesJson) {
+          try {
+            imagesArray = typeof optionImagesJson === 'string' ? JSON.parse(optionImagesJson) : optionImagesJson;
+          } catch (e) {
+            console.error('Error parsing option images:', e);
+            imagesArray = [];
+          }
+        }
+        
         if (optionsArray && optionsArray.length > 0) {
           optionsArray.forEach((option, index) => {
             addOption();
             const items = optionsContainer.querySelectorAll('.option-item');
             const currentItem = items[items.length - 1];
             currentItem.querySelector('.option-name').value = option;
-            if (imagesArray[index] && imagesArray[index].url) {
-              optionImages[index] = imagesArray[index].url;
-              currentItem.querySelector('.option-preview').src = imagesArray[index].url;
+            if (imagesArray[index]) {
+              optionImages[index] = imagesArray[index];
+              currentItem.querySelector('.option-preview').src = imagesArray[index];
               currentItem.querySelector('.option-preview').classList.remove('hidden');
               currentItem.querySelector('.image-status').textContent = 'Фото загружено';
             }
@@ -1630,10 +1664,7 @@
           options.push(nameInput.value.trim());
           
           if (optionImages[index]) {
-            optionImageUrls.push({ 
-              url: optionImages[index],
-              filename: `option_image_${index}_${Date.now()}.jpg`
-            });
+            optionImageUrls.push(optionImages[index]);
           } else {
             optionImageUrls.push(null);
           }
@@ -1657,7 +1688,7 @@
       };
       
       if (optionImageUrls.some(img => img !== null)) {
-        votingData.fields.OptionImages = optionImageUrls.filter(img => img !== null);
+        votingData.fields.OptionImages = JSON.stringify(optionImageUrls.filter(img => img !== null));
       }
       
       if (latitude !== '') votingData.fields.Latitude = parseFloat(latitude);
@@ -1795,7 +1826,7 @@
             const safeLocation = event.Location ? event.Location.replace(/'/g, "\\'") : '';
             const safeDescription = event.Description ? event.Description.replace(/'/g, "\\'") : '';
             const safeMapLink = event.MapLink ? event.MapLink.replace(/'/g, "\\'") : '';
-            const safeImageUrl = event.Image?.[0]?.url ? event.Image[0].url.replace(/'/g, "\\'") : '';
+            const safeImageUrl = event.Image ? event.Image.replace(/'/g, "\\'") : '';
             
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)]';
@@ -1851,7 +1882,7 @@
       document.getElementById('eventLocation').value = location;
       document.getElementById('eventDescription').value = description;
       document.getElementById('eventMapLink').value = mapLink || '';
-      alert('Текущее изображение: ' + imageUrl);
+      alert('Текущее изображение: ' + (imageUrl || 'отсутствует'));
       showTab('tab-form');
     }
 
@@ -1903,10 +1934,7 @@
           });
           const uploadData = await uploadResponse.json();
           if (uploadData.url) {
-            eventData.fields.Image = [{ 
-              url: uploadData.url,
-              filename: `event_image_${Date.now()}.jpg`
-            }];
+            eventData.fields.Image = uploadData.url;
           } else {
             throw new Error('Ошибка загрузки изображения');
           }
