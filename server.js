@@ -28,16 +28,15 @@ const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
 
-// Uploadcare конфигурация
-const UPLOADCARE_PUB_KEY = process.env.UPLOADCARE_PUB_KEY;
-const UPLOADCARE_SECRET_KEY = process.env.UPLOADCARE_SECRET_KEY;
-const UPLOADCARE_CDN_BASE = process.env.UPLOADCARE_CDN_BASE || 'https://62wb4q8n36.ucarecd.net';
+// Radikal API конфигурация
+const RADIKAL_API_URL = 'https://radikal.cloud/api-v1';
+const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
 
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !UPLOADCARE_PUB_KEY || !UPLOADCARE_SECRET_KEY) {
-  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, UPLOADCARE_PUB_KEY, UPLOADCARE_SECRET_KEY in Render');
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !RADIKAL_API_KEY) {
+  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, RADIKAL_API_KEY in Render');
   process.exit(1);
 }
 
@@ -45,169 +44,80 @@ const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TAB
 const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
 const VOTINGS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${VOTINGS_TABLE}`;
 
-// Uploadcare API endpoints
-const UPLOADCARE_UPLOAD_URL = 'https://upload.uploadcare.com/base/';
-const UPLOADCARE_FILES_URL = 'https://api.uploadcare.com/files/';
-
 app.get('/', (req, res) => {
   res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
 });
 
-// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ UPLOADCARE ====================
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ RADIKAL API ====================
 
 /**
- * Генерирует CDN URL согласно документации Uploadcare CDN
- * Формат: https://cdn.mydomain.com/{uuid}/{operation1}/{operation2}/.../{filename}
+ * Загружает файл в Radikal API
  */
-function generateUploadcareCDNUrl(fileId, operations = [], filename = null) {
-  // Базовый URL с кастомным CDN доменом
-  let cdnUrl = `${UPLOADCARE_CDN_BASE}/${fileId}`;
-  
-  // Добавляем операции
-  if (operations && operations.length > 0) {
-    operations.forEach(operation => {
-      cdnUrl += `/${operation}`;
-    });
-  }
-  
-  // Добавляем имя файла если указано
-  if (filename) {
-    cdnUrl += `/${encodeURIComponent(filename)}`;
-  }
-  
-  return cdnUrl;
-}
-
-/**
- * Генерирует URL для операций с изображениями
- */
-function generateImageUrlWithOperations(fileId, operations = {}) {
-  const ops = [];
-  
-  // Ресайз
-  if (operations.resize) {
-    ops.push(`-/resize/${operations.resize}/`);
-  }
-  
-  // Кроп
-  if (operations.crop) {
-    ops.push(`-/crop/${operations.crop}/`);
-  }
-  
-  // Формат
-  if (operations.format) {
-    ops.push(`-/format/${operations.format}/`);
-  }
-  
-  // Качество
-  if (operations.quality) {
-    ops.push(`-/quality/${operations.quality}/`);
-  }
-  
-  // Превью
-  if (operations.preview) {
-    ops.push(`-/preview/${operations.preview}/`);
-  }
-  
-  // Умный ресайз
-  if (operations.smartResize) {
-    ops.push(`-/smart_resize/${operations.smartResize}/`);
-  }
-  
-  // Установить размер
-  if (operations.setSize) {
-    ops.push(`-/set_size/${operations.setSize}/`);
-  }
-  
-  // Обрезать по размеру
-  if (operations.cropSize) {
-    ops.push(`-/crop_size/${operations.cropSize}/`);
-  }
-  
-  // Масштабировать
-  if (operations.scale) {
-    ops.push(`-/scale_crop/${operations.scale}/`);
-  }
-  
-  return generateUploadcareCDNUrl(fileId, ops, operations.filename);
-}
-
-/**
- * Загружает файл в Uploadcare
- */
-async function uploadToUploadcare(fileBuffer, filename, contentType = 'image/jpeg') {
+async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
-    console.log('Starting Uploadcare upload...');
+    console.log('Starting Radikal API upload...');
     console.log('Filename:', filename);
     console.log('Content type:', contentType);
     console.log('File size:', fileBuffer.length, 'bytes');
     
     const formData = new FormData();
-    formData.append('file', fileBuffer, {
+    formData.append('image', fileBuffer, {
       filename: filename,
       contentType: contentType
     });
-    formData.append('UPLOADCARE_PUB_KEY', UPLOADCARE_PUB_KEY);
-    formData.append('UPLOADCARE_STORE', '1');
-    
-    console.log('Uploadcare Public Key:', UPLOADCARE_PUB_KEY ? 'Set' : 'Missing');
-    console.log('CDN Base:', UPLOADCARE_CDN_BASE);
 
-    const response = await axios.post(UPLOADCARE_UPLOAD_URL, formData, {
+    console.log('Radikal API Key:', RADIKAL_API_KEY ? 'Set' : 'Missing');
+
+    const response = await axios.post(`${RADIKAL_API_URL}/upload`, formData, {
       headers: {
+        'Authorization': `Bearer ${RADIKAL_API_KEY}`,
         ...formData.getHeaders(),
       },
       timeout: 30000
     });
 
-    console.log('Uploadcare upload response:', response.data);
+    console.log('Radikal API upload response:', response.data);
 
-    if (response.data.file) {
-      const fileId = response.data.file;
-      console.log('File uploaded successfully, file ID:', fileId);
-      
-      // Генерируем CDN URL с кастомным доменом
-      const cdnUrl = generateUploadcareCDNUrl(fileId, [], filename);
-      
-      console.log('Generated CDN URL:', cdnUrl);
+    if (response.data.status === 'success' && response.data.data) {
+      const fileData = response.data.data;
+      console.log('File uploaded successfully, file ID:', fileData.id);
+      console.log('File URL:', fileData.url);
       
       return {
-        fileId: fileId,
-        url: cdnUrl,
-        filename: filename,
-        cdnUrl: cdnUrl
+        fileId: fileData.id,
+        url: fileData.url,
+        filename: filename
       };
     } else {
-      throw new Error('Uploadcare response missing file ID');
+      throw new Error('Radikal API response missing file data');
     }
   } catch (error) {
-    console.error('Uploadcare upload error:', error.message);
+    console.error('Radikal API upload error:', error.message);
     if (error.response) {
-      console.error('Uploadcare response status:', error.response.status);
-      console.error('Uploadcare response data:', error.response.data);
+      console.error('Radikal API response status:', error.response.status);
+      console.error('Radikal API response data:', error.response.data);
     }
     throw error;
   }
 }
 
 /**
- * Получает информацию о файле из Uploadcare
+ * Получает информацию о файле из Radikal API
  */
-async function getUploadcareFileInfo(fileId) {
+async function getRadikalFileInfo(fileId) {
   try {
     console.log('Getting file info for:', fileId);
     
-    const response = await axios.get(`${UPLOADCARE_FILES_URL}${fileId}/`, {
+    const response = await axios.get(`${RADIKAL_API_URL}/files/${fileId}`, {
       headers: {
-        'Authorization': `Uploadcare.Simple ${UPLOADCARE_PUB_KEY}:${UPLOADCARE_SECRET_KEY}`,
-        'Accept': 'application/vnd.uploadcare-v0.7+json'
+        'Authorization': `Bearer ${RADIKAL_API_KEY}`
       }
     });
     
     console.log('File info retrieved successfully');
     return response.data;
   } catch (error) {
-    console.error('Error getting file info from Uploadcare:', error.message);
+    console.error('Error getting file info from Radikal API:', error.message);
     if (error.response) {
       console.error('File info error response:', error.response.data);
     }
@@ -216,19 +126,18 @@ async function getUploadcareFileInfo(fileId) {
 }
 
 /**
- * Удаляет файл из Uploadcare
+ * Удаляет файл из Radikal API
  */
-async function deleteFromUploadcare(fileId) {
+async function deleteFromRadikal(fileId) {
   try {
-    await axios.delete(`${UPLOADCARE_FILES_URL}${fileId}/storage/`, {
+    await axios.delete(`${RADIKAL_API_URL}/files/${fileId}`, {
       headers: {
-        'Authorization': `Uploadcare.Simple ${UPLOADCARE_PUB_KEY}:${UPLOADCARE_SECRET_KEY}`,
-        'Accept': 'application/vnd.uploadcare-v0.7+json'
+        'Authorization': `Bearer ${RADIKAL_API_KEY}`
       }
     });
-    console.log(`File ${fileId} deleted from Uploadcare`);
+    console.log(`File ${fileId} deleted from Radikal API`);
   } catch (error) {
-    console.error('Error deleting file from Uploadcare:', error.message);
+    console.error('Error deleting file from Radikal API:', error.message);
   }
 }
 
@@ -256,8 +165,8 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     
-    // Загружаем в Uploadcare
-    const uploadResult = await uploadToUploadcare(
+    // Загружаем в Radikal API
+    const uploadResult = await uploadToRadikal(
       fileBuffer,
       req.file.originalname || `upload_${Date.now()}.jpg`,
       req.file.mimetype
@@ -300,8 +209,8 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     
-    // Загружаем в Uploadcare
-    const uploadResult = await uploadToUploadcare(
+    // Загружаем в Radikal API
+    const uploadResult = await uploadToRadikal(
       fileBuffer,
       req.file.originalname || `option_image_${Date.now()}.jpg`,
       req.file.mimetype
@@ -330,56 +239,12 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
   }
 });
 
-// Новый эндпоинт для генерации URL с операциями над изображением
-app.get('/api/upload/:fileId/url', (req, res) => {
-  try {
-    const { fileId } = req.params;
-    const { 
-      resize, 
-      crop, 
-      format, 
-      quality, 
-      preview, 
-      smartResize,
-      setSize,
-      cropSize,
-      scale,
-      filename 
-    } = req.query;
-    
-    const operations = {
-      ...(resize && { resize }),
-      ...(crop && { crop }),
-      ...(format && { format }),
-      ...(quality && { quality }),
-      ...(preview && { preview }),
-      ...(smartResize && { smartResize }),
-      ...(setSize && { setSize }),
-      ...(cropSize && { cropSize }),
-      ...(scale && { scale }),
-      ...(filename && { filename })
-    };
-    
-    const url = generateImageUrlWithOperations(fileId, operations);
-    
-    res.json({
-      fileId: fileId,
-      url: url,
-      operations: operations,
-      cdnBase: UPLOADCARE_CDN_BASE
-    });
-  } catch (error) {
-    console.error('Generate URL error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Эндпоинт для удаления изображений
 app.delete('/api/upload/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
     
-    await deleteFromUploadcare(fileId);
+    await deleteFromRadikal(fileId);
     
     res.json({ success: true, message: `File ${fileId} deleted successfully` });
     
@@ -387,53 +252,6 @@ app.delete('/api/upload/:fileId', async (req, res) => {
     console.error('Delete file error:', error.message);
     res.status(500).json({ error: error.message });
   }
-});
-
-// ==================== ПРИМЕРЫ CDN ОПЕРАЦИЙ ====================
-
-app.get('/api/upload/examples/:fileId', (req, res) => {
-  const { fileId } = req.params;
-  
-  const examples = {
-    original: generateUploadcareCDNUrl(fileId),
-    
-    // Ресайз
-    resize_800x600: generateImageUrlWithOperations(fileId, { resize: '800x600' }),
-    resize_50percent: generateImageUrlWithOperations(fileId, { resize: '50x/' }),
-    
-    // Кроп
-    crop_300x300: generateImageUrlWithOperations(fileId, { crop: '300x300' }),
-    crop_center: generateImageUrlWithOperations(fileId, { crop: '300x300/center' }),
-    
-    // Форматы
-    webp: generateImageUrlWithOperations(fileId, { format: 'webp' }),
-    avif: generateImageUrlWithOperations(fileId, { format: 'avif' }),
-    
-    // Качество
-    quality_light: generateImageUrlWithOperations(fileId, { quality: 'lightest' }),
-    quality_best: generateImageUrlWithOperations(fileId, { quality: 'best' }),
-    
-    // Превью
-    preview_100x100: generateImageUrlWithOperations(fileId, { preview: '100x100' }),
-    
-    // Комбинированные операции
-    optimized_web: generateImageUrlWithOperations(fileId, { 
-      resize: '1200x630',
-      format: 'webp',
-      quality: 'smart'
-    }),
-    
-    thumbnail: generateImageUrlWithOperations(fileId, {
-      smartResize: '300x300',
-      format: 'webp'
-    })
-  };
-  
-  res.json({
-    fileId: fileId,
-    cdnBase: UPLOADCARE_CDN_BASE,
-    examples: examples
-  });
 });
 
 // ==================== API ДЛЯ СОБЫТИЙ ====================
@@ -958,13 +776,13 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       })
       .toBuffer();
 
-    const uploadResult = await uploadToUploadcare(
+    const uploadResult = await uploadToRadikal(
       imageBuffer, 
       `voting_results_${id}_${Date.now()}.jpg`,
       'image/jpeg'
     );
 
-    console.log('Results image uploaded to Uploadcare:', uploadResult.url);
+    console.log('Results image uploaded to Radikal API:', uploadResult.url);
     
     try {
       const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
@@ -1210,10 +1028,5 @@ if (!fs.existsSync(uploadsDir)) {
 // Запуск сервера
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`Uploadcare CDN Base: ${UPLOADCARE_CDN_BASE}`);
-  console.log('CDN URL format: ' + UPLOADCARE_CDN_BASE + '/{file_id}/{operations}/{filename}');
-  console.log('Examples:');
-  console.log('- Original: ' + UPLOADCARE_CDN_BASE + '/{file_id}');
-  console.log('- Resized: ' + UPLOADCARE_CDN_BASE + '/{file_id}/-/resize/800x600/');
-  console.log('- WebP: ' + UPLOADCARE_CDN_BASE + '/{file_id}/-/format/webp/');
+  console.log(`Radikal API URL: ${RADIKAL_API_URL}`);
 });
