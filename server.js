@@ -30,7 +30,7 @@ const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
 
 // Radikal API конфигурация
 const RADIKAL_API_URL = 'https://radikal.cloud/api-v1';
-const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
+const X-API-Key = process.env.X-API-Key;
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
