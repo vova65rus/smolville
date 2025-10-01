@@ -244,7 +244,6 @@
       margin-top: 5px;
     }
 
-    /* Улучшенные контрастные цвета */
     .text-contrast {
       color: var(--text-color);
     }
@@ -257,7 +256,6 @@
       border-color: var(--hint-color);
     }
 
-    /* Улучшенные цвета для карточек */
     .card-contrast {
       background: var(--secondary-bg-color);
       color: var(--text-color);
@@ -319,7 +317,6 @@
       <h2 id="votingModalTitle" class="text-lg font-bold text-contrast"></h2>
       <p id="votingModalDescription" class="text-contrast"></p>
       
-      <!-- ПЕРЕМЕЩЕННАЯ КНОПКА ОПРЕДЕЛЕНИЯ МЕСТОПОЛОЖЕНИЯ - ТЕПЕРЬ ПОД ОПИСАНИЕМ -->
       <div class="mt-4 pt-3 border-t border-contrast">
         <p class="text-sm text-[var(--hint-color)]">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
         <button id="getLocationBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3">
@@ -354,13 +351,11 @@
         <div class="tab" onclick="showTab('tab-voting-form')">Добавить голосование</div>
       </div>
       
-      <!-- Вкладка списка событий -->
       <div id="tab-list" class="tab-content active">
         <h3 class="text-md font-bold mb-2 text-contrast">Список событий</h3>
         <div id="eventList" class="mb-4"></div>
       </div>
       
-      <!-- Вкладка формы события -->
       <div id="tab-form" class="tab-content">
         <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать событие</h3>
         <form id="eventForm">
@@ -381,14 +376,12 @@
         </form>
       </div>
       
-      <!-- Вкладка списка рекламы -->
       <div id="tab-ads-list" class="tab-content">
         <h3 class="text-md font-bold mb-2 text-contrast">Список рекламных блоков</h3>
         <div id="adsList" class="mb-4"></div>
         <button onclick="loadAds()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">Обновить список</button>
       </div>
       
-      <!-- Вкладка формы рекламы -->
       <div id="tab-ad-form" class="tab-content">
         <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать рекламу</h3>
         <form id="adForm">
@@ -404,14 +397,12 @@
         </form>
       </div>
       
-      <!-- Вкладка списка голосований -->
       <div id="tab-votings-list" class="tab-content">
         <h3 class="text-md font-bold mb-2 text-contrast">Список голосований</h3>
         <div id="votingsList" class="mb-4"></div>
         <button onclick="loadVotings()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">Обновить список</button>
       </div>
       
-      <!-- Вкладка формы голосования -->
       <div id="tab-voting-form" class="tab-content">
         <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать голосование</h3>
         <form id="votingForm">
@@ -472,79 +463,24 @@
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
-    // Применение темы Telegram с адаптацией под системные настройки
+    // Упрощенная функция применения темы
     function applyTheme() {
-      // Проверяем системные предпочтения
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      
-      // Приоритет: тема Telegram -> системная тема -> светлая тема по умолчанию
       const theme = tg.themeParams;
       
       if (theme.bg_color) {
-        // Используем тему Telegram
-        document.documentElement.style.setProperty('--bg-color', theme.bg_color || '#ffffff');
-        document.documentElement.style.setProperty('--text-color', theme.text_color || '#000000');
-        document.documentElement.style.setProperty('--hint-color', theme.hint_color || '#707579');
-        document.documentElement.style.setProperty('--link-color', theme.link_color || '#3390ec');
-        document.documentElement.style.setProperty('--button-color', theme.button_color || '#3390ec');
-        document.documentElement.style.setProperty('--button-text-color', theme.button_text_color || '#ffffff');
-        document.documentElement.style.setProperty('--secondary-bg-color', theme.secondary_bg_color || '#f4f4f5');
+        document.documentElement.style.setProperty('--bg-color', theme.bg_color);
+        document.documentElement.style.setProperty('--text-color', theme.text_color);
+        document.documentElement.style.setProperty('--hint-color', theme.hint_color);
+        document.documentElement.style.setProperty('--link-color', theme.link_color);
+        document.documentElement.style.setProperty('--button-color', theme.button_color);
+        document.documentElement.style.setProperty('--button-text-color', theme.button_text_color);
+        document.documentElement.style.setProperty('--secondary-bg-color', theme.secondary_bg_color);
       } else if (prefersDark) {
-        // Темная тема по системным настройкам
-        applyDarkTheme();
-      } else {
-        // Светлая тема по умолчанию
-        applyLightTheme();
+        document.documentElement.style.setProperty('--bg-color', '#1a1a1a');
+        document.documentElement.style.setProperty('--text-color', '#ffffff');
+        document.documentElement.style.setProperty('--hint-color', '#a0a0a0');
       }
-      
-      // Слушаем изменения системной темы
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-        if (!tg.themeParams.bg_color) {
-          if (e.matches) {
-            applyDarkTheme();
-          } else {
-            applyLightTheme();
-          }
-        }
-      });
-    }
-
-    function applyDarkTheme() {
-      document.documentElement.style.setProperty('--bg-color', '#1a1a1a');
-      document.documentElement.style.setProperty('--text-color', '#ffffff');
-      document.documentElement.style.setProperty('--hint-color', '#a0a0a0');
-      document.documentElement.style.setProperty('--link-color', '#4da6ff');
-      document.documentElement.style.setProperty('--button-color', '#4da6ff');
-      document.documentElement.style.setProperty('--button-text-color', '#ffffff');
-      document.documentElement.style.setProperty('--secondary-bg-color', '#2d2d2d');
-      document.documentElement.style.setProperty('--ad-bg-color', '#333300');
-      document.documentElement.style.setProperty('--ad-text-color', '#ffffcc');
-      document.documentElement.style.setProperty('--ad-border-color', '#666600');
-      document.documentElement.style.setProperty('--voting-bg-color', '#330000');
-      document.documentElement.style.setProperty('--voting-text-color', '#ffcccc');
-      document.documentElement.style.setProperty('--voting-border-color', '#660000');
-      document.documentElement.style.setProperty('--voting-completed-bg', '#003300');
-      document.documentElement.style.setProperty('--voting-completed-text', '#ccffcc');
-      document.documentElement.style.setProperty('--voting-completed-border', '#006600');
-    }
-
-    function applyLightTheme() {
-      document.documentElement.style.setProperty('--bg-color', '#ffffff');
-      document.documentElement.style.setProperty('--text-color', '#000000');
-      document.documentElement.style.setProperty('--hint-color', '#707579');
-      document.documentElement.style.setProperty('--link-color', '#3390ec');
-      document.documentElement.style.setProperty('--button-color', '#3390ec');
-      document.documentElement.style.setProperty('--button-text-color', '#ffffff');
-      document.documentElement.style.setProperty('--secondary-bg-color', '#f4f4f5');
-      document.documentElement.style.setProperty('--ad-bg-color', '#fff3cd');
-      document.documentElement.style.setProperty('--ad-text-color', '#856404');
-      document.documentElement.style.setProperty('--ad-border-color', '#ffeaa7');
-      document.documentElement.style.setProperty('--voting-bg-color', '#fff0f0');
-      document.documentElement.style.setProperty('--voting-text-color', '#8b0000');
-      document.documentElement.style.setProperty('--voting-border-color', '#ffcccc');
-      document.documentElement.style.setProperty('--voting-completed-bg', '#f0fff0');
-      document.documentElement.style.setProperty('--voting-completed-text', '#006400');
-      document.documentElement.style.setProperty('--voting-completed-border', '#ccffcc');
     }
 
     function formatDate(dateStr) {
@@ -553,9 +489,7 @@
       return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
     }
 
-    // ==================== ОСНОВНЫЕ ФУНКЦИИ ДЛЯ БИПИУМА ====================
-
-    // Функция для получения значений из структуры Бипиума
+    // Универсальная функция для получения значений из Бипиума
     function getBpiumValue(record, fieldName) {
       if (!record || !record.values) return null;
       return record.values[fieldName];
@@ -566,153 +500,201 @@
       return { values: fields };
     }
 
+    // Основная функция загрузки и отображения событий
     async function renderEvents() {
       const eventsContainer = document.getElementById('events');
       eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
 
       try {
+        console.log('Загрузка данных...');
+        
         const [eventsResponse, adsResponse, votingsResponse] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' }),
-          fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' }),
-          fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' })
+          fetch(`${BACKEND_URL}/api/events`).catch(err => {
+            console.error('Ошибка загрузки событий:', err);
+            return { ok: false };
+          }),
+          fetch(`${BACKEND_URL}/api/ads`).catch(err => {
+            console.error('Ошибка загрузки рекламы:', err);
+            return { ok: false };
+          }),
+          fetch(`${BACKEND_URL}/api/votings`).catch(err => {
+            console.error('Ошибка загрузки голосований:', err);
+            return { ok: false };
+          })
         ]);
 
-        if (!eventsResponse.ok) {
-          const errorData = await eventsResponse.json();
-          throw new Error(errorData.error || 'Ошибка загрузки событий');
-        }
-
-        // Бипиум возвращает массив records напрямую
-        eventsData = await eventsResponse.json();
+        let eventsData = [];
         let adsData = [];
         let votingsData = [];
 
-        if (adsResponse.ok) adsData = await adsResponse.json();
-        if (votingsResponse.ok) votingsData = await votingsResponse.json();
+        // Обработка событий
+        if (eventsResponse.ok) {
+          const data = await eventsResponse.json();
+          console.log('События получены:', data);
+          eventsData = Array.isArray(data) ? data : (data.values || []);
+        } else {
+          console.error('Ошибка загрузки событий:', eventsResponse.status);
+        }
+
+        // Обработка рекламы
+        if (adsResponse.ok) {
+          const data = await adsResponse.json();
+          console.log('Реклама получена:', data);
+          adsData = Array.isArray(data) ? data : (data.values || []);
+        }
+
+        // Обработка голосований
+        if (votingsResponse.ok) {
+          const data = await votingsResponse.json();
+          console.log('Голосования получены:', data);
+          votingsData = Array.isArray(data) ? data : (data.values || []);
+        }
 
         eventsContainer.innerHTML = '';
 
-        let activeVotings = [];
-        let events = [];
-        let ads = [];
-
-        // Собираем активные голосования (всегда первые)
-        if (votingsData && votingsData.length > 0) {
-          activeVotings = votingsData
-            .filter(record => getBpiumValue(record, 'Status') !== 'Completed')
-            .map(record => ({
-              type: 'voting',
-              data: record,
-              date: new Date(record.createdTime || Date.now())
-            }));
-        }
-
-        // Собираем события и сортируем по дате (от ближайших к будущим)
-        if (eventsData && eventsData.length > 0) {
-          events = eventsData
-            .map(record => ({
-              type: 'event',
-              data: record,
-              date: new Date(getBpiumValue(record, 'Date') || record.createdTime || Date.now())
-            }))
-            .sort((a, b) => a.date - b.date);
-        }
-
-        // Собираем рекламу
-        if (adsData && adsData.length > 0) {
-          ads = adsData.map(record => ({
-            type: 'ad',
-            data: record,
-            date: new Date(record.createdTime || Date.now())
-          }));
-        }
-
-        // Формируем итоговый список: голосования первые, затем события, реклама каждые 2 события
-        let allItems = [...activeVotings];
-
-        let adIndex = 0;
-        events.forEach((event, index) => {
-          allItems.push(event);
-          if ((index + 1) % 2 === 0 && adIndex < ads.length) {
-            allItems.push(ads[adIndex]);
-            adIndex++;
-          }
+        // Отображение голосований
+        votingsData.forEach(record => {
+          renderVotingItem(record);
         });
 
-        while (adIndex < ads.length) {
-          allItems.push(ads[adIndex]);
-          adIndex++;
-        }
+        // Отображение событий
+        if (eventsData.length > 0) {
+          eventsData.forEach((record, index) => {
+            renderEventItem(record);
+            
+            // Вставляем рекламу после каждых 2 событий
+            if ((index + 1) % 2 === 0 && adsData[index / 2]) {
+              renderAdItem(adsData[index / 2]);
+            }
+          });
 
-        allItems.forEach(item => {
-          if (item.type === 'voting') renderVotingItem(item.data);
-          else if (item.type === 'ad') renderAdItem(item.data);
-          else if (item.type === 'event') renderEventItem(item.data);
-        });
-
-        if (allItems.length === 0) {
+          // Добавляем оставшуюся рекламу в конец
+          const remainingAds = adsData.slice(Math.floor(eventsData.length / 2));
+          remainingAds.forEach(ad => {
+            renderAdItem(ad);
+          });
+        } else {
           eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
         }
+
       } catch (err) {
         console.error('Render events error:', err);
-        eventsContainer.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
+        eventsContainer.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка загрузки: ${err.message}</p>`;
       }
     }
 
+    // Функция отображения события
     function renderEventItem(record) {
       const eventsContainer = document.getElementById('events');
-      const event = record.values || {};
-      const attendeesCount = getBpiumValue(record, 'AttendeesCount') || 0;
       
+      const title = getBpiumValue(record, 'Title') || 'Без названия';
+      const date = getBpiumValue(record, 'Date');
+      const location = getBpiumValue(record, 'Location') || 'Без места';
+      const attendeesCount = getBpiumValue(record, 'AttendeesCount') || 0;
+      const imageUrl = getBpiumValue(record, 'Image') || 'https://via.placeholder.com/150';
+
       const div = document.createElement('div');
-      div.className = 'event-card p-2 fade-in card-contrast';
+      div.className = 'event-card p-3 fade-in card-contrast cursor-pointer';
       div.innerHTML = `
-        <h3 class="text-sm font-bold text-contrast">${getBpiumValue(record, 'Title') || 'Без названия'}</h3>
-        <p class="text-xs text-[var(--hint-color)]">${formatDate(getBpiumValue(record, 'Date'))}</p>
-        <p class="text-xs text-[var(--hint-color)]">${getBpiumValue(record, 'Location') || 'Без места'}</p>
-        <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
-        <img src="${getBpiumValue(record, 'Image') || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
+        <h3 class="text-lg font-bold text-contrast mb-2">${title}</h3>
+        <p class="text-sm text-[var(--hint-color)] mb-1">${formatDate(date)}</p>
+        <p class="text-sm text-[var(--hint-color)] mb-2">${location}</p>
+        <p class="text-sm text-green-600 mb-2">Идут: ${attendeesCount} человек</p>
+        <img src="${imageUrl}" alt="${title}" class="w-full h-32 object-cover rounded-lg" loading="lazy">
       `;
+      
       div.addEventListener('click', () => showEventModal(record));
       eventsContainer.appendChild(div);
     }
 
+    // Функция отображения рекламы
+    function renderAdItem(record) {
+      const eventsContainer = document.getElementById('events');
+      
+      const title = getBpiumValue(record, 'Title') || 'Реклама';
+      const description = getBpiumValue(record, 'Description') || 'Специальное предложение';
+      const imageUrl = getBpiumValue(record, 'IMG') || 'https://via.placeholder.com/150';
+
+      const div = document.createElement('div');
+      div.className = 'ad-card p-3 fade-in relative cursor-pointer';
+      div.innerHTML = `
+        <div class="ad-badge">Реклама</div>
+        <h3 class="text-lg font-bold mb-2">${title}</h3>
+        <p class="text-sm mb-2">${description}</p>
+        <img src="${imageUrl}" alt="${title}" class="w-full h-32 object-cover rounded-lg" loading="lazy">
+      `;
+      
+      div.addEventListener('click', () => showAdModal(record));
+      eventsContainer.appendChild(div);
+    }
+
+    // Функция отображения голосования
+    function renderVotingItem(record) {
+      const eventsContainer = document.getElementById('events');
+      
+      const title = getBpiumValue(record, 'Title') || 'Голосование';
+      const description = getBpiumValue(record, 'Description') || '';
+      const status = getBpiumValue(record, 'Status') || 'Active';
+      const isCompleted = status === 'Completed';
+
+      const div = document.createElement('div');
+      div.className = `voting-card p-3 fade-in relative cursor-pointer ${isCompleted ? 'completed' : ''}`;
+      div.innerHTML = `
+        <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
+        <h3 class="text-lg font-bold mb-2">${title}</h3>
+        <p class="text-sm mb-2">${description}</p>
+        <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'}">
+          ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
+        </p>
+      `;
+      
+      div.addEventListener('click', () => showVotingModal(record));
+      eventsContainer.appendChild(div);
+    }
+
+    // Модальное окно события
     async function showEventModal(record) {
       const modal = document.getElementById('eventModal');
-      const event = record.values || {};
       currentEventRecord = record;
+
+      const title = getBpiumValue(record, 'Title') || 'Без названия';
+      const date = getBpiumValue(record, 'Date');
+      const location = getBpiumValue(record, 'Location') || 'Без места';
+      const description = getBpiumValue(record, 'Description') || 'Без описания';
+      const imageUrl = getBpiumValue(record, 'Image') || 'https://via.placeholder.com/150';
+      const mapLink = getBpiumValue(record, 'MapLink');
       currentAttendeesCount = getBpiumValue(record, 'AttendeesCount') || 0;
-      
+
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modalDate').textContent = formatDate(date) || 'Без даты';
+      document.getElementById('modalLocation').textContent = location;
+      document.getElementById('modalDescription').textContent = description;
+      document.getElementById('modalImage').src = imageUrl;
+      document.getElementById('attendeesCount').textContent = currentAttendeesCount;
+
+      // Проверяем статус участия пользователя
       try {
         const response = await fetch(`${BACKEND_URL}/api/events/${record.id}/attend-status/${user.id}`);
         if (response.ok) {
           const status = await response.json();
           isUserAttending = status.isAttending;
-        } else {
-          isUserAttending = false;
         }
       } catch (err) {
         console.error('Error checking attend status:', err);
         isUserAttending = false;
       }
-      
-      document.getElementById('modalTitle').textContent = getBpiumValue(record, 'Title') || 'Без названия';
-      document.getElementById('modalDate').textContent = formatDate(getBpiumValue(record, 'Date')) || 'Без даты';
-      document.getElementById('modalLocation').textContent = getBpiumValue(record, 'Location') || 'Без места';
-      document.getElementById('modalDescription').textContent = getBpiumValue(record, 'Description') || 'Без описания';
-      document.getElementById('modalImage').src = getBpiumValue(record, 'Image') || 'https://via.placeholder.com/150';
-      document.getElementById('attendeesCount').textContent = currentAttendeesCount;
-      
+
+      // Настройка кнопки карты
       const mapButtonContainer = document.getElementById('modalMapButtonContainer');
       const mapButton = document.getElementById('modalMapButton');
-      
-      if (getBpiumValue(record, 'MapLink')) {
+      if (mapLink) {
         mapButtonContainer.classList.remove('hidden');
-        mapButton.onclick = () => tg.openLink(getBpiumValue(record, 'MapLink'));
+        mapButton.onclick = () => tg.openLink(mapLink);
       } else {
         mapButtonContainer.classList.add('hidden');
       }
-      
+
+      // Настройка кнопки участия
       const attendButton = document.getElementById('attendButton');
       if (isUserAttending) {
         attendButton.textContent = 'Не пойду';
@@ -723,24 +705,21 @@
         attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
         attendButton.onclick = () => attendEvent();
       }
-      
+
       modal.classList.remove('hidden');
       tg.BackButton.show();
       tg.BackButton.onClick(closeEventModal);
     }
 
+    // Функции участия в событии
     async function attendEvent() {
       if (!currentEventRecord) return;
       
       try {
         const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/attend`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
         });
         
         if (response.ok) {
@@ -749,25 +728,11 @@
           isUserAttending = true;
           
           document.getElementById('attendeesCount').textContent = result.count;
-          
-          const attendButton = document.getElementById('attendButton');
-          attendButton.textContent = 'Не пойду';
-          attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-          attendButton.onclick = () => unattendEvent();
-          
+          updateAttendButton();
           alert('Отлично! Вы идете на мероприятие!');
         } else {
           const error = await response.json();
-          if (error.error === 'User already attending') {
-            alert('Вы уже записаны на это мероприятие!');
-            isUserAttending = true;
-            const attendButton = document.getElementById('attendButton');
-            attendButton.textContent = 'Не пойду';
-            attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-            attendButton.onclick = () => unattendEvent();
-          } else {
-            throw new Error(error.error || 'Ошибка при записи');
-          }
+          alert(error.error || 'Ошибка при записи');
         }
       } catch (err) {
         console.error('Attend error:', err);
@@ -783,12 +748,8 @@
       try {
         const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/unattend`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
         });
         
         if (response.ok) {
@@ -797,12 +758,7 @@
           isUserAttending = false;
           
           document.getElementById('attendeesCount').textContent = result.count;
-          
-          const attendButton = document.getElementById('attendButton');
-          attendButton.textContent = 'Я пойду!';
-          attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
-          attendButton.onclick = () => attendEvent();
-          
+          updateAttendButton();
           alert('Вы больше не идете на мероприятие');
         } else {
           throw new Error('Ошибка при отмене записи');
@@ -813,39 +769,41 @@
       }
     }
 
+    function updateAttendButton() {
+      const attendButton = document.getElementById('attendButton');
+      if (isUserAttending) {
+        attendButton.textContent = 'Не пойду';
+        attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+        attendButton.onclick = () => unattendEvent();
+      } else {
+        attendButton.textContent = 'Я пойду!';
+        attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+        attendButton.onclick = () => attendEvent();
+      }
+    }
+
     function closeEventModal() {
       document.getElementById('eventModal').classList.add('hidden');
       tg.BackButton.hide();
       currentEventRecord = null;
     }
 
-    function renderAdItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const ad = record.values || {};
-      
-      const div = document.createElement('div');
-      div.className = 'ad-card p-2 fade-in relative';
-      div.innerHTML = `
-        <div class="ad-badge">Реклама</div>
-        <h3 class="text-sm font-bold">${getBpiumValue(record, 'Title') || 'Реклама'}</h3>
-        <p class="text-xs">${getBpiumValue(record, 'Description') || 'Специальное предложение'}</p>
-        <img src="${getBpiumValue(record, 'IMG') || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
-      `;
-      div.addEventListener('click', () => showAdModal(record));
-      eventsContainer.appendChild(div);
-    }
-
+    // Модальное окно рекламы
     function showAdModal(record) {
       const modal = document.getElementById('adModal');
-      const ad = record.values || {};
       
-      document.getElementById('adModalTitle').textContent = getBpiumValue(record, 'Title') || 'Реклама';
-      document.getElementById('adModalDescription').textContent = getBpiumValue(record, 'Description') || 'Специальное предложение';
-      document.getElementById('adModalImage').src = getBpiumValue(record, 'IMG') || 'https://via.placeholder.com/150';
+      const title = getBpiumValue(record, 'Title') || 'Реклама';
+      const description = getBpiumValue(record, 'Description') || 'Специальное предложение';
+      const imageUrl = getBpiumValue(record, 'IMG') || 'https://via.placeholder.com/150';
+      const url = getBpiumValue(record, 'URL');
+
+      document.getElementById('adModalTitle').textContent = title;
+      document.getElementById('adModalDescription').textContent = description;
+      document.getElementById('adModalImage').src = imageUrl;
       
       const adButton = document.getElementById('adModalButton');
-      if (getBpiumValue(record, 'URL')) {
-        adButton.onclick = () => tg.openLink(getBpiumValue(record, 'URL'));
+      if (url) {
+        adButton.onclick = () => tg.openLink(url);
         adButton.style.display = 'block';
       } else {
         adButton.style.display = 'none';
@@ -861,8 +819,7 @@
       tg.BackButton.hide();
     }
 
-    // ==================== ГОЛОСОВАНИЯ ====================
-
+    // Функции для голосований
     function showVotingOptions(voting) {
       const optionsContainer = document.getElementById('votingOptions');
       optionsContainer.innerHTML = '<h4 class="font-bold mb-2 text-contrast">Выберите номинанта:</h4>';
@@ -883,8 +840,7 @@
           if (optionImages[index] && optionImages[index].url) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
-                <img src="${optionImages[index].url}" alt="${option}" 
-                     class="w-24 h-24 object-cover rounded-lg border border-contrast">
+                <img src="${optionImages[index].url}" alt="${option}" class="w-24 h-24 object-cover rounded-lg border border-contrast">
               </div>
             `;
           }
@@ -895,8 +851,7 @@
               <div class="flex-grow">
                 <span class="font-medium text-contrast">${option}</span>
               </div>
-              <button class="vote-button bg-blue-600 text-white px-3 py-1 rounded text-sm transition" 
-                      onclick="castVote(${index})" disabled>
+              <button class="vote-button bg-blue-600 text-white px-3 py-1 rounded text-sm transition" onclick="castVote(${index})" disabled>
                 Голосовать
               </button>
             </div>
@@ -917,42 +872,17 @@
           button.classList.remove('bg-blue-600');
           button.classList.add('bg-green-600', 'hover:bg-green-700');
           button.disabled = false;
-        } else {
-          button.classList.remove('enabled');
-          button.classList.add('bg-blue-600');
-          button.classList.remove('bg-green-600', 'hover:bg-green-700');
-          button.disabled = true;
         }
       });
     }
 
     async function castVote(optionIndex) {
-      if (!currentVotingRecord) {
-        alert('Ошибка: голосование не выбрано');
-        console.error('castVote: No currentVotingRecord');
-        return;
-      }
-
-      if (!userLocation) {
-        alert('Сначала необходимо определить ваше местоположение');
-        console.error('castVote: No userLocation');
-        return;
-      }
+      if (!currentVotingRecord || !userLocation) return;
 
       try {
-        console.log('Attempting to cast vote:', {
-          votingId: currentVotingRecord.id,
-          userId: user.id,
-          optionIndex,
-          userLat: userLocation.latitude,
-          userLon: userLocation.longitude
-        });
-
         const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: user.id,
             optionIndex: optionIndex,
@@ -962,12 +892,10 @@
         });
 
         if (response.ok) {
-          console.log('Vote cast successfully');
           alert('Ваш голос учтен!');
           showVotingModal(currentVotingRecord);
         } else {
           const error = await response.json();
-          console.error('Vote error:', error);
           alert(error.error || 'Ошибка при голосовании');
         }
       } catch (err) {
@@ -976,10 +904,10 @@
       }
     }
 
+    // Определение местоположения
     document.getElementById('getLocationBtn').addEventListener('click', () => {
       if (!navigator.geolocation) {
         alert('Геолокация не поддерживается вашим браузером');
-        console.error('Geolocation not supported');
         return;
       }
 
@@ -989,7 +917,6 @@
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           };
-          console.log('Geolocation obtained:', userLocation);
           alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
           document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
           document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
@@ -1006,130 +933,89 @@
 
     function showVotingModal(record) {
       const modal = document.getElementById('votingModal');
-      const voting = record.values || {};
       currentVotingRecord = record;
 
-      document.getElementById('votingModalTitle').textContent = getBpiumValue(record, 'Title') || 'Голосование';
-      document.getElementById('votingModalDescription').textContent = getBpiumValue(record, 'Description') || '';
+      const title = getBpiumValue(record, 'Title') || 'Голосование';
+      const description = getBpiumValue(record, 'Description') || '';
 
-      try {
-        fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
-          .then(response => {
-            if (response.ok) {
-              return response.json();
-            }
-            throw new Error('Ошибка проверки статуса голосования');
-          })
-          .then(status => {
-            if (status.hasVoted || getBpiumValue(record, 'Status') === 'Completed') {
-              showVotingResults(voting, status.userVote, record.id);
-            } else {
-              showVotingOptions(voting);
-            }
-          })
-          .catch(err => {
-            console.error('Error checking vote status:', err);
-            showVotingOptions(voting);
-          });
-      } catch (err) {
-        console.error('Error in showVotingModal:', err);
-        showVotingOptions(voting);
-      }
+      document.getElementById('votingModalTitle').textContent = title;
+      document.getElementById('votingModalDescription').textContent = description;
+
+      // Проверяем статус голосования
+      fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
+        .then(response => response.ok ? response.json() : { hasVoted: false })
+        .then(status => {
+          if (status.hasVoted || getBpiumValue(record, 'Status') === 'Completed') {
+            showVotingResults(record, status.userVote);
+          } else {
+            showVotingOptions(record);
+          }
+        })
+        .catch(() => showVotingOptions(record));
 
       modal.classList.remove('hidden');
       tg.BackButton.show();
       tg.BackButton.onClick(closeVotingModal);
     }
 
-    async function showVotingResults(voting, userVote, votingId) {
+    function showVotingResults(record, userVote) {
       const optionsContainer = document.getElementById('votingOptions');
-      const isCompleted = getBpiumValue(currentVotingRecord, 'Status') === 'Completed';
+      const isCompleted = getBpiumValue(record, 'Status') === 'Completed';
       
       optionsContainer.innerHTML = isCompleted ? 
         '<h4 class="font-bold mb-2 text-contrast">Финальные результаты:</h4>' : 
         '<h4 class="font-bold mb-2 text-contrast">Текущие результаты:</h4>';
       
       document.getElementById('getLocationBtn').style.display = 'none';
-      
-      // Отображение изображения результатов
-      if (getBpiumValue(currentVotingRecord, 'ResultsImage')) {
-        const imageContainer = document.getElementById('votingResultsImageContainer');
-        const resultsImage = document.getElementById('votingResultsImage');
-        const downloadBtn = document.getElementById('downloadResultsBtn');
-        const generateBtn = document.getElementById('generateResultsBtn');
-        
-        resultsImage.src = getBpiumValue(currentVotingRecord, 'ResultsImage');
-        imageContainer.classList.remove('hidden');
-        
-        downloadBtn.onclick = () => {
-          const link = document.createElement('a');
-          link.href = getBpiumValue(currentVotingRecord, 'ResultsImage');
-          link.download = `results_${votingId}_${Date.now()}.jpg`;
-          link.click();
-        };
-        
-        generateBtn.onclick = () => generateResultsImage(votingId);
-      } else {
-        document.getElementById('votingResultsImageContainer').classList.add('hidden');
-      }
-      
-      const options = getBpiumValue(currentVotingRecord, 'Options');
-      if (options && options.split(',').length > 0) {
+
+      const options = getBpiumValue(record, 'Options');
+      if (options) {
         const optionsArray = options.split(',');
-        const optionImages = getBpiumValue(currentVotingRecord, 'OptionImages') || [];
-        
+        const optionImages = getBpiumValue(record, 'OptionImages') || [];
+        const votes = getBpiumValue(record, 'Votes');
+
+        // Подсчет результатов
         const results = {};
         optionsArray.forEach((option, index) => {
-          results[index] = {
-            option: option,
-            count: 0,
-            percentage: 0,
-            image: optionImages[index] ? optionImages[index].url : null
-          };
+          results[index] = { option, count: 0, percentage: 0 };
         });
-        
-        const votes = getBpiumValue(currentVotingRecord, 'Votes');
+
         if (votes) {
           const votesObj = typeof votes === 'string' ? JSON.parse(votes) : votes;
           Object.values(votesObj).forEach(voteIndex => {
-            if (results[voteIndex]) {
-              results[voteIndex].count++;
-            }
+            if (results[voteIndex]) results[voteIndex].count++;
           });
         }
-        
+
         const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
         Object.values(results).forEach(result => {
           result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
         });
-        
+
+        // Отображение результатов
         Object.values(results).forEach((result, index) => {
           const isUserChoice = userVote === index;
-          
+          const imageUrl = optionImages[index] ? optionImages[index].url : null;
+
           const resultDiv = document.createElement('div');
           resultDiv.className = 'mb-4 p-3 border rounded-lg bg-contrast voting-option border-contrast';
-          
+
           let imageHtml = '';
-          if (result.image) {
+          if (imageUrl) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
-                <img src="${result.image}" alt="${result.option}" 
-                     class="w-24 h-24 object-cover rounded-lg border border-contrast">
+                <img src="${imageUrl}" alt="${result.option}" class="w-24 h-24 object-cover rounded-lg border border-contrast">
               </div>
             `;
           }
-          
+
           resultDiv.innerHTML = `
             <div class="flex items-start">
               ${imageHtml}
               <div class="flex-grow">
                 <div class="flex justify-between items-start mb-2">
-                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-contrast'}">
-                    ${result.option}
-                  </span>
-                  <span class="text-sm text-[var(--hint-color)] whitespace-nowrap">
-                    ${result.count} голосов (${result.percentage}%)
-                  </span>
+                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-contrast'}">${result.option}</span>
+                  <span class="text-sm text-[var(--hint-color)] whitespace-nowrap">${result.count} голосов (${result.percentage}%)</span>
                 </div>
                 <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
                   <div class="bg-blue-600 h-2 rounded-full" style="width: ${result.percentage}%"></div>
@@ -1138,642 +1024,23 @@
               </div>
             </div>
           `;
-          
+
           optionsContainer.appendChild(resultDiv);
         });
-        
-        if (isCompleted) {
-          optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
-        }
-
-        const resultsData = getBpiumValue(currentVotingRecord, 'Results');
-        if (isCompleted && resultsData) {
-          const resultsParsed = typeof resultsData === 'string' ? JSON.parse(resultsData) : resultsData;
-          let resultsHtml = '<h4 class="font-bold mb-2 mt-4 text-contrast">Итоги:</h4>';
-          Object.values(resultsParsed).sort((a, b) => b.count - a.count).forEach((result, index) => {
-            resultsHtml += `
-              <p class="text-contrast">${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
-            `;
-          });
-          optionsContainer.innerHTML += resultsHtml;
-        }
       }
-    }
 
-    async function generateResultsImage(votingId) {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${votingId}/generate-results`, {
-          method: 'POST'
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            currentResultsImageUrl = data.imageUrl;
-            
-            // Сохраняем URL изображения в базе данных
-            await fetch(`${BACKEND_URL}/api/votings/${votingId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(createBpiumData({
-                ResultsImage: data.imageUrl
-              }))
-            });
-            
-            // Обновляем отображение
-            showVotingModal(currentVotingRecord);
-            alert('Изображение с результатами успешно сгенерировано!');
-          } else {
-            alert('Ошибка при генерации изображения: ' + data.error);
-          }
-        } else {
-          const error = await response.json();
-          alert('Ошибка при генерации изображения: ' + error.error);
-        }
-      } catch (err) {
-        console.error('Generate results image error:', err);
-        alert('Ошибка при генерации изображения: ' + err.message);
+      if (isCompleted) {
+        optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
       }
     }
 
     function closeVotingModal() {
       document.getElementById('votingModal').classList.add('hidden');
-      document.getElementById('votingResultsImageContainer').classList.add('hidden');
       tg.BackButton.hide();
       currentVotingRecord = null;
-      currentResultsImageUrl = null;
     }
 
-    // ==================== АДМИН-ПАНЕЛЬ ====================
-
-    async function loadAds() {
-      const adsList = document.getElementById('adsList');
-      adsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка рекламы...</p>';
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' });
-        if (!response.ok) throw new Error('Ошибка загрузки рекламы');
-        
-        const data = await response.json();
-        adsList.innerHTML = '';
-        
-        if (data && data.length > 0) {
-          data.forEach(record => {
-            const ad = record.values || {};
-            const safeTitle = getBpiumValue(record, 'Title') ? getBpiumValue(record, 'Title').replace(/'/g, "\\'") : '';
-            const safeDescription = getBpiumValue(record, 'Description') ? getBpiumValue(record, 'Description').replace(/'/g, "\\'") : '';
-            const safeUrl = getBpiumValue(record, 'URL') ? getBpiumValue(record, 'URL').replace(/'/g, "\\'") : '';
-            const safeImageUrl = getBpiumValue(record, 'IMG') ? getBpiumValue(record, 'IMG').replace(/'/g, "\\'") : '';
-            
-            const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
-            div.innerHTML = `
-              <p class="text-sm font-bold text-contrast">${getBpiumValue(record, 'Title') || 'Без названия'}</p>
-              <p class="text-xs text-contrast">${getBpiumValue(record, 'Description') || 'Без описания'}</p>
-              <p class="text-xs text-[var(--hint-color)]">URL: ${getBpiumValue(record, 'URL') || 'Не указан'}</p>
-              <div class="flex space-x-2 mt-2">
-                <button onclick="editAd('${record.id}', '${safeTitle}', '${safeDescription}', '${safeUrl}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
-                <button onclick="deleteAd('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
-              </div>
-            `;
-            adsList.appendChild(div);
-          });
-        } else {
-          adsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Рекламные материалы не найдены</p>';
-        }
-      } catch (err) {
-        adsList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
-      }
-    }
-
-    function editAd(recordId, title, description, url, imageUrl) {
-      document.getElementById('adRecordId').value = recordId;
-      document.getElementById('adTitle').value = title || '';
-      document.getElementById('adDescription').value = description || '';
-      document.getElementById('adUrl').value = url || '';
-      alert('Текущее изображение: ' + (imageUrl || 'отсутствует'));
-      showTab('tab-ad-form');
-    }
-
-    async function deleteAd(recordId) {
-      if (!confirm('Удалить рекламный блок?')) return;
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/ads/${recordId}`, {
-          method: 'DELETE'
-        });
-        if (!response.ok) throw new Error('Ошибка удаления');
-        alert('Рекламный блок удален');
-        loadAds();
-        renderEvents();
-      } catch (err) {
-        alert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    function clearAdForm() {
-      document.getElementById('adRecordId').value = '';
-      document.getElementById('adTitle').value = '';
-      document.getElementById('adDescription').value = '';
-      document.getElementById('adUrl').value = '';
-      document.getElementById('adImage').value = '';
-    }
-
-    document.getElementById('adForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const recordId = document.getElementById('adRecordId').value;
-      const title = document.getElementById('adTitle').value;
-      const description = document.getElementById('adDescription').value;
-      const url = document.getElementById('adUrl').value;
-
-      if (!title) {
-        alert('Заголовок рекламы обязателен для заполнения');
-        return;
-      }
-
-      const adData = createBpiumData({
-        Title: title,
-        Description: description || '',
-        URL: url || ''
-      });
-
-      const imageFile = document.getElementById('adImage').files[0];
-      if (imageFile) {
-        try {
-          const uploadForm = new FormData();
-          uploadForm.append('image', imageFile);
-          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
-            method: 'POST',
-            body: uploadForm
-          });
-          const uploadData = await uploadResponse.json();
-          if (uploadData.url) {
-            adData.values.IMG = uploadData.url;
-          } else {
-            throw new Error('Ошибка загрузки изображения');
-          }
-        } catch (err) {
-          alert(`Ошибка загрузки изображения: ${err.message}`);
-          return;
-        }
-      }
-
-      try {
-        const method = recordId ? 'PATCH' : 'POST';
-        const url = recordId ? `${BACKEND_URL}/api/ads/${recordId}` : `${BACKEND_URL}/api/ads`;
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(adData)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения рекламы');
-        }
-
-        alert('Рекламный блок сохранен');
-        clearAdForm();
-        loadAds();
-        renderEvents();
-      } catch (err) {
-        console.error('Ошибка сохранения рекламы:', err);
-        alert(`Ошибка сохранения рекламы: ${err.message}`);
-      }
-    });
-
-    async function loadVotings() {
-      const votingsList = document.getElementById('votingsList');
-      votingsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки голосований');
-        }
-        
-        const data = await response.json();
-        votingsList.innerHTML = '';
-        
-        if (data && data.length > 0) {
-          data.forEach(record => {
-            const voting = record.values || {};
-            const safeTitle = getBpiumValue(record, 'Title') ? getBpiumValue(record, 'Title').replace(/'/g, "\\'") : '';
-            const safeDescription = getBpiumValue(record, 'Description') ? getBpiumValue(record, 'Description').replace(/'/g, "\\'") : '';
-            const options = getBpiumValue(record, 'Options') ? getBpiumValue(record, 'Options').split(',') : [];
-            const status = getBpiumValue(record, 'Status') || 'Active';
-            
-            const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
-            div.innerHTML = `
-              <p class="text-sm font-bold text-contrast">${getBpiumValue(record, 'Title') || 'Без названия'} 
-                <span class="text-xs ${status === 'Completed' ? 'text-green-600' : 'text-red-600'}">
-                  (${status === 'Completed' ? 'Завершено' : 'Активно'})
-                </span>
-              </p>
-              ${getBpiumValue(record, 'EventID') ? `<p class="text-xs text-contrast">Мероприятие: ${getBpiumValue(record, 'EventID')}</p>` : ''}
-              <p class="text-xs text-contrast">Номинантов: ${options.length}</p>
-              <p class="text-xs text-[var(--hint-color)]">Проголосовало: ${getBpiumValue(record, 'VotedUserIDs') ? getBpiumValue(record, 'VotedUserIDs').split(',').length : 0} человек</p>
-              <div class="flex space-x-2 mt-2 flex-wrap">
-                <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${getBpiumValue(record, 'Latitude') || ''}, ${getBpiumValue(record, 'Longitude') || ''}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${getBpiumValue(record, 'EventID') || ''}', '${status}', '${JSON.stringify(getBpiumValue(record, 'OptionImages') || [])}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition mb-1">Редактировать</button>
-                ${status === 'Active' ? `<button onclick="completeVoting('${record.id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs transition mb-1">Завершить</button>` : ''}
-                <button onclick="generateResultsImageAdmin('${record.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition mb-1">Ген. изображение</button>
-                <button onclick="deleteVoting('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition mb-1">Удалить</button>
-              </div>
-            `;
-            votingsList.appendChild(div);
-          });
-        } else {
-          votingsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Голосования не найдены</p>';
-        }
-      } catch (err) {
-        votingsList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
-      }
-    }
-
-    async function generateResultsImageAdmin(votingId) {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${votingId}/generate-results`, {
-          method: 'POST'
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            // Открываем изображение в новой вкладке
-            window.open(data.imageUrl, '_blank');
-            alert('Изображение с результатами успешно сгенерировано!');
-          } else {
-            alert('Ошибка при генерации изображения: ' + data.error);
-          }
-        } else {
-          const error = await response.json();
-          alert('Ошибка при генерации изображения: ' + error.error);
-        }
-      } catch (err) {
-        console.error('Generate results image error:', err);
-        alert('Ошибка при генерации изображения: ' + err.message);
-      }
-    }
-
-    async function loadEventsForVoting() {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (response.ok) {
-          eventsData = await response.json();
-          const select = document.getElementById('votingEventId');
-          
-          while (select.options.length > 1) {
-            select.remove(1);
-          }
-          
-          if (eventsData && eventsData.length > 0) {
-            eventsData.forEach(record => {
-              const event = record.values || {};
-              if (getBpiumValue(record, 'Title') && getBpiumValue(record, 'ID')) {
-                const option = document.createElement('option');
-                option.value = getBpiumValue(record, 'ID');
-                option.textContent = getBpiumValue(record, 'Title');
-                select.appendChild(option);
-              }
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error loading events for voting:', err);
-      }
-    }
-
-    function addOption() {
-      const container = document.getElementById('votingOptionsContainer');
-      const newOption = document.createElement('div');
-      newOption.className = 'option-item flex flex-col mb-3 p-2 border rounded border-contrast';
-      newOption.innerHTML = `
-        <div class="flex mb-2">
-          <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2 bg-contrast text-contrast border-contrast" required>
-          <button type="button" onclick="removeOption(this)" class="bg-red-500 text-white px-3 rounded">-</button>
-        </div>
-        <div class="flex items-center mb-2">
-          <input type="file" class="option-image hidden" accept="image/*">
-          <button type="button" onclick="triggerImageUpload(this)" class="bg-blue-500 text-white px-3 py-1 rounded text-xs mr-2">
-            📷 Выбрать фото
-          </button>
-          <span class="image-status text-xs text-[var(--hint-color)]"></span>
-        </div>
-        <img class="option-preview mt-2 w-20 h-20 object-cover rounded hidden">
-      `;
-      container.appendChild(newOption);
-      
-      const fileInput = newOption.querySelector('.option-image');
-      fileInput.addEventListener('change', function(e) {
-        handleImageUpload(e, this);
-      });
-    }
-
-    function triggerImageUpload(button) {
-      const fileInput = button.parentElement.querySelector('.option-image');
-      fileInput.click();
-    }
-
-    async function handleImageUpload(event, fileInput) {
-      const file = event.target.files[0];
-      if (!file) return;
-      
-      const container = fileInput.closest('.option-item');
-      const imageStatus = container.querySelector('.image-status');
-      const preview = container.querySelector('.option-preview');
-      const uploadBtn = container.querySelector('button');
-      const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
-      
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        preview.src = e.target.result;
-        preview.classList.remove('hidden');
-      };
-      reader.readAsDataURL(file);
-      
-      uploadBtn.textContent = '⏳ Загружаем...';
-      uploadBtn.disabled = true;
-      imageStatus.textContent = 'Загрузка...';
-      
-      try {
-        const formData = new FormData();
-        formData.append('image', file);
-        
-        const response = await fetch(`${BACKEND_URL}/api/votings/upload-option-image`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          optionImages[optionIndex] = data.url;
-          
-          imageStatus.textContent = 'Фото загружено';
-          uploadBtn.textContent = '✅ Фото загружено';
-          uploadBtn.classList.remove('bg-blue-500');
-          uploadBtn.classList.add('bg-green-500');
-        } else {
-          throw new Error('Ошибка загрузки');
-        }
-      } catch (error) {
-        console.error('Image upload error:', error);
-        imageStatus.textContent = 'Ошибка загрузки';
-        uploadBtn.textContent = '📷 Попробовать снова';
-        delete optionImages[optionIndex];
-      } finally {
-        uploadBtn.disabled = false;
-      }
-    }
-
-    function removeOption(button) {
-      const container = button.closest('.option-item');
-      const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
-      
-      delete optionImages[optionIndex];
-      
-      if (document.querySelectorAll('.option-item').length > 1) {
-        container.remove();
-        
-        const newOptionImages = {};
-        document.querySelectorAll('.option-item').forEach((item, newIndex) => {
-          const oldIndex = Array.from(item.parentElement.children).indexOf(item);
-          if (optionImages[oldIndex]) {
-            newOptionImages[newIndex] = optionImages[oldIndex];
-          }
-        });
-        optionImages = newOptionImages;
-      }
-    }
-
-    function editVoting(recordId, title, description, lat, lon, options, eventId, status, optionImagesJson) {
-      document.getElementById('votingRecordId').value = recordId;
-      document.getElementById('votingTitle').value = title || '';
-      document.getElementById('votingDescription').value = description || '';
-      document.getElementById('votingLatitude').value = lat || '';
-      document.getElementById('votingLongitude').value = lon || '';
-      document.getElementById('votingEventId').value = eventId || '';
-      
-      optionImages = {};
-      
-      const completeBtn = document.getElementById('completeVotingBtn');
-      const generateImageBtn = document.getElementById('generateImageBtn');
-      
-      if (status === 'Active') {
-        completeBtn.classList.remove('hidden');
-        completeBtn.onclick = () => completeVoting(recordId);
-        generateImageBtn.classList.add('hidden');
-      } else {
-        completeBtn.classList.add('hidden');
-        generateImageBtn.classList.remove('hidden');
-        generateImageBtn.onclick = () => generateResultsImageAdmin(recordId);
-      }
-      
-      const optionsContainer = document.getElementById('votingOptionsContainer');
-      optionsContainer.innerHTML = '';
-      
-      try {
-        const optionsArray = typeof options === 'string' ? JSON.parse(options) : options;
-        const imagesArray = typeof optionImagesJson === 'string' ? JSON.parse(optionImagesJson) : [];
-        if (optionsArray && optionsArray.length > 0) {
-          optionsArray.forEach((option, index) => {
-            addOption();
-            const items = optionsContainer.querySelectorAll('.option-item');
-            const currentItem = items[items.length - 1];
-            currentItem.querySelector('.option-name').value = option;
-            if (imagesArray[index] && imagesArray[index].url) {
-              optionImages[index] = imagesArray[index].url;
-              currentItem.querySelector('.option-preview').src = imagesArray[index].url;
-              currentItem.querySelector('.option-preview').classList.remove('hidden');
-              currentItem.querySelector('.image-status').textContent = 'Фото загружено';
-              currentItem.querySelector('button').textContent = '✅ Фото загружено';
-              currentItem.querySelector('button').classList.remove('bg-blue-500');
-              currentItem.querySelector('button').classList.add('bg-green-500');
-            }
-          });
-        } else {
-          addOption();
-        }
-      } catch (e) {
-        console.error('Error editing voting:', e);
-        addOption();
-      }
-      
-      showTab('tab-voting-form');
-    }
-
-    async function completeVoting(recordId) {
-      if (!confirm('Завершить голосование? После этого нельзя будет голосовать.')) return;
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${recordId}/complete`, {
-          method: 'POST'
-        });
-        
-        if (response.ok) {
-          alert('Голосование завершено! Результаты подсчитаны.');
-          loadVotings();
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Ошибка при завершении голосования');
-        }
-      } catch (err) {
-        console.error('Complete voting error:', err);
-        alert('Ошибка при завершении голосования: ' + err.message);
-      }
-    }
-
-    async function deleteVoting(recordId) {
-      if (!confirm('Удалить голосование?')) return;
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${recordId}`, {
-          method: 'DELETE'
-        });
-        if (!response.ok) throw new Error('Ошибка удаления');
-        alert('Голосование удалено');
-        loadVotings();
-        renderEvents();
-      } catch (err) {
-        alert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    document.getElementById('votingForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const recordId = document.getElementById('votingRecordId').value;
-      const title = document.getElementById('votingTitle').value;
-      const description = document.getElementById('votingDescription').value;
-      const latitude = document.getElementById('votingLatitude').value.trim();
-      const longitude = document.getElementById('votingLongitude').value.trim();
-      const eventId = document.getElementById('votingEventId').value;
-      
-      if (latitude !== '') {
-        const latValue = parseFloat(latitude);
-        if (isNaN(latValue) || latValue < -90 || latValue > 90) {
-          alert('Широта должна быть числом от -90 до 90');
-          return;
-        }
-      }
-      if (longitude !== '') {
-        const lonValue = parseFloat(longitude);
-        if (isNaN(lonValue) || lonValue < -180 || lonValue > 180) {
-          alert('Долгота должна быть числом от -180 до 180');
-          return;
-        }
-      }
-      
-      const options = [];
-      const optionImageUrls = [];
-      
-      document.querySelectorAll('.option-item').forEach((item, index) => {
-        const nameInput = item.querySelector('.option-name');
-        
-        if (nameInput.value.trim()) {
-          options.push(nameInput.value.trim());
-          
-          if (optionImages[index]) {
-            optionImageUrls.push({ 
-              url: optionImages[index],
-              filename: `option_image_${index}_${Date.now()}.jpg`
-            });
-          } else {
-            optionImageUrls.push(null);
-          }
-        }
-      });
-      
-      if (options.length < 2) {
-        alert('Добавьте хотя бы два номинанта');
-        return;
-      }
-      
-      const votingData = createBpiumData({
-        Title: title,
-        Description: description || '',
-        Options: options.join(','),
-        Votes: JSON.stringify({}),
-        VotedUserIDs: '',
-        Status: 'Active'
-      });
-      
-      if (optionImageUrls.some(img => img !== null)) {
-        votingData.values.OptionImages = optionImageUrls.filter(img => img !== null);
-      }
-      
-      if (latitude !== '') votingData.values.Latitude = parseFloat(latitude);
-      if (longitude !== '') votingData.values.Longitude = parseFloat(longitude);
-      if (eventId) votingData.values.EventID = eventId;
-      
-      try {
-        const method = recordId ? 'PATCH' : 'POST';
-        const url = recordId ? `${BACKEND_URL}/api/votings/${recordId}` : `${BACKEND_URL}/api/votings`;
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(votingData)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения голосования');
-        }
-        
-        alert('Голосование сохранено');
-        
-        document.getElementById('votingForm').reset();
-        document.getElementById('votingRecordId').value = '';
-        document.getElementById('votingOptionsContainer').innerHTML = '';
-        optionImages = {};
-        addOption();
-        
-        loadVotings();
-        renderEvents();
-        showTab('tab-votings-list');
-      } catch (err) {
-        console.error('Voting save error:', err);
-        alert(`Ошибка сохранения: ${err.message}`);
-      }
-    });
-
-    async function getEventTitleById(eventId) {
-      if (!eventsData) {
-        await loadEventsForVoting();
-      }
-      const eventRecord = eventsData.find(record => getBpiumValue(record, 'ID') === eventId);
-      return eventRecord ? getBpiumValue(eventRecord, 'Title') : eventId;
-    }
-
-    function renderVotingItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const voting = record.values || {};
-      const isCompleted = getBpiumValue(record, 'Status') === 'Completed';
-      const eventTitle = getBpiumValue(record, 'EventID') ? await getEventTitleById(getBpiumValue(record, 'EventID')) : '';
-      
-      const div = document.createElement('div');
-      div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
-      
-      if (isCompleted) {
-        div.style.background = 'var(--voting-completed-bg)';
-        div.style.borderColor = 'var(--voting-completed-border)';
-        div.style.color = 'var(--voting-completed-text)';
-      }
-      
-      div.innerHTML = `
-        <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
-        <h3 class="text-sm font-bold">${getBpiumValue(record, 'Title') || 'Без названия'}</h3>
-        <p class="text-xs">${getBpiumValue(record, 'Description') || ''}</p>
-        ${getBpiumValue(record, 'EventID') ? `<p class="text-xs text-[var(--hint-color)]">Для мероприятия: ${eventTitle}</p>` : ''}
-        <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'} mt-1">
-          ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
-        </p>
-      `;
-      
-      div.addEventListener('click', () => showVotingModal(record));
-      eventsContainer.appendChild(div);
-    }
-
+    // Админ-панель
     async function checkIsAdmin(userId) {
       try {
         const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
@@ -1788,23 +1055,22 @@
     async function initAdmin() {
       try {
         const isAdmin = await checkIsAdmin(user.id);
-        console.log('Is Admin:', isAdmin);
+        console.log('Is Admin:', isAdmin, 'User ID:', user.id);
         if (isAdmin) {
           document.getElementById('adminBtn').classList.remove('hidden');
-        } else {
-          console.log('Admin panel hidden - not admin');
-          document.getElementById('adminBtn').classList.add('hidden');
         }
       } catch (err) {
         console.error('Admin init error:', err);
-        document.getElementById('adminBtn').classList.add('hidden');
       }
     }
 
     function showTab(tabId) {
       document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-      document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+      
+      const activeTab = document.querySelector(`[onclick="showTab('${tabId}')"]`);
+      if (activeTab) activeTab.classList.add('active');
+      
       document.getElementById(tabId).classList.add('active');
       
       if (tabId === 'tab-list') {
@@ -1819,49 +1085,41 @@
     async function renderAdminEvents() {
       const eventList = document.getElementById('eventList');
       eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
+      
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки ивентов');
-        }
+        const response = await fetch(`${BACKEND_URL}/api/events`);
+        if (!response.ok) throw new Error('Ошибка загрузки событий');
         
         const data = await response.json();
+        const events = Array.isArray(data) ? data : (data.values || []);
+        
         eventList.innerHTML = '';
         
-        if (data && data.length > 0) {
-          data.sort((a, b) => new Date(getBpiumValue(a, 'Date')) - new Date(getBpiumValue(b, 'Date')));
-          data.forEach(record => {
-            const event = record.values || {};
-            const safeTitle = getBpiumValue(record, 'Title') ? getBpiumValue(record, 'Title').replace(/'/g, "\\'") : '';
-            const safeLocation = getBpiumValue(record, 'Location') ? getBpiumValue(record, 'Location').replace(/'/g, "\\'") : '';
-            const safeDescription = getBpiumValue(record, 'Description') ? getBpiumValue(record, 'Description').replace(/'/g, "\\'") : '';
-            const safeMapLink = getBpiumValue(record, 'MapLink') ? getBpiumValue(record, 'MapLink').replace(/'/g, "\\'") : '';
-            const safeImageUrl = getBpiumValue(record, 'Image') ? getBpiumValue(record, 'Image').replace(/'/g, "\\'") : '';
-            
+        if (events.length > 0) {
+          events.forEach(record => {
             const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)]';
+            div.className = 'p-3 border-b border-[var(--hint-color)] mb-2';
             div.innerHTML = `
-              <p class="text-sm text-contrast">${getBpiumValue(record, 'Title') || 'Без названия'} (${formatDate(getBpiumValue(record, 'Date'))})</p>
+              <p class="text-sm font-bold text-contrast">${getBpiumValue(record, 'Title') || 'Без названия'}</p>
+              <p class="text-xs text-contrast">${formatDate(getBpiumValue(record, 'Date'))} - ${getBpiumValue(record, 'Location') || 'Без места'}</p>
               <p class="text-xs text-contrast">Идут: ${getBpiumValue(record, 'AttendeesCount') || 0} человек</p>
-              <button onclick="editEvent('${record.id}', '${getBpiumValue(record, 'ID')}', '${safeTitle}', '${getBpiumValue(record, 'Type')}', '${getBpiumValue(record, 'Date')}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
-              <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
+              <div class="flex space-x-2 mt-2">
+                <button onclick="editEvent('${record.id}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs">Редактировать</button>
+                <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs">Удалить</button>
+              </div>
             `;
             eventList.appendChild(div);
           });
         } else {
-          eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Ивенты не найдены</p>';
+          eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">События не найдены</p>';
         }
       } catch (err) {
-        alert(`Ошибка: ${err.message}`);
+        eventList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
       }
     }
 
     function showAdminModal() {
       showTab('tab-list');
-      clearForm();
-      clearAdForm();
-      loadEventsForVoting();
       document.getElementById('adminModal').classList.remove('hidden');
       tg.BackButton.show();
       tg.BackButton.onClick(closeAdminModal);
@@ -1872,116 +1130,36 @@
       tg.BackButton.hide();
     }
 
-    function clearForm() {
-      document.getElementById('eventRecordId').value = '';
-      document.getElementById('eventId').value = '';
-      document.getElementById('eventTitle').value = '';
-      document.getElementById('eventType').value = '';
-      document.getElementById('eventDate').value = '';
-      document.getElementById('eventLocation').value = '';
-      document.getElementById('eventDescription').value = '';
-      document.getElementById('eventMapLink').value = '';
-      document.getElementById('eventImage').value = '';
-    }
-
-    function editEvent(recordId, id, title, type, date, location, description, mapLink, imageUrl) {
-      document.getElementById('eventRecordId').value = recordId;
-      document.getElementById('eventId').value = id;
-      document.getElementById('eventTitle').value = title;
-      document.getElementById('eventType').value = type;
-      document.getElementById('eventDate').value = date;
-      document.getElementById('eventLocation').value = location;
-      document.getElementById('eventDescription').value = description;
-      document.getElementById('eventMapLink').value = mapLink || '';
-      alert('Текущее изображение: ' + imageUrl);
-      showTab('tab-form');
+    // Упрощенные функции для админки (заглушки)
+    function editEvent(recordId) {
+      alert('Редактирование события: ' + recordId);
     }
 
     async function deleteEvent(recordId) {
-      if (!confirm('Удалить ивент?')) return;
+      if (!confirm('Удалить событие?')) return;
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${recordId}`, {
-          method: 'DELETE'
-        });
-        if (!response.ok) throw new Error('Ошибка удаления');
-        alert('Ивент удален');
-        renderAdminEvents();
-        renderEvents();
+        const response = await fetch(`${BACKEND_URL}/api/events/${recordId}`, { method: 'DELETE' });
+        if (response.ok) {
+          alert('Событие удалено');
+          renderAdminEvents();
+          renderEvents();
+        } else {
+          throw new Error('Ошибка удаления');
+        }
       } catch (err) {
-        alert(`Ошибка: ${err.message}`);
+        alert('Ошибка: ' + err.message);
       }
     }
-
-    document.getElementById('eventForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      let eventId = document.getElementById('eventId').value;
-      if (!eventId) eventId = String(Math.floor(Math.random() * 1000000));
-      
-      const recordId = document.getElementById('eventRecordId').value;
-      const eventData = createBpiumData({
-        ID: eventId,
-        Title: document.getElementById('eventTitle').value,
-        Type: document.getElementById('eventType').value,
-        Date: document.getElementById('eventDate').value,
-        Location: document.getElementById('eventLocation').value,
-        Description: document.getElementById('eventDescription').value,
-        AttendeesCount: 0,
-        AttendeesIDs: ''
-      });
-      
-      const mapLink = document.getElementById('eventMapLink').value;
-      if (mapLink) eventData.values.MapLink = mapLink;
-      
-      const imageFile = document.getElementById('eventImage').files[0];
-      if (imageFile) {
-        try {
-          const uploadForm = new FormData();
-          uploadForm.append('image', imageFile);
-          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
-            method: 'POST',
-            body: uploadForm
-          });
-          const uploadData = await uploadResponse.json();
-          if (uploadData.url) {
-            eventData.values.Image = uploadData.url;
-          } else {
-            throw new Error('Ошибка загрузки изображения');
-          }
-        } catch (err) {
-          alert(`Ошибка загрузки изображения: ${err.message}`);
-          return;
-        }
-      }
-      
-      try {
-        const method = recordId ? 'PATCH' : 'POST';
-        const url = recordId ? `${BACKEND_URL}/api/events/${recordId}` : `${BACKEND_URL}/api/events`;
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(eventData)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения события');
-        }
-        
-        alert('Событие сохранено');
-        clearForm();
-        renderAdminEvents();
-        renderEvents();
-        showTab('tab-list');
-      } catch (err) {
-        alert(`Ошибка сохранения: ${err.message}`);
-      }
-    });
 
     // Инициализация приложения
     applyTheme();
     initAdmin();
     renderEvents();
-    addOption();
+
+    // Добавляем обработчик ошибок для отладки
+    window.addEventListener('error', function(e) {
+      console.error('Global error:', e.error);
+    });
   </script>
 </body>
 </html>
