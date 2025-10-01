@@ -1,11 +1,9 @@
-const express = require('express');
 const axios = require('axios');
 const multer = require('multer');
 const fs = require('fs');
 const FormData = require('form-data');
 const path = require('path');
 const sharp = require('sharp');
-const https = require('https');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,7 +12,7 @@ const port = process.env.PORT || 3000;
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   next();
 });
 
@@ -22,132 +20,44 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const upload = multer({ dest: 'uploads/' });
 
-// Env vars для Бипиума
-const BPIUM_DOMAIN = process.env.BPIUM_DOMAIN ? process.env.BPIUM_DOMAIN.replace(/https?:\/\//, '') : '';
-const BPIUM_USERNAME = process.env.BPIUM_USERNAME;
-const BPIUM_PASSWORD = process.env.BPIUM_PASSWORD;
-const BPIUM_CATALOG_EVENTS = process.env.BPIUM_CATALOG_EVENTS || '1';
-const BPIUM_CATALOG_ADS = process.env.BPIUM_CATALOG_ADS || '2';
-const BPIUM_CATALOG_VOTINGS = process.env.BPIUM_CATALOG_VOTINGS || '3';
+// Env vars
+const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
+const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
+const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
 
-// Radikal API конфигурация
+// Radikal API конфигурация (Chevereto-совместимое)
 const RADIKAL_API_URL = 'https://radikal.cloud/api/1';
-const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
+const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY; // ← ИМЕННО ТАК!
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
 
-// SSL agent для игнорирования самоподписанных сертификатов
-const httpsAgent = new https.Agent({
-  rejectUnauthorized: false
-});
-
-console.log('Environment variables check:');
-console.log('BPIUM_DOMAIN:', BPIUM_DOMAIN ? BPIUM_DOMAIN : 'Missing');
-console.log('BPIUM_USERNAME:', BPIUM_USERNAME ? 'Set' : 'Missing');
-console.log('RADIKAL_API_KEY:', RADIKAL_API_KEY ? 'Set' : 'Missing');
-
-if (!BPIUM_DOMAIN || !BPIUM_USERNAME || !BPIUM_PASSWORD || !RADIKAL_API_KEY) {
-  console.error('Missing env vars: Set BPIUM_DOMAIN, BPIUM_USERNAME, BPIUM_PASSWORD, RADIKAL_API_KEY');
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !RADIKAL_API_KEY) {
+  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, RADIKAL_API_KEY in Render');
   process.exit(1);
 }
 
-// Базовый URL для API Бипиума
-const BPIUM_API_BASE = `https://${BPIUM_DOMAIN}/api/v1`;
-console.log('Bpium API Base URL:', BPIUM_API_BASE);
+const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
+const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
+const VOTINGS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${VOTINGS_TABLE}`;
 
-// Переменные для хранения токена
-let authToken = null;
-let tokenExpiry = null;
-
-// ==================== АУТЕНТИФИКАЦИЯ БИПИУМ ====================
-
-/**
- * Аутентификация в Бипиум и получение токена
- */
-async function authenticateBpium() {
-  try {
-    console.log('Authenticating with Bpium...');
-    console.log('API URL:', `${BPIUM_API_BASE}/auth/login`);
-    
-    const response = await axios.post(`${BPIUM_API_BASE}/auth/login`, {
-      username: BPIUM_USERNAME,
-      password: BPIUM_PASSWORD
-    }, {
-      timeout: 10000,
-      httpsAgent: httpsAgent // Игнорируем SSL ошибки
-    });
-
-    authToken = response.data.token;
-    tokenExpiry = Date.now() + (23 * 60 * 60 * 1000);
-    
-    console.log('Bpium authentication successful');
-    return authToken;
-  } catch (error) {
-    console.error('Bpium authentication error:', error.message);
-    if (error.response) {
-      console.error('Bpium response status:', error.response.status);
-      console.error('Bpium response data:', JSON.stringify(error.response.data, null, 2));
-    } else if (error.code) {
-      console.error('Error code:', error.code);
-    }
-    throw error;
-  }
-}
-
-/**
- * Получение валидного токена (обновляет при необходимости)
- */
-async function getValidToken() {
-  if (!authToken || !tokenExpiry || Date.now() >= tokenExpiry) {
-    await authenticateBpium();
-  }
-  return authToken;
-}
-
-/**
- * Универсальный метод для запросов к API Бипиума
- */
-async function bpiumRequest(method, url, data = null) {
-  const token = await getValidToken();
-  
-  const config = {
-    method,
-    url: `${BPIUM_API_BASE}${url}`,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    httpsAgent: httpsAgent, // Игнорируем SSL ошибки
-    timeout: 15000
-  };
-
-  if (data) {
-    config.data = data;
-  }
-
-  try {
-    console.log(`Making Bpium request: ${method} ${url}`);
-    const response = await axios(config);
-    return response.data;
-  } catch (error) {
-    console.error(`Bpium API error (${method} ${url}):`, error.message);
-    if (error.response) {
-      console.error('Bpium response status:', error.response.status);
-      console.error('Bpium response data:', JSON.stringify(error.response.data, null, 2));
-    }
-    throw error;
-  }
-}
+app.get('/', (req, res) => {
+  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
+});
 
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ RADIKAL API ====================
 
 /**
- * Загружает файл в Radikal API
+ * Загружает файл в Radikal API (Chevereto-совместимое)
  */
 async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
     console.log('Starting Radikal API upload...');
+    console.log('Filename:', filename);
+    console.log('Content type:', contentType);
+    console.log('File size:', fileBuffer.length, 'bytes');
 
     const formData = new FormData();
     formData.append('source', fileBuffer, {
@@ -155,9 +65,12 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
       contentType: contentType
     });
 
+    console.log('Radikal API Key:', RADIKAL_API_KEY ? 'Set' : 'Missing');
+    console.log('API URL:', `${RADIKAL_API_URL}/upload`);
+
     const response = await axios.post(`${RADIKAL_API_URL}/upload`, formData, {
       headers: {
-        'X-API-Key': RADIKAL_API_KEY,
+        'X-API-Key': RADIKAL_API_KEY, // ← ЗДЕСЬ используем X-API-Key как заголовок!
         ...formData.getHeaders(),
       },
       timeout: 30000
@@ -172,7 +85,8 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
       return {
         fileId: imageData.id_encoded || imageData.name,
         url: imageData.url,
-        filename: filename
+        filename: filename,
+        imageData: response.data.image
       };
     } else {
       throw new Error(response.data.error ? response.data.error.message : (response.data.status_txt || 'Upload failed'));
@@ -182,6 +96,31 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
     if (error.response) {
       console.error('Radikal API response status:', error.response.status);
       console.error('Radikal API response data:', error.response.data);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Получает информацию о файле из Radikal API
+ */
+async function getRadikalFileInfo(fileId) {
+  try {
+    console.log('Getting file info for:', fileId);
+    
+    const response = await axios.get(`${RADIKAL_API_URL}/files/${fileId}`, {
+      headers: {
+        'X-API-Key': RADIKAL_API_KEY
+      }
+    });
+    
+    console.log('File info retrieved successfully');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting file info from Radikal API:', error.message);
+    if (error.response && error.response.status === 404) {
+      console.log('File info endpoint not available in Radikal Cloud');
+      return null;
     }
     throw error;
   }
@@ -225,6 +164,9 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     }
     
     console.log('Upload request received');
+    console.log('Original filename:', req.file.originalname);
+    console.log('Mimetype:', req.file.mimetype);
+    console.log('File size:', req.file.size, 'bytes');
     
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
@@ -262,6 +204,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
+// API для загрузки изображений номинантов
 app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -269,6 +212,8 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     }
     
     console.log('Option image upload request received');
+    console.log('Original filename:', req.file.originalname);
+    console.log('Mimetype:', req.file.mimetype);
     
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
@@ -306,6 +251,7 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
   }
 });
 
+// Эндпоинт для удаления изображений
 app.delete('/api/upload/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
@@ -320,14 +266,16 @@ app.delete('/api/upload/:fileId', async (req, res) => {
   }
 });
 
-// ==================== EVENTS API (БИПИУМ) ====================
+// ==================== ОСТАЛЬНЫЕ API (без изменений) ====================
 
+// [Здесь остальной код без изменений - события, реклама, голосования и т.д.]
+// Events API
 app.get('/api/events', async (req, res) => {
   try {
-    console.log('Fetching events from Bpium...');
-    const records = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_EVENTS}/records`);
-    console.log(`Found ${Array.isArray(records) ? records.length : 'unknown'} events`);
-    res.json(records);
+    const response = await axios.get(EVENTS_URL, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Events GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -337,9 +285,13 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
-    const record = await bpiumRequest('POST', `/catalogs/${BPIUM_CATALOG_EVENTS}/records`, req.body);
-    console.log('Event created successfully:', record.id);
-    res.json(record);
+    const response = await axios.post(EVENTS_URL, req.body, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Events POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -348,8 +300,10 @@ app.post('/api/events', async (req, res) => {
 
 app.get('/api/events/:id', async (req, res) => {
   try {
-    const record = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_EVENTS}/records/${req.params.id}`);
-    res.json(record);
+    const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Event GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -359,8 +313,13 @@ app.get('/api/events/:id', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   try {
     console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
-    const record = await bpiumRequest('PATCH', `/catalogs/${BPIUM_CATALOG_EVENTS}/records/${req.params.id}`, req.body);
-    res.json(record);
+    const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Event PATCH error:', error.message);
     res.status(500).json({ error: error.message });
@@ -369,20 +328,23 @@ app.patch('/api/events/:id', async (req, res) => {
 
 app.delete('/api/events/:id', async (req, res) => {
   try {
-    await bpiumRequest('DELETE', `/catalogs/${BPIUM_CATALOG_EVENTS}/records/${req.params.id}`);
-    res.json({ success: true, message: 'Event deleted successfully' });
+    const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Event DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// ==================== ADS API (БИПИУМ) ====================
-
+// Ads API
 app.get('/api/ads', async (req, res) => {
   try {
-    const records = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_ADS}/records`);
-    res.json(records);
+    const response = await axios.get(ADS_URL, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Ads GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -391,8 +353,13 @@ app.get('/api/ads', async (req, res) => {
 
 app.post('/api/ads', async (req, res) => {
   try {
-    const record = await bpiumRequest('POST', `/catalogs/${BPIUM_CATALOG_ADS}/records`, req.body);
-    res.json(record);
+    const response = await axios.post(ADS_URL, req.body, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Ads POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -401,8 +368,13 @@ app.post('/api/ads', async (req, res) => {
 
 app.patch('/api/ads/:id', async (req, res) => {
   try {
-    const record = await bpiumRequest('PATCH', `/catalogs/${BPIUM_CATALOG_ADS}/records/${req.params.id}`, req.body);
-    res.json(record);
+    const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Ads PATCH error:', error.message);
     res.status(500).json({ error: error.message });
@@ -411,20 +383,23 @@ app.patch('/api/ads/:id', async (req, res) => {
 
 app.delete('/api/ads/:id', async (req, res) => {
   try {
-    await bpiumRequest('DELETE', `/catalogs/${BPIUM_CATALOG_ADS}/records/${req.params.id}`);
-    res.json({ success: true, message: 'Ad deleted successfully' });
+    const response = await axios.delete(`${ADS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Ad DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// ==================== VOTINGS API (БИПИУМ) ====================
-
+// Votings API
 app.get('/api/votings', async (req, res) => {
   try {
-    const records = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records`);
-    res.json(records);
+    const response = await axios.get(VOTINGS_URL, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Votings GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -433,8 +408,13 @@ app.get('/api/votings', async (req, res) => {
 
 app.post('/api/votings', async (req, res) => {
   try {
-    const record = await bpiumRequest('POST', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records`, req.body);
-    res.json(record);
+    const response = await axios.post(VOTINGS_URL, req.body, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Votings POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -443,8 +423,13 @@ app.post('/api/votings', async (req, res) => {
 
 app.patch('/api/votings/:id', async (req, res) => {
   try {
-    const record = await bpiumRequest('PATCH', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${req.params.id}`, req.body);
-    res.json(record);
+    const response = await axios.patch(`${VOTINGS_URL}/${req.params.id}`, req.body, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
+        'Content-Type': 'application/json' 
+      }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Votings PATCH error:', error.message);
     res.status(500).json({ error: error.message });
@@ -453,25 +438,27 @@ app.patch('/api/votings/:id', async (req, res) => {
 
 app.delete('/api/votings/:id', async (req, res) => {
   try {
-    await bpiumRequest('DELETE', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${req.params.id}`);
-    res.json({ success: true, message: 'Voting deleted successfully' });
+    const response = await axios.delete(`${VOTINGS_URL}/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Votings DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// ==================== ОСТАЛЬНЫЕ API ====================
-
 // Получить голосования по ID мероприятия
 app.get('/api/events/:eventId/votings', async (req, res) => {
   try {
     const { eventId } = req.params;
-    const records = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records`);
-    const filteredVotings = Array.isArray(records) ? records.filter(record => 
-      record.values && record.values.eventId === eventId
-    ) : [];
-    res.json(filteredVotings);
+    const response = await axios.get(VOTINGS_URL, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+      params: {
+        filterByFormula: `{EventID} = '${eventId}'`
+      }
+    });
+    res.json(response.data);
   } catch (error) {
     console.error('Event votings GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -486,54 +473,72 @@ app.post('/api/votings/:id/vote', async (req, res) => {
 
     console.log('Received vote request:', { id, userId, optionIndex, userLat, userLon });
 
-    if (!userId || optionIndex === undefined) {
+    if (!userId || optionIndex === undefined || userLat === undefined || userLon === undefined) {
+      console.error('Missing required fields');
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const voting = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${id}`);
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
     
-    if (!voting || !voting.values) {
+    const voting = votingResponse.data;
+    if (!voting.fields) {
+      console.error('Voting not found');
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    if (voting.values.Status === 'Completed') {
+    if (voting.fields.Status === 'Completed') {
+      console.error('Voting is completed');
       return res.status(400).json({ error: 'Voting is completed' });
     }
 
-    const votedUserIds = voting.values.VotedUserIDs || '';
+    const votedUserIds = voting.fields.VotedUserIDs || '';
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
     
     if (votedUsersArray.includes(userId.toString())) {
+      console.error('User has already voted');
       return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
     }
 
-    // Проверка геолокации
-    const votingLat = voting.values.Latitude;
-    const votingLon = voting.values.Longitude;
+    const votingLat = voting.fields.Latitude;
+    const votingLon = voting.fields.Longitude;
     
     if (votingLat && votingLon && userLat && userLon) {
       const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
       console.log('Calculated distance:', distance);
       if (distance > 1000) {
+        console.error('User is too far away');
         return res.status(400).json({ error: 'Вы находитесь слишком далеко от места голосования' });
       }
     }
 
-    let currentVotes = voting.values.Votes ? JSON.parse(voting.values.Votes) : {};
+    let currentVotes = voting.fields.Votes ? JSON.parse(voting.fields.Votes) : {};
+    console.log('Current votes:', currentVotes);
+
     currentVotes[userId] = optionIndex;
+    console.log('Updated votes:', currentVotes);
 
     const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
 
     const updateData = {
-      values: { 
+      fields: { 
         Votes: JSON.stringify(currentVotes),
         VotedUserIDs: newVotedUserIDs
       }
     };
 
-    const updateResponse = await bpiumRequest('PATCH', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${id}`, updateData);
+    console.log('Updating voting record with:', JSON.stringify(updateData, null, 2));
 
-    res.json({ success: true, voting: updateResponse });
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, updateData, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
+    });
+
+    console.log('Vote updated successfully:', updateResponse.data);
+    res.json({ success: true, voting: updateResponse.data });
   } catch (error) {
     console.error('Vote error:', error.message);
     res.status(500).json({ error: error.message });
@@ -545,19 +550,22 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
   try {
     const { id, userId } = req.params;
 
-    const voting = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${id}`);
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
     
-    if (!voting.values) {
+    const voting = votingResponse.data;
+    if (!voting.fields) {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    const votedUserIds = voting.values.VotedUserIDs || '';
+    const votedUserIds = voting.fields.VotedUserIDs || '';
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
     
     const hasVoted = votedUsersArray.includes(userId.toString());
     let userVote = null;
-    if (voting.values.Votes) {
-      const votes = JSON.parse(voting.values.Votes);
+    if (voting.fields.Votes) {
+      const votes = JSON.parse(voting.fields.Votes);
       userVote = votes[userId] !== undefined ? votes[userId] : null;
     }
 
@@ -573,20 +581,23 @@ app.post('/api/votings/:id/complete', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const voting = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${id}`);
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
     
-    if (!voting.values) {
+    const voting = votingResponse.data;
+    if (!voting.fields) {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    const votes = voting.values.Votes ? 
-      (typeof voting.values.Votes === 'string' ? JSON.parse(voting.values.Votes) : voting.values.Votes) 
+    const votes = voting.fields.Votes ? 
+      (typeof voting.fields.Votes === 'string' ? JSON.parse(voting.fields.Votes) : voting.fields.Votes) 
       : {};
     
     const results = [];
     
-    if (voting.values.Options) {
-      const options = voting.values.Options.split(',');
+    if (voting.fields.Options) {
+      const options = voting.fields.Options.split(',');
       
       const voteCounts = {};
       options.forEach((option, index) => {
@@ -613,14 +624,19 @@ app.post('/api/votings/:id/complete', async (req, res) => {
       });
     }
 
-    const updateResponse = await bpiumRequest('PATCH', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${id}`, {
-      values: { 
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { 
         Status: 'Completed',
         Results: JSON.stringify(results)
       }
+    }, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
     });
 
-    res.json({ success: true, results: results, voting: updateResponse });
+    res.json({ success: true, results: results, voting: updateResponse.data });
   } catch (error) {
     console.error('Complete voting error:', error.message);
     res.status(500).json({ error: error.message });
@@ -632,22 +648,25 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const voting = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${id}`);
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
 
-    if (!voting.values) {
+    const voting = votingResponse.data;
+    if (!voting.fields) {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    if (!voting.values.Results) {
+    if (!voting.fields.Results) {
       return res.status(400).json({ error: 'Результаты голосования недоступны' });
     }
 
     let results;
     try {
-      if (typeof voting.values.Results === 'string') {
-        results = JSON.parse(voting.values.Results);
+      if (typeof voting.fields.Results === 'string') {
+        results = JSON.parse(voting.fields.Results);
       } else {
-        results = voting.values.Results;
+        results = voting.fields.Results;
       }
     } catch (parseError) {
       console.error('Error parsing results:', parseError);
@@ -663,10 +682,11 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       return res.status(400).json({ error: 'Неверный формат результатов' });
     }
 
-    const title = voting.values.Title || 'Результаты голосования';
-    const description = voting.values.Description || '';
+    const title = voting.fields.Title || 'Результаты голосования';
+    const description = voting.fields.Description || '';
     
-    const optionImages = voting.values.OptionImages || [];
+    const optionImages = voting.fields.OptionImages || [];
+    console.log('OptionImages from Airtable:', JSON.stringify(optionImages, null, 2));
 
     let height = 600;
     const hasImages = optionImages && optionImages.length > 0;
@@ -745,15 +765,20 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     console.log('Results image uploaded to Radikal API:', uploadResult.url);
     
     try {
-      await bpiumRequest('PATCH', `/catalogs/${BPIUM_CATALOG_VOTINGS}/records/${id}`, {
-        values: { 
+      const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+        fields: { 
           ResultsImage: uploadResult.url
+        }
+      }, {
+        headers: { 
+          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json' 
         }
       });
       
-      console.log('ResultsImage saved to Bpium successfully');
+      console.log('ResultsImage saved to Airtable successfully');
     } catch (updateError) {
-      console.error('Error saving ResultsImage to Bpium:', updateError.message);
+      console.error('Error saving ResultsImage to Airtable:', updateError.message);
     }
 
     res.json({ 
@@ -781,14 +806,18 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const event = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_EVENTS}/records/${eventId}`);
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
 
-    if (!event.values) {
+    const event = eventResponse.data;
+    
+    if (!event.fields) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const currentAttendees = event.values.AttendeesIDs || '';
-    const currentCount = event.values.AttendeesCount || 0;
+    const currentAttendees = event.fields.AttendeesIDs || '';
+    const currentCount = event.fields.AttendeesCount || 0;
     
     console.log('Current attendees:', currentAttendees);
     console.log('Current count:', currentCount);
@@ -815,7 +844,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     console.log('New count:', newCount);
 
     const updateData = {
-      values: {
+      fields: {
         AttendeesIDs: newAttendees,
         AttendeesCount: newCount
       }
@@ -823,9 +852,14 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
 
     console.log('Update data:', JSON.stringify(updateData, null, 2));
 
-    const updateResponse = await bpiumRequest('PATCH', `/catalogs/${BPIUM_CATALOG_EVENTS}/records/${eventId}`, updateData);
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
+    });
 
-    console.log('Update successful');
+    console.log('Update successful:', updateResponse.data);
     res.json({ success: true, count: newCount, attending: true });
     
   } catch (error) {
@@ -845,14 +879,18 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const event = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_EVENTS}/records/${eventId}`);
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
 
-    if (!event.values) {
+    const event = eventResponse.data;
+    
+    if (!event.fields) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const currentAttendees = event.values.AttendeesIDs || '';
-    const currentCount = event.values.AttendeesCount || 0;
+    const currentAttendees = event.fields.AttendeesIDs || '';
+    const currentCount = event.fields.AttendeesCount || 0;
     
     console.log('Current attendees:', currentAttendees);
     console.log('Current count:', currentCount);
@@ -874,13 +912,18 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     console.log('New count:', newCount);
 
     const updateData = {
-      values: {
+      fields: {
         AttendeesIDs: newAttendees,
         AttendeesCount: newCount
       }
     };
 
-    const updateResponse = await bpiumRequest('PATCH', `/catalogs/${BPIUM_CATALOG_EVENTS}/records/${eventId}`, updateData);
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
+      headers: { 
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json' 
+      }
+    });
 
     console.log('Unattend successful');
     res.json({ success: true, count: newCount, attending: false });
@@ -898,13 +941,17 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
 
     console.log(`Checking attend status for user ${userId} in event ${eventId}`);
 
-    const event = await bpiumRequest('GET', `/catalogs/${BPIUM_CATALOG_EVENTS}/records/${eventId}`);
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    });
 
-    if (!event.values) {
+    const event = eventResponse.data;
+    
+    if (!event.fields) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const attendees = event.values.AttendeesIDs || '';
+    const attendees = event.fields.AttendeesIDs || '';
     let attendeesArray = [];
     
     if (Array.isArray(attendees)) {
@@ -951,10 +998,6 @@ if (!fs.existsSync(uploadsDir)) {
 // Запуск сервера
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`Bpium domain: ${BPIUM_DOMAIN}`);
   console.log(`Radikal API URL: ${RADIKAL_API_URL}`);
-});
-
-app.get('/', (req, res) => {
-  res.send('Smolville Backend is running with Bpium! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
+  console.log('Make sure RADIKAL_API_KEY is set in environment variables');
 });
