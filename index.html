@@ -7,6 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    /* Стили остаются без изменений */
     :root {
       --bg-color: #ffffff;
       --text-color: #000000;
@@ -273,7 +274,7 @@
     <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition" onclick="showAdminModal()">Админ</button>
   </div>
 
-  <!-- Модальное окно события -->
+  <!-- Модальные окна остаются без изменений -->
   <div id="eventModal" class="modal hidden">
     <div class="modal-content">
       <h2 id="modalTitle" class="text-lg font-bold text-contrast"></h2>
@@ -299,7 +300,6 @@
     </div>
   </div>
 
-  <!-- Модальное окно рекламы -->
   <div id="adModal" class="modal hidden">
     <div class="modal-content">
       <h2 id="adModalTitle" class="text-lg font-bold text-contrast"></h2>
@@ -311,7 +311,6 @@
     </div>
   </div>
 
-  <!-- Модальное окно голосования -->
   <div id="votingModal" class="modal hidden">
     <div class="modal-content">
       <h2 id="votingModalTitle" class="text-lg font-bold text-contrast"></h2>
@@ -338,7 +337,6 @@
     </div>
   </div>
 
-  <!-- Админ-панель -->
   <div id="adminModal" class="modal hidden">
     <div class="modal-content">
       <h2 class="text-lg font-bold mb-4 text-contrast">Админ-панель</h2>
@@ -360,7 +358,6 @@
         <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать событие</h3>
         <form id="eventForm">
           <input type="hidden" id="eventRecordId">
-          <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
           <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
           <select id="eventType" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
             <option value="">Выберите тип</option>
@@ -444,13 +441,16 @@
   <script>
     const BACKEND_URL = 'https://smolville.onrender.com';
     const tg = window.Telegram?.WebApp;
+    
     if (!tg) {
       document.body.innerHTML = '<p class="text-center text-[var(--text-color)]">Ошибка: Запустите в Telegram WebApp</p>';
       throw new Error('Telegram WebApp not found');
     }
+    
     tg.ready();
     tg.expand();
 
+    // Глобальные переменные
     let currentEventRecord = null;
     let currentAttendeesCount = 0;
     let isUserAttending = false;
@@ -458,12 +458,11 @@
     let userLocation = null;
     let optionImages = {};
     let eventsData = null;
-    let currentResultsImageUrl = null;
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
-    // Упрощенная функция применения темы
+    // Применение темы
     function applyTheme() {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const theme = tg.themeParams;
@@ -483,196 +482,187 @@
       }
     }
 
+    // Утилиты
     function formatDate(dateStr) {
       if (!dateStr) return 'Без даты';
       const [year, month, day] = dateStr.split('-');
       return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
     }
 
-    // Универсальная функция для получения значений из Бипиума
+    // Функции для работы с Бипиум API
     function getBpiumValue(record, fieldName) {
       if (!record || !record.values) return null;
       return record.values[fieldName];
     }
 
-    // Функция для создания структуры данных для Бипиума
     function createBpiumData(fields) {
       return { values: fields };
     }
 
-    // Основная функция загрузки и отображения событий
-    async function renderEvents() {
-      const eventsContainer = document.getElementById('events');
-      eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-
+    // Основная функция загрузки данных
+    async function loadAllData() {
       try {
-        console.log('Загрузка данных...');
+        console.log('🔄 Начинаем загрузку данных...');
         
-        const [eventsResponse, adsResponse, votingsResponse] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/events`).catch(err => {
-            console.error('Ошибка загрузки событий:', err);
-            return { ok: false };
-          }),
-          fetch(`${BACKEND_URL}/api/ads`).catch(err => {
-            console.error('Ошибка загрузки рекламы:', err);
-            return { ok: false };
-          }),
-          fetch(`${BACKEND_URL}/api/votings`).catch(err => {
-            console.error('Ошибка загрузки голосований:', err);
-            return { ok: false };
-          })
+        const [eventsRes, adsRes, votingsRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/events`).then(r => r.json()),
+          fetch(`${BACKEND_URL}/api/ads`).then(r => r.json()),
+          fetch(`${BACKEND_URL}/api/votings`).then(r => r.json())
         ]);
 
-        let eventsData = [];
-        let adsData = [];
-        let votingsData = [];
-
-        // Обработка событий
-        if (eventsResponse.ok) {
-          const data = await eventsResponse.json();
-          console.log('События получены:', data);
-          eventsData = Array.isArray(data) ? data : (data.values || []);
-        } else {
-          console.error('Ошибка загрузки событий:', eventsResponse.status);
-        }
-
-        // Обработка рекламы
-        if (adsResponse.ok) {
-          const data = await adsResponse.json();
-          console.log('Реклама получена:', data);
-          adsData = Array.isArray(data) ? data : (data.values || []);
-        }
-
-        // Обработка голосований
-        if (votingsResponse.ok) {
-          const data = await votingsResponse.json();
-          console.log('Голосования получены:', data);
-          votingsData = Array.isArray(data) ? data : (data.values || []);
-        }
-
-        eventsContainer.innerHTML = '';
-
-        // Отображение голосований
-        votingsData.forEach(record => {
-          renderVotingItem(record);
+        console.log('📊 Данные загружены:', {
+          events: eventsRes,
+          ads: adsRes,
+          votings: votingsRes
         });
 
-        // Отображение событий
-        if (eventsData.length > 0) {
-          eventsData.forEach((record, index) => {
-            renderEventItem(record);
-            
-            // Вставляем рекламу после каждых 2 событий
-            if ((index + 1) % 2 === 0 && adsData[index / 2]) {
-              renderAdItem(adsData[index / 2]);
-            }
-          });
+        // Обработка событий
+        const events = Array.isArray(eventsRes) ? eventsRes : [];
+        const ads = Array.isArray(adsRes) ? adsRes : [];
+        const votings = Array.isArray(votingsRes) ? votingsRes : [];
 
-          // Добавляем оставшуюся рекламу в конец
-          const remainingAds = adsData.slice(Math.floor(eventsData.length / 2));
-          remainingAds.forEach(ad => {
-            renderAdItem(ad);
-          });
-        } else {
-          eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
-        }
-
-      } catch (err) {
-        console.error('Render events error:', err);
-        eventsContainer.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка загрузки: ${err.message}</p>`;
+        renderContent(events, ads, votings);
+        
+      } catch (error) {
+        console.error('❌ Ошибка загрузки данных:', error);
+        document.getElementById('events').innerHTML = `
+          <div class="text-center p-4">
+            <p class="text-[var(--hint-color)]">Ошибка загрузки данных</p>
+            <button onclick="loadAllData()" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded">Повторить</button>
+          </div>
+        `;
       }
     }
 
-    // Функция отображения события
+    // Рендеринг контента
+    function renderContent(events, ads, votings) {
+      const container = document.getElementById('events');
+      container.innerHTML = '';
+
+      if (events.length === 0 && ads.length === 0 && votings.length === 0) {
+        container.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
+        return;
+      }
+
+      // Активные голосования
+      const activeVotings = votings.filter(v => getBpiumValue(v, 'Status') !== 'Completed');
+      activeVotings.forEach(voting => renderVotingItem(voting));
+
+      // События с рекламой
+      events.forEach((event, index) => {
+        renderEventItem(event);
+        
+        // Вставляем рекламу после каждых 2 событий
+        if ((index + 1) % 2 === 0 && ads[Math.floor(index / 2)]) {
+          renderAdItem(ads[Math.floor(index / 2)]);
+        }
+      });
+
+      // Оставшаяся реклама
+      const remainingAds = ads.slice(Math.floor(events.length / 2));
+      remainingAds.forEach(ad => renderAdItem(ad));
+    }
+
+    // Рендеринг карточки события
     function renderEventItem(record) {
-      const eventsContainer = document.getElementById('events');
+      const container = document.getElementById('events');
       
       const title = getBpiumValue(record, 'Title') || 'Без названия';
       const date = getBpiumValue(record, 'Date');
       const location = getBpiumValue(record, 'Location') || 'Без места';
-      const attendeesCount = getBpiumValue(record, 'AttendeesCount') || 0;
-      const imageUrl = getBpiumValue(record, 'Image') || 'https://via.placeholder.com/150';
+      const attendees = getBpiumValue(record, 'AttendeesCount') || 0;
+      const image = getBpiumValue(record, 'Image') || 'https://via.placeholder.com/150';
 
-      const div = document.createElement('div');
-      div.className = 'event-card p-3 fade-in card-contrast cursor-pointer';
-      div.innerHTML = `
-        <h3 class="text-lg font-bold text-contrast mb-2">${title}</h3>
+      const card = document.createElement('div');
+      card.className = 'event-card p-4 fade-in cursor-pointer';
+      card.innerHTML = `
+        <h3 class="font-bold text-lg mb-2">${title}</h3>
         <p class="text-sm text-[var(--hint-color)] mb-1">${formatDate(date)}</p>
         <p class="text-sm text-[var(--hint-color)] mb-2">${location}</p>
-        <p class="text-sm text-green-600 mb-2">Идут: ${attendeesCount} человек</p>
-        <img src="${imageUrl}" alt="${title}" class="w-full h-32 object-cover rounded-lg" loading="lazy">
+        <p class="text-sm text-green-600 mb-2">Идут: ${attendees} человек</p>
+        <img src="${image}" alt="${title}" class="w-full h-32 object-cover rounded-lg">
       `;
       
-      div.addEventListener('click', () => showEventModal(record));
-      eventsContainer.appendChild(div);
+      card.addEventListener('click', () => showEventModal(record));
+      container.appendChild(card);
     }
 
-    // Функция отображения рекламы
+    // Рендеринг рекламы
     function renderAdItem(record) {
-      const eventsContainer = document.getElementById('events');
+      const container = document.getElementById('events');
       
       const title = getBpiumValue(record, 'Title') || 'Реклама';
       const description = getBpiumValue(record, 'Description') || 'Специальное предложение';
-      const imageUrl = getBpiumValue(record, 'IMG') || 'https://via.placeholder.com/150';
+      const image = getBpiumValue(record, 'IMG') || 'https://via.placeholder.com/150';
 
-      const div = document.createElement('div');
-      div.className = 'ad-card p-3 fade-in relative cursor-pointer';
-      div.innerHTML = `
+      const card = document.createElement('div');
+      card.className = 'ad-card p-4 fade-in relative cursor-pointer';
+      card.innerHTML = `
         <div class="ad-badge">Реклама</div>
-        <h3 class="text-lg font-bold mb-2">${title}</h3>
+        <h3 class="font-bold text-lg mb-2">${title}</h3>
         <p class="text-sm mb-2">${description}</p>
-        <img src="${imageUrl}" alt="${title}" class="w-full h-32 object-cover rounded-lg" loading="lazy">
+        <img src="${image}" alt="${title}" class="w-full h-32 object-cover rounded-lg">
       `;
       
-      div.addEventListener('click', () => showAdModal(record));
-      eventsContainer.appendChild(div);
+      card.addEventListener('click', () => showAdModal(record));
+      container.appendChild(card);
     }
 
-    // Функция отображения голосования
+    // Рендеринг голосования
     function renderVotingItem(record) {
-      const eventsContainer = document.getElementById('events');
+      const container = document.getElementById('events');
       
       const title = getBpiumValue(record, 'Title') || 'Голосование';
       const description = getBpiumValue(record, 'Description') || '';
       const status = getBpiumValue(record, 'Status') || 'Active';
       const isCompleted = status === 'Completed';
 
-      const div = document.createElement('div');
-      div.className = `voting-card p-3 fade-in relative cursor-pointer ${isCompleted ? 'completed' : ''}`;
-      div.innerHTML = `
+      const card = document.createElement('div');
+      card.className = `voting-card p-4 fade-in relative cursor-pointer ${isCompleted ? 'completed' : ''}`;
+      card.innerHTML = `
         <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
-        <h3 class="text-lg font-bold mb-2">${title}</h3>
+        <h3 class="font-bold text-lg mb-2">${title}</h3>
         <p class="text-sm mb-2">${description}</p>
         <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'}">
           ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
         </p>
       `;
       
-      div.addEventListener('click', () => showVotingModal(record));
-      eventsContainer.appendChild(div);
+      card.addEventListener('click', () => showVotingModal(record));
+      container.appendChild(card);
     }
 
     // Модальное окно события
     async function showEventModal(record) {
-      const modal = document.getElementById('eventModal');
       currentEventRecord = record;
-
+      
       const title = getBpiumValue(record, 'Title') || 'Без названия';
       const date = getBpiumValue(record, 'Date');
       const location = getBpiumValue(record, 'Location') || 'Без места';
       const description = getBpiumValue(record, 'Description') || 'Без описания';
-      const imageUrl = getBpiumValue(record, 'Image') || 'https://via.placeholder.com/150';
+      const image = getBpiumValue(record, 'Image') || 'https://via.placeholder.com/150';
       const mapLink = getBpiumValue(record, 'MapLink');
       currentAttendeesCount = getBpiumValue(record, 'AttendeesCount') || 0;
 
+      // Заполняем модальное окно
       document.getElementById('modalTitle').textContent = title;
-      document.getElementById('modalDate').textContent = formatDate(date) || 'Без даты';
+      document.getElementById('modalDate').textContent = formatDate(date);
       document.getElementById('modalLocation').textContent = location;
       document.getElementById('modalDescription').textContent = description;
-      document.getElementById('modalImage').src = imageUrl;
+      document.getElementById('modalImage').src = image;
       document.getElementById('attendeesCount').textContent = currentAttendeesCount;
 
-      // Проверяем статус участия пользователя
+      // Кнопка карты
+      const mapContainer = document.getElementById('modalMapButtonContainer');
+      const mapButton = document.getElementById('modalMapButton');
+      if (mapLink) {
+        mapContainer.classList.remove('hidden');
+        mapButton.onclick = () => tg.openLink(mapLink);
+      } else {
+        mapContainer.classList.add('hidden');
+      }
+
+      // Проверяем статус участия
       try {
         const response = await fetch(`${BACKEND_URL}/api/events/${record.id}/attend-status/${user.id}`);
         if (response.ok) {
@@ -680,33 +670,13 @@
           isUserAttending = status.isAttending;
         }
       } catch (err) {
-        console.error('Error checking attend status:', err);
         isUserAttending = false;
       }
 
-      // Настройка кнопки карты
-      const mapButtonContainer = document.getElementById('modalMapButtonContainer');
-      const mapButton = document.getElementById('modalMapButton');
-      if (mapLink) {
-        mapButtonContainer.classList.remove('hidden');
-        mapButton.onclick = () => tg.openLink(mapLink);
-      } else {
-        mapButtonContainer.classList.add('hidden');
-      }
+      updateAttendButton();
 
-      // Настройка кнопки участия
-      const attendButton = document.getElementById('attendButton');
-      if (isUserAttending) {
-        attendButton.textContent = 'Не пойду';
-        attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-        attendButton.onclick = () => unattendEvent();
-      } else {
-        attendButton.textContent = 'Я пойду!';
-        attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
-        attendButton.onclick = () => attendEvent();
-      }
-
-      modal.classList.remove('hidden');
+      // Показываем модальное окно
+      document.getElementById('eventModal').classList.remove('hidden');
       tg.BackButton.show();
       tg.BackButton.onClick(closeEventModal);
     }
@@ -726,17 +696,15 @@
           const result = await response.json();
           currentAttendeesCount = result.count;
           isUserAttending = true;
-          
           document.getElementById('attendeesCount').textContent = result.count;
           updateAttendButton();
-          alert('Отлично! Вы идете на мероприятие!');
+          alert('✅ Вы идете на мероприятие!');
         } else {
           const error = await response.json();
           alert(error.error || 'Ошибка при записи');
         }
       } catch (err) {
-        console.error('Attend error:', err);
-        alert('Ошибка при записи на мероприятие: ' + err.message);
+        alert('❌ Ошибка при записи: ' + err.message);
       }
     }
 
@@ -756,29 +724,27 @@
           const result = await response.json();
           currentAttendeesCount = result.count;
           isUserAttending = false;
-          
           document.getElementById('attendeesCount').textContent = result.count;
           updateAttendButton();
-          alert('Вы больше не идете на мероприятие');
+          alert('❌ Вы больше не идете на мероприятие');
         } else {
           throw new Error('Ошибка при отмене записи');
         }
       } catch (err) {
-        console.error('Unattend error:', err);
-        alert('Ошибка при отмене записи: ' + err.message);
+        alert('❌ Ошибка при отмене записи: ' + err.message);
       }
     }
 
     function updateAttendButton() {
-      const attendButton = document.getElementById('attendButton');
+      const button = document.getElementById('attendButton');
       if (isUserAttending) {
-        attendButton.textContent = 'Не пойду';
-        attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-        attendButton.onclick = () => unattendEvent();
+        button.textContent = 'Не пойду';
+        button.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
+        button.onclick = unattendEvent;
       } else {
-        attendButton.textContent = 'Я пойду!';
-        attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
-        attendButton.onclick = () => attendEvent();
+        button.textContent = 'Я пойду!';
+        button.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
+        button.onclick = attendEvent;
       }
     }
 
@@ -790,26 +756,24 @@
 
     // Модальное окно рекламы
     function showAdModal(record) {
-      const modal = document.getElementById('adModal');
-      
       const title = getBpiumValue(record, 'Title') || 'Реклама';
       const description = getBpiumValue(record, 'Description') || 'Специальное предложение';
-      const imageUrl = getBpiumValue(record, 'IMG') || 'https://via.placeholder.com/150';
+      const image = getBpiumValue(record, 'IMG') || 'https://via.placeholder.com/150';
       const url = getBpiumValue(record, 'URL');
 
       document.getElementById('adModalTitle').textContent = title;
       document.getElementById('adModalDescription').textContent = description;
-      document.getElementById('adModalImage').src = imageUrl;
-      
-      const adButton = document.getElementById('adModalButton');
+      document.getElementById('adModalImage').src = image;
+
+      const button = document.getElementById('adModalButton');
       if (url) {
-        adButton.onclick = () => tg.openLink(url);
-        adButton.style.display = 'block';
+        button.onclick = () => tg.openLink(url);
+        button.style.display = 'block';
       } else {
-        adButton.style.display = 'none';
+        button.style.display = 'none';
       }
-      
-      modal.classList.remove('hidden');
+
+      document.getElementById('adModal').classList.remove('hidden');
       tg.BackButton.show();
       tg.BackButton.onClick(closeAdModal);
     }
@@ -819,302 +783,22 @@
       tg.BackButton.hide();
     }
 
-    // Функции для голосований
-    function showVotingOptions(voting) {
-      const optionsContainer = document.getElementById('votingOptions');
-      optionsContainer.innerHTML = '<h4 class="font-bold mb-2 text-contrast">Выберите номинанта:</h4>';
-
-      document.getElementById('getLocationBtn').style.display = 'block';
-      document.getElementById('votingResultsImageContainer').classList.add('hidden');
-
-      const options = getBpiumValue(voting, 'Options');
-      if (options && options.split(',').length > 0) {
-        const optionsArray = options.split(',');
-        const optionImages = getBpiumValue(voting, 'OptionImages') || [];
-
-        optionsArray.forEach((option, index) => {
-          const optionDiv = document.createElement('div');
-          optionDiv.className = 'mb-3 p-3 border rounded-lg bg-contrast transition voting-option border-contrast';
-
-          let imageHtml = '';
-          if (optionImages[index] && optionImages[index].url) {
-            imageHtml = `
-              <div class="flex-shrink-0 mr-3">
-                <img src="${optionImages[index].url}" alt="${option}" class="w-24 h-24 object-cover rounded-lg border border-contrast">
-              </div>
-            `;
-          }
-
-          optionDiv.innerHTML = `
-            <div class="flex items-center justify-between">
-              ${imageHtml}
-              <div class="flex-grow">
-                <span class="font-medium text-contrast">${option}</span>
-              </div>
-              <button class="vote-button bg-blue-600 text-white px-3 py-1 rounded text-sm transition" onclick="castVote(${index})" disabled>
-                Голосовать
-              </button>
-            </div>
-          `;
-
-          optionsContainer.appendChild(optionDiv);
-        });
-
-        updateVoteButtons();
-      }
-    }
-
-    function updateVoteButtons() {
-      const voteButtons = document.querySelectorAll('.vote-button');
-      voteButtons.forEach(button => {
-        if (userLocation) {
-          button.classList.add('enabled');
-          button.classList.remove('bg-blue-600');
-          button.classList.add('bg-green-600', 'hover:bg-green-700');
-          button.disabled = false;
-        }
-      });
-    }
-
-    async function castVote(optionIndex) {
-      if (!currentVotingRecord || !userLocation) return;
-
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user.id,
-            optionIndex: optionIndex,
-            userLat: userLocation.latitude,
-            userLon: userLocation.longitude
-          })
-        });
-
-        if (response.ok) {
-          alert('Ваш голос учтен!');
-          showVotingModal(currentVotingRecord);
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Ошибка при голосовании');
-        }
-      } catch (err) {
-        console.error('Vote error:', err);
-        alert('Ошибка при голосовании: ' + err.message);
-      }
-    }
-
-    // Определение местоположения
-    document.getElementById('getLocationBtn').addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        alert('Геолокация не поддерживается вашим браузером');
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          userLocation = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          };
-          alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
-          document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
-          document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
-          document.getElementById('getLocationBtn').classList.add('bg-green-600', 'hover:bg-green-700');
-          document.getElementById('getLocationBtn').disabled = true;
-          updateVoteButtons();
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
-          alert('Не удалось определить ваше местоположение. Проверьте настройки геолокации.');
-        }
-      );
-    });
-
-    function showVotingModal(record) {
-      const modal = document.getElementById('votingModal');
-      currentVotingRecord = record;
-
-      const title = getBpiumValue(record, 'Title') || 'Голосование';
-      const description = getBpiumValue(record, 'Description') || '';
-
-      document.getElementById('votingModalTitle').textContent = title;
-      document.getElementById('votingModalDescription').textContent = description;
-
-      // Проверяем статус голосования
-      fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
-        .then(response => response.ok ? response.json() : { hasVoted: false })
-        .then(status => {
-          if (status.hasVoted || getBpiumValue(record, 'Status') === 'Completed') {
-            showVotingResults(record, status.userVote);
-          } else {
-            showVotingOptions(record);
-          }
-        })
-        .catch(() => showVotingOptions(record));
-
-      modal.classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeVotingModal);
-    }
-
-    function showVotingResults(record, userVote) {
-      const optionsContainer = document.getElementById('votingOptions');
-      const isCompleted = getBpiumValue(record, 'Status') === 'Completed';
-      
-      optionsContainer.innerHTML = isCompleted ? 
-        '<h4 class="font-bold mb-2 text-contrast">Финальные результаты:</h4>' : 
-        '<h4 class="font-bold mb-2 text-contrast">Текущие результаты:</h4>';
-      
-      document.getElementById('getLocationBtn').style.display = 'none';
-
-      const options = getBpiumValue(record, 'Options');
-      if (options) {
-        const optionsArray = options.split(',');
-        const optionImages = getBpiumValue(record, 'OptionImages') || [];
-        const votes = getBpiumValue(record, 'Votes');
-
-        // Подсчет результатов
-        const results = {};
-        optionsArray.forEach((option, index) => {
-          results[index] = { option, count: 0, percentage: 0 };
-        });
-
-        if (votes) {
-          const votesObj = typeof votes === 'string' ? JSON.parse(votes) : votes;
-          Object.values(votesObj).forEach(voteIndex => {
-            if (results[voteIndex]) results[voteIndex].count++;
-          });
-        }
-
-        const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
-        Object.values(results).forEach(result => {
-          result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
-        });
-
-        // Отображение результатов
-        Object.values(results).forEach((result, index) => {
-          const isUserChoice = userVote === index;
-          const imageUrl = optionImages[index] ? optionImages[index].url : null;
-
-          const resultDiv = document.createElement('div');
-          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-contrast voting-option border-contrast';
-
-          let imageHtml = '';
-          if (imageUrl) {
-            imageHtml = `
-              <div class="flex-shrink-0 mr-3">
-                <img src="${imageUrl}" alt="${result.option}" class="w-24 h-24 object-cover rounded-lg border border-contrast">
-              </div>
-            `;
-          }
-
-          resultDiv.innerHTML = `
-            <div class="flex items-start">
-              ${imageHtml}
-              <div class="flex-grow">
-                <div class="flex justify-between items-start mb-2">
-                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-contrast'}">${result.option}</span>
-                  <span class="text-sm text-[var(--hint-color)] whitespace-nowrap">${result.count} голосов (${result.percentage}%)</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <div class="bg-blue-600 h-2 rounded-full" style="width: ${result.percentage}%"></div>
-                </div>
-                ${isUserChoice ? '<div class="text-xs text-blue-600">✓ Ваш выбор</div>' : ''}
-              </div>
-            </div>
-          `;
-
-          optionsContainer.appendChild(resultDiv);
-        });
-      }
-
-      if (isCompleted) {
-        optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
-      }
-    }
-
-    function closeVotingModal() {
-      document.getElementById('votingModal').classList.add('hidden');
-      tg.BackButton.hide();
-      currentVotingRecord = null;
-    }
-
     // Админ-панель
-    async function checkIsAdmin(userId) {
+    async function checkIsAdmin() {
       try {
-        const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
+        const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${user.id}`);
         const data = await response.json();
         return data.isAdmin;
       } catch (err) {
-        console.error('Error checking admin:', err);
         return false;
       }
     }
 
     async function initAdmin() {
-      try {
-        const isAdmin = await checkIsAdmin(user.id);
-        console.log('Is Admin:', isAdmin, 'User ID:', user.id);
-        if (isAdmin) {
-          document.getElementById('adminBtn').classList.remove('hidden');
-        }
-      } catch (err) {
-        console.error('Admin init error:', err);
-      }
-    }
-
-    function showTab(tabId) {
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-      
-      const activeTab = document.querySelector(`[onclick="showTab('${tabId}')"]`);
-      if (activeTab) activeTab.classList.add('active');
-      
-      document.getElementById(tabId).classList.add('active');
-      
-      if (tabId === 'tab-list') {
-        renderAdminEvents();
-      } else if (tabId === 'tab-ads-list') {
-        loadAds();
-      } else if (tabId === 'tab-votings-list') {
-        loadVotings();
-      }
-    }
-
-    async function renderAdminEvents() {
-      const eventList = document.getElementById('eventList');
-      eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events`);
-        if (!response.ok) throw new Error('Ошибка загрузки событий');
-        
-        const data = await response.json();
-        const events = Array.isArray(data) ? data : (data.values || []);
-        
-        eventList.innerHTML = '';
-        
-        if (events.length > 0) {
-          events.forEach(record => {
-            const div = document.createElement('div');
-            div.className = 'p-3 border-b border-[var(--hint-color)] mb-2';
-            div.innerHTML = `
-              <p class="text-sm font-bold text-contrast">${getBpiumValue(record, 'Title') || 'Без названия'}</p>
-              <p class="text-xs text-contrast">${formatDate(getBpiumValue(record, 'Date'))} - ${getBpiumValue(record, 'Location') || 'Без места'}</p>
-              <p class="text-xs text-contrast">Идут: ${getBpiumValue(record, 'AttendeesCount') || 0} человек</p>
-              <div class="flex space-x-2 mt-2">
-                <button onclick="editEvent('${record.id}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs">Редактировать</button>
-                <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs">Удалить</button>
-              </div>
-            `;
-            eventList.appendChild(div);
-          });
-        } else {
-          eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">События не найдены</p>';
-        }
-      } catch (err) {
-        eventList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
+      const isAdmin = await checkIsAdmin();
+      if (isAdmin) {
+        document.getElementById('adminBtn').classList.remove('hidden');
+        console.log('👨‍💼 Админ-панель включена');
       }
     }
 
@@ -1130,36 +814,137 @@
       tg.BackButton.hide();
     }
 
-    // Упрощенные функции для админки (заглушки)
-    function editEvent(recordId) {
-      alert('Редактирование события: ' + recordId);
+    function showTab(tabId) {
+      // Скрываем все вкладки
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      
+      // Активируем выбранную вкладку
+      document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
     }
 
-    async function deleteEvent(recordId) {
-      if (!confirm('Удалить событие?')) return;
+    // Форма создания события
+    document.getElementById('eventForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData();
+      const title = document.getElementById('eventTitle').value;
+      const type = document.getElementById('eventType').value;
+      const date = document.getElementById('eventDate').value;
+      const location = document.getElementById('eventLocation').value;
+      const description = document.getElementById('eventDescription').value;
+      const mapLink = document.getElementById('eventMapLink').value;
+      const imageFile = document.getElementById('eventImage').files[0];
+
+      if (!title || !type || !date || !location) {
+        alert('Заполните обязательные поля');
+        return;
+      }
+
       try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${recordId}`, { method: 'DELETE' });
+        // Загружаем изображение если есть
+        let imageUrl = '';
+        if (imageFile) {
+          const uploadForm = new FormData();
+          uploadForm.append('image', imageFile);
+          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
+            method: 'POST',
+            body: uploadForm
+          });
+          const uploadData = await uploadResponse.json();
+          imageUrl = uploadData.url;
+        }
+
+        // Создаем событие
+        const eventData = createBpiumData({
+          Title: title,
+          Type: type,
+          Date: date,
+          Location: location,
+          Description: description,
+          MapLink: mapLink || '',
+          Image: imageUrl || '',
+          AttendeesCount: 0,
+          AttendeesIDs: ''
+        });
+
+        const response = await fetch(`${BACKEND_URL}/api/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData)
+        });
+
         if (response.ok) {
-          alert('Событие удалено');
+          alert('✅ Событие создано!');
+          document.getElementById('eventForm').reset();
+          loadAllData();
+        } else {
+          throw new Error('Ошибка создания события');
+        }
+      } catch (err) {
+        alert('❌ Ошибка: ' + err.message);
+      }
+    });
+
+    // Загрузка событий для админки
+    async function renderAdminEvents() {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events`);
+        const events = await response.json();
+        
+        const container = document.getElementById('eventList');
+        container.innerHTML = '';
+        
+        if (Array.isArray(events) && events.length > 0) {
+          events.forEach(event => {
+            const div = document.createElement('div');
+            div.className = 'p-3 border-b border-gray-300';
+            div.innerHTML = `
+              <p class="font-bold">${getBpiumValue(event, 'Title')}</p>
+              <p class="text-sm">${formatDate(getBpiumValue(event, 'Date'))} - ${getBpiumValue(event, 'Location')}</p>
+              <button onclick="deleteEvent('${event.id}')" class="mt-2 bg-red-500 text-white px-3 py-1 rounded text-sm">Удалить</button>
+            `;
+            container.appendChild(div);
+          });
+        } else {
+          container.innerHTML = '<p class="text-center text-gray-500">События не найдены</p>';
+        }
+      } catch (err) {
+        document.getElementById('eventList').innerHTML = '<p class="text-center text-red-500">Ошибка загрузки</p>';
+      }
+    }
+
+    async function deleteEvent(eventId) {
+      if (!confirm('Удалить событие?')) return;
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/events/${eventId}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          alert('✅ Событие удалено');
           renderAdminEvents();
-          renderEvents();
+          loadAllData();
         } else {
           throw new Error('Ошибка удаления');
         }
       } catch (err) {
-        alert('Ошибка: ' + err.message);
+        alert('❌ Ошибка: ' + err.message);
       }
     }
 
-    // Инициализация приложения
+    // Инициализация
     applyTheme();
     initAdmin();
-    renderEvents();
+    loadAllData();
 
-    // Добавляем обработчик ошибок для отладки
-    window.addEventListener('error', function(e) {
+    // Глобальный обработчик ошибок
+    window.addEventListener('error', (e) => {
       console.error('Global error:', e.error);
     });
+
   </script>
 </body>
 </html>
