@@ -73,11 +73,14 @@ const logger = {
       timestamp: new Date().toISOString(), 
       ...meta 
     }));
+  },
+  warn: (message, meta = {}) => {
+    console.warn(JSON.stringify({ level: 'warn', message, timestamp: new Date().toISOString(), ...meta }));
   }
 };
 
 /**
- * Загружает файл в Radikal API
+ * Загружает файл в Radikal API с улучшенной обработкой дубликатов
  */
 async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
@@ -88,9 +91,14 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
       throw new Error('File size exceeds 10MB limit');
     }
 
+    // Добавляем уникальный идентификатор к имени файла
+    const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    const fileExtension = filename.split('.').pop() || 'jpg';
+    const uniqueFilename = `${filename.replace(`.${fileExtension}`, '')}_${uniqueSuffix}.${fileExtension}`;
+
     const formData = new FormData();
     formData.append('source', fileBuffer, {
-      filename: filename,
+      filename: uniqueFilename,
       contentType: contentType
     });
 
@@ -112,7 +120,7 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
       return {
         fileId: imageData.id_encoded || imageData.name,
         url: imageData.url,
-        filename: filename,
+        filename: uniqueFilename,
         imageData: response.data.image
       };
     } else {
@@ -120,17 +128,29 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
     }
   } catch (error) {
     logger.error('Radikal API upload error', error);
-    if (error.code === 'ENOTFOUND') {
-      throw new Error('Radikal API is unreachable');
-    } else if (error.response) {
+    
+    if (error.response) {
       const status = error.response.status;
-      if (status === 401) {
+      const errorMessage = error.response.data?.error?.message || error.response.data?.status_txt;
+      
+      if (status === 400 && errorMessage?.includes('Дублирующаяся загрузка')) {
+        // Если файл уже загружен, генерируем новое уникальное имя и пробуем снова
+        logger.info('File already exists, generating new unique name');
+        const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}_retry`;
+        const fileExtension = filename.split('.').pop() || 'jpg';
+        const newUniqueFilename = `${filename.replace(`.${fileExtension}`, '')}_${uniqueSuffix}.${fileExtension}`;
+        
+        // Рекурсивно вызываем функцию с новым именем
+        return uploadToRadikal(fileBuffer, newUniqueFilename, contentType);
+      } else if (status === 401) {
         throw new Error('Invalid Radikal API key');
       } else if (status === 413) {
         throw new Error('File too large for Radikal API');
       } else {
-        throw new Error(`Radikal API error: ${status} - ${error.response.data?.error?.message || 'Unknown error'}`);
+        throw new Error(`Radikal API error: ${status} - ${errorMessage || 'Unknown error'}`);
       }
+    } else if (error.code === 'ENOTFOUND') {
+      throw new Error('Radikal API is unreachable');
     }
     throw error;
   }
@@ -281,8 +301,7 @@ app.post('/api/events', upload.single('image'), async (req, res) => {
       fields: {
         ...req.body,
         ...(imageUrl && { 
-          Image: imageUrl,
-          ImageFileId: fileId 
+          Image: imageUrl
         })
       }
     };
@@ -363,7 +382,6 @@ app.patch('/api/events/:id', upload.single('image'), async (req, res) => {
       newImageUrl = uploadResult.url;
       newFileId = uploadResult.fileId;
       updateData.fields.Image = newImageUrl;
-      updateData.fields.ImageFileId = newFileId;
       logger.info('New event image uploaded', { url: newImageUrl });
     }
     
@@ -472,8 +490,7 @@ app.post('/api/ads', upload.single('image'), async (req, res) => {
       fields: {
         ...req.body,
         ...(imageUrl && { 
-          Image: imageUrl,
-          ImageFileId: fileId 
+          Image: imageUrl
         })
       }
     };
@@ -514,15 +531,18 @@ app.patch('/api/ads/:id', upload.single('image'), async (req, res) => {
     
     const updateData = { fields: { ...req.body } };
     let newImageUrl = null;
-    let newFileId = null;
     
     if (req.file) {
       const filePath = req.file.path;
       const fileBuffer = fs.readFileSync(filePath);
       
+      // Генерируем уникальное имя файла
+      const fileExtension = req.file.originalname.split('.').pop() || 'jpg';
+      const uniqueFilename = `ad_${Date.now()}_${Math.random().toString(36).substring(2, 15)}.${fileExtension}`;
+      
       const uploadResult = await uploadToRadikal(
         fileBuffer,
-        req.file.originalname || `ad_${Date.now()}.jpg`,
+        uniqueFilename,
         req.file.mimetype
       );
       
@@ -533,11 +553,16 @@ app.patch('/api/ads/:id', upload.single('image'), async (req, res) => {
       }
       
       newImageUrl = uploadResult.url;
-      newFileId = uploadResult.fileId;
       updateData.fields.Image = newImageUrl;
-      updateData.fields.ImageFileId = newFileId;
     }
     
+    // Убедимся, что данные корректны перед отправкой в Airtable
+    logger.info('Sending update to Airtable', { 
+      adId: req.params.id, 
+      fields: Object.keys(updateData.fields),
+      hasImage: !!newImageUrl
+    });
+
     const response = await axios.patch(`${ADS_URL}/${req.params.id}`, updateData, {
       headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
@@ -547,11 +572,21 @@ app.patch('/api/ads/:id', upload.single('image'), async (req, res) => {
     
     res.json({
       ...response.data,
-      ...(newImageUrl && { uploadedImage: { url: newImageUrl, fileId: newFileId } })
+      ...(newImageUrl && { uploadedImage: { url: newImageUrl } })
     });
     
   } catch (error) {
     logger.error('Ad update with image error', error);
+    
+    // Детальное логирование ошибки Airtable
+    if (error.response) {
+      logger.error('Airtable error details:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+    }
+    
     if (req.file) {
       try {
         fs.unlinkSync(req.file.path);
@@ -559,7 +594,14 @@ app.patch('/api/ads/:id', upload.single('image'), async (req, res) => {
         logger.error('Error deleting temp file', unlinkError);
       }
     }
-    res.status(500).json({ error: error.message });
+    
+    // Более информативное сообщение об ошибке
+    let errorMessage = error.message;
+    if (error.response?.status === 422) {
+      errorMessage = 'Ошибка валидации данных в Airtable. Проверьте структуру полей.';
+    }
+    
+    res.status(error.response?.status || 500).json({ error: errorMessage });
   }
 });
 
@@ -570,19 +612,7 @@ app.delete('/api/ads/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid ad ID' });
     }
 
-    const adResponse = await axios.get(`${ADS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    
-    const ad = adResponse.data;
-    if (ad.fields && ad.fields.ImageFileId) {
-      try {
-        await deleteFromRadikal(ad.fields.ImageFileId);
-      } catch (deleteError) {
-        logger.error('Error deleting image from Radikal', deleteError);
-      }
-    }
-    
+    // Пропускаем удаление из Radikal для рекламы, если нет ImageFileId
     const response = await axios.delete(`${ADS_URL}/${req.params.id}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
@@ -634,14 +664,10 @@ app.post('/api/votings', upload.fields([
           logger.error('Error deleting temp file', unlinkError);
         }
         
-        optionImagesData.push({
-          url: uploadResult.url,
-          fileId: uploadResult.fileId
-        });
+        optionImagesData.push(uploadResult.url);
       }
       
-      votingData.fields.OptionImages = JSON.stringify(optionImagesData.map(img => img.url));
-      votingData.fields.OptionImagesFileIds = JSON.stringify(optionImagesData.map(img => img.fileId));
+      votingData.fields.OptionImages = JSON.stringify(optionImagesData);
       logger.info('Option images uploaded', { count: optionImagesData.length });
     }
     
@@ -701,14 +727,10 @@ app.patch('/api/votings/:id', upload.fields([
           logger.error('Error deleting temp file', unlinkError);
         }
         
-        newOptionImagesData.push({
-          url: uploadResult.url,
-          fileId: uploadResult.fileId
-        });
+        newOptionImagesData.push(uploadResult.url);
       }
       
-      updateData.fields.OptionImages = JSON.stringify(newOptionImagesData.map(img => img.url));
-      updateData.fields.OptionImagesFileIds = JSON.stringify(newOptionImagesData.map(img => img.fileId));
+      updateData.fields.OptionImages = JSON.stringify(newOptionImagesData);
     }
     
     const response = await axios.patch(`${VOTINGS_URL}/${req.params.id}`, updateData, {
@@ -1087,8 +1109,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     try {
       const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
         fields: { 
-          ResultsImage: uploadResult.url,
-          ResultsImageFileId: uploadResult.fileId
+          ResultsImage: uploadResult.url
         }
       }, {
         headers: { 
@@ -1104,8 +1125,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     res.json({ 
       success: true, 
-      imageUrl: uploadResult.url,
-      fileId: uploadResult.fileId
+      imageUrl: uploadResult.url
     });
 
   } catch (error) {
@@ -1205,83 +1225,161 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     if (Array.isArray(currentAttendees)) {
       attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
     } else if (typeof currentAttendees === 'string') {
-      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
+      attendeesArray = currentAttendees.split(',').filter(id => idAttendees.split(',').filter(id => id && id.trim());
     }
 
     const userIdStr = userId.toString();
-    const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
-    const newAttendees = newAttendeesArray.join(',');
+ && id.trim());
+    }
+
+    const userIdStr = userId.toString();
+    const new    const newAttendeesArrayAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
+    = attendeesArray.filter(id => id !== userIdStr);
+    const newAttendees = newAttendeesArray.join const newAttendees = newAttendeesArray.join(',');
+    const newCount = Math.max(0, newAttendeesArray.length);
+
+    const(',');
     const newCount = Math.max(0, newAttendeesArray.length);
 
     const updateData = {
       fields: {
+        AttendeesIDs: newAtt updateData = {
+      fields: {
         AttendeesIDs: newAttendees,
         AttendeesCount: newCount
-      }
+     endees,
+        AttendeesCount: newCount
+ }
+    };
+
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${event      }
     };
 
     const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
       headers: { 
+        Authorization: `Bearer ${Id}`, updateData, {
+      headers: { 
         Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+       AIRTABLE_API_KEY}`,
         'Content-Type': 'application/json' 
+      }
+    'Content-Type': 'application/json' 
       }
     });
 
     logger.info('Unattend successful');
+    });
+
+    logger.info('Unattend successful');
     res.json({ success: true, count: newCount, attending: false });
+ res.json({ success: true, count: newCount, attending: false });
     
-  } catch (error) {
+  } catch    
+  } catch (error (error) {
+    logger.error('Unattend error', error);
+    res.status(500) {
     logger.error('Unattend error', error);
     res.status(500).json({ error: error.message });
   }
 });
 
+// Пров).json({ error: error.message });
+  }
+});
+
 // Проверяем статус участия пользователя
-app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
+app.get('/apiеряем статус участия пользователя
+app.get('/api/events/:eventId/attend-status/:userId/events/:eventId/attend-status/:userId', async (req, res', async (req, res) => {
   try {
-    const { eventId, userId } = req.params;
+    const) => {
+  try {
+    const { eventId, userId } = req { eventId, userId }.params;
 
-    logger.info(`Checking attend status for user ${userId} in event ${eventId}`);
+    logger.info(`Checking attend status for user ${ = req.params;
 
-    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    logger.info(`Checking attend status for user ${userId} in eventuserId} in event ${eventId}`);
+
+    const event ${eventId}`);
+
+   Response = await axios.get(`${EVENTS_URL}/${eventId} const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
+      headers:`, {
+      headers: { Authorization: `Bearer ${AIRTABLE { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
     });
 
-    const event = eventResponse.data;
-    if (!event.fields) {
+    const event = event_API_KEY}` }
+    });
+
+Response.data;
+    if (!event    const event = eventResponse.data;
+    if (!event.fields.fields) {
+      return res.status(404).json({ error: ') {
       return res.status(404).json({ error: 'Event not found' });
     }
 
+    const attendees = event.fieldsEvent not found' });
+    }
+
     const attendees = event.fields.AttendeesIDs || '';
-    let attendeesArray = [];
+    let.AttendeesIDs || '';
+    let attendees attendeesArray = [];
+    if (Array.isArray(Array = [];
     if (Array.isArray(attendees)) {
-      attendeesArray = attendees.filter(id => id && id.toString().trim());
+      attendeesArray = attendees.filter(id => id && id.toString().attendees)) {
+      attendeesArray = attendees.filter(id => id && id.toStringtrim());
+    } else if (typeof attendees === 'string().trim());
     } else if (typeof attendees === 'string') {
-      attendeesArray = attendees.split(',').filter(id => id && id.trim());
+') {
+      attendeesArray = attendees.split(','      attendeesArray = attendees.split(',').filter(id => id && id.trim());
+    }
+    
+    const isAtt).filter(id => id && id.trim());
     }
     
     const isAttending = attendeesArray.includes(userId.toString());
 
+   ending = attendeesArray.includes(user logger.info('Is attending', { isAttending });
+Id.toString());
+
     logger.info('Is attending', { isAttending });
     res.json({ isAttending });
     
-  } catch (error) {
+    res.json({ isAttending });
+    
+  } catch (error)  } catch (error) {
+    logger.error('Attend {
     logger.error('Attend status error', error);
-    res.status(500).json({ error: error.message });
+ status error', error);
+    res.status(500).json    res.status(500).json({ error: error({ error: error.message.message });
+  });
   }
 });
 
 // ==================== ЗАВЕРШЕНИЕ НАСТРОЙКИ СЕРВЕРА ====================
 
-// Создание папки uploads
+ }
+});
+
+// ==================== ЗАВЕРШЕНИЕ НАСТРОЙКИ СЕРВЕРА ====================
+
+// Создание папки// Создание папки uploads
+const upload uploads
 const uploadsDir = path.join(__dirname, 'uploads');
+if (!fssDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.mk.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDirdirSync(uploadsDir, { recursive: true });
 }
 
-// Запуск сервера
+//, { recursive: true });
+}
+
+// Запуск Запуск сервера
+app.listen(port сервера
 app.listen(port, () => {
+  console.log(`Server running on, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`Radikal API URL: ${RADIKAL_API_URL}`);
-  console.log('Image storage: URLs in Airtable, files in Radikal Cloud');
+  console.log port ${port}`);
+  console.log(`Radikal API URL(`Radikal API URL: ${RADIKAL_API_URL}`);
+  console.log: ${RADIKAL_API_URL}`);
+  console.log('Image storage: URLs in Airt('Image storage: URLs in Airtable, files inable, files in Radikal Cloud');
 });
