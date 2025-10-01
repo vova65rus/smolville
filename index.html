@@ -58,7 +58,7 @@
     }
 
     .event-card {
-      background: rgba(255, 255, 255, 0.15);
+      background: var(--secondary-bg-color);
       border-radius: 8px;
       backdrop-filter: blur(5px);
       margin-bottom: 10px;
@@ -243,6 +243,26 @@
       border-radius: 4px;
       margin-top: 5px;
     }
+
+    /* Улучшенные контрастные цвета */
+    .text-contrast {
+      color: var(--text-color);
+    }
+
+    .bg-contrast {
+      background-color: var(--bg-color);
+    }
+
+    .border-contrast {
+      border-color: var(--hint-color);
+    }
+
+    /* Улучшенные цвета для карточек */
+    .card-contrast {
+      background: var(--secondary-bg-color);
+      color: var(--text-color);
+      border: 1px solid var(--hint-color);
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -250,7 +270,7 @@
     <a href="https://t.me/smolville_drift" target="_blank">
       <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
     </a>
-    <h1 class="text-2xl font-bold text-center mb-4">Автособытия Сахалина</h1>
+    <h1 class="text-2xl font-bold text-center mb-4 text-contrast">Автособытия Сахалина</h1>
     <div id="events" class="grid grid-cols-1 gap-4"></div>
     <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition" onclick="showAdminModal()">Админ</button>
   </div>
@@ -258,19 +278,19 @@
   <!-- Модальное окно события -->
   <div id="eventModal" class="modal hidden">
     <div class="modal-content">
-      <h2 id="modalTitle" class="text-lg font-bold"></h2>
-      <p id="modalDate"></p>
-      <p id="modalLocation"></p>
-      <p id="modalDescription"></p>
+      <h2 id="modalTitle" class="text-lg font-bold text-contrast"></h2>
+      <p id="modalDate" class="text-contrast"></p>
+      <p id="modalLocation" class="text-contrast"></p>
+      <p id="modalDescription" class="text-contrast"></p>
       <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
       <div id="modalMapButtonContainer" class="hidden mt-3">
         <button id="modalMapButton" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">
           На карте
         </button>
       </div>
-      <div class="mt-4 pt-3 border-t">
+      <div class="mt-4 pt-3 border-t border-contrast">
         <div class="flex items-center justify-between">
-          <span class="text-sm font-medium">
+          <span class="text-sm font-medium text-contrast">
             Идут: <span id="attendeesCount">0</span> человек
           </span>
           <button id="attendButton" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
@@ -284,8 +304,8 @@
   <!-- Модальное окно рекламы -->
   <div id="adModal" class="modal hidden">
     <div class="modal-content">
-      <h2 id="adModalTitle" class="text-lg font-bold"></h2>
-      <p id="adModalDescription"></p>
+      <h2 id="adModalTitle" class="text-lg font-bold text-contrast"></h2>
+      <p id="adModalDescription" class="text-contrast"></p>
       <img id="adModalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
       <button id="adModalButton" class="bg-[var(--ad-border-color)] hover:opacity-90 text-[var(--ad-text-color)] px-4 py-2 rounded-lg transition w-full mt-3">
         Перейти
@@ -296,17 +316,20 @@
   <!-- Модальное окно голосования -->
   <div id="votingModal" class="modal hidden">
     <div class="modal-content">
-      <h2 id="votingModalTitle" class="text-lg font-bold"></h2>
-      <p id="votingModalDescription"></p>
-       <div class="mt-4 pt-3 border-t">
+      <h2 id="votingModalTitle" class="text-lg font-bold text-contrast"></h2>
+      <p id="votingModalDescription" class="text-contrast"></p>
+      
+      <!-- ПЕРЕМЕЩЕННАЯ КНОПКА ОПРЕДЕЛЕНИЯ МЕСТОПОЛОЖЕНИЯ - ТЕПЕРЬ ПОД ОПИСАНИЕМ -->
+      <div class="mt-4 pt-3 border-t border-contrast">
         <p class="text-sm text-[var(--hint-color)]">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
         <button id="getLocationBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3">
           Определить мое местоположение
         </button>
       </div>
+      
       <div id="votingOptions" class="my-4"></div>
       <div id="votingResultsImageContainer" class="hidden mt-4">
-        <h3 class="font-bold mb-2">Изображение с результатами:</h3>
+        <h3 class="font-bold mb-2 text-contrast">Изображение с результатами:</h3>
         <img id="votingResultsImage" class="results-image" loading="lazy">
         <div class="flex space-x-2 mt-3">
           <button id="downloadResultsBtn" class="download-btn flex-1">Скачать изображение</button>
@@ -321,7 +344,7 @@
   <!-- Админ-панель -->
   <div id="adminModal" class="modal hidden">
     <div class="modal-content">
-      <h2 class="text-lg font-bold mb-4">Админ-панель</h2>
+      <h2 class="text-lg font-bold mb-4 text-contrast">Админ-панель</h2>
       <div class="flex mb-4 overflow-x-auto">
         <div class="tab active" onclick="showTab('tab-list')">События</div>
         <div class="tab" onclick="showTab('tab-form')">Добавить событие</div>
@@ -333,26 +356,26 @@
       
       <!-- Вкладка списка событий -->
       <div id="tab-list" class="tab-content active">
-        <h3 class="text-md font-bold mb-2">Список событий</h3>
+        <h3 class="text-md font-bold mb-2 text-contrast">Список событий</h3>
         <div id="eventList" class="mb-4"></div>
       </div>
       
       <!-- Вкладка формы события -->
       <div id="tab-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Добавить/Редактировать событие</h3>
+        <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать событие</h3>
         <form id="eventForm">
           <input type="hidden" id="eventRecordId">
-          <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2">
-          <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2" required>
-          <select id="eventType" class="border p-2 w-full mb-2" required>
+          <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
+          <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
+          <select id="eventType" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
             <option value="">Выберите тип</option>
             <option value="Спорт">Спорт</option>
             <option value="Выставки">Выставки</option>
           </select>
-          <input type="date" id="eventDate" class="border p-2 w-full mb-2" required>
-          <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2" required>
-          <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2"></textarea>
-          <input type="text" id="eventMapLink" placeholder="Ссылка на карту (2GIS)" class="border p-2 w-full mb-2">
+          <input type="date" id="eventDate" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
+          <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
+          <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast"></textarea>
+          <input type="text" id="eventMapLink" placeholder="Ссылка на карту (2GIS)" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
           <input type="file" id="eventImage" accept="image/*" class="mb-2">
           <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">Сохранить событие</button>
         </form>
@@ -360,19 +383,19 @@
       
       <!-- Вкладка списка рекламы -->
       <div id="tab-ads-list" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Список рекламных блоков</h3>
+        <h3 class="text-md font-bold mb-2 text-contrast">Список рекламных блоков</h3>
         <div id="adsList" class="mb-4"></div>
         <button onclick="loadAds()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">Обновить список</button>
       </div>
       
       <!-- Вкладка формы рекламы -->
       <div id="tab-ad-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Добавить/Редактировать рекламу</h3>
+        <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать рекламу</h3>
         <form id="adForm">
           <input type="hidden" id="adRecordId">
-          <input type="text" id="adTitle" placeholder="Заголовок рекламы" class="border p-2 w-full mb-2" required>
-          <textarea id="adDescription" placeholder="Описание рекламы" class="border p-2 w-full mb-2"></textarea>
-          <input type="url" id="adUrl" placeholder="Ссылка (URL)" class="border p-2 w-full mb-2">
+          <input type="text" id="adTitle" placeholder="Заголовок рекламы" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
+          <textarea id="adDescription" placeholder="Описание рекламы" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast"></textarea>
+          <input type="url" id="adUrl" placeholder="Ссылка (URL)" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
           <input type="file" id="adImage" accept="image/*" class="mb-2">
           <div class="flex space-x-2">
             <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition flex-1">Сохранить рекламу</button>
@@ -383,25 +406,25 @@
       
       <!-- Вкладка списка голосований -->
       <div id="tab-votings-list" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Список голосований</h3>
+        <h3 class="text-md font-bold mb-2 text-contrast">Список голосований</h3>
         <div id="votingsList" class="mb-4"></div>
         <button onclick="loadVotings()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">Обновить список</button>
       </div>
       
       <!-- Вкладка формы голосования -->
       <div id="tab-voting-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2">Добавить/Редактировать голосование</h3>
+        <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать голосование</h3>
         <form id="votingForm">
           <input type="hidden" id="votingRecordId">
-          <input type="text" id="votingTitle" placeholder="Название голосования" class="border p-2 w-full mb-2" required>
-          <textarea id="votingDescription" placeholder="Описание голосования" class="border p-2 w-full mb-2"></textarea>
-          <select id="votingEventId" class="border p-2 w-full mb-2">
+          <input type="text" id="votingTitle" placeholder="Название голосования" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
+          <textarea id="votingDescription" placeholder="Описание голосования" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast"></textarea>
+          <select id="votingEventId" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
             <option value="">Выберите мероприятие (опционально)</option>
           </select>
           <div id="votingOptionsContainer" class="mb-2">
-            <div class="option-item flex flex-col mb-3 p-2 border rounded">
+            <div class="option-item flex flex-col mb-3 p-2 border rounded border-contrast">
               <div class="flex mb-2">
-                <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2" required>
+                <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2 bg-contrast text-contrast border-contrast" required>
                 <button type="button" onclick="removeOption(this)" class="bg-red-500 text-white px-3 rounded">-</button>
               </div>
               <div class="flex items-center mb-2">
@@ -409,14 +432,14 @@
                 <button type="button" onclick="triggerImageUpload(this)" class="bg-blue-500 text-white px-3 py-1 rounded text-xs mr-2">
                   📷 Выбрать фото
                 </button>
-                <span class="image-status text-xs text-gray-500"></span>
+                <span class="image-status text-xs text-[var(--hint-color)]"></span>
               </div>
               <img class="option-preview mt-2 w-20 h-20 object-cover rounded hidden">
             </div>
           </div>
           <button type="button" onclick="addOption()" class="bg-gray-500 text-white px-3 py-1 rounded mb-2">+ Добавить номинанта</button>
-          <input type="number" id="votingLatitude" placeholder="Широта места голосования" step="any" class="border p-2 w-full mb-2">
-          <input type="number" id="votingLongitude" placeholder="Долгота места голосования" step="any" class="border p-2 w-full mb-2">
+          <input type="number" id="votingLatitude" placeholder="Широта места голосования" step="any" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
+          <input type="number" id="votingLongitude" placeholder="Долгота места голосования" step="any" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
           <div class="flex space-x-2">
             <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition flex-1">Сохранить голосование</button>
             <button type="button" id="completeVotingBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition hidden">Завершить</button>
@@ -624,7 +647,7 @@
 
     function showVotingOptions(voting) {
       const optionsContainer = document.getElementById('votingOptions');
-      optionsContainer.innerHTML = '<h4 class="font-bold mb-2 text-[var(--text-color)]">Выберите номинанта:</h4>';
+      optionsContainer.innerHTML = '<h4 class="font-bold mb-2 text-contrast">Выберите номинанта:</h4>';
 
       document.getElementById('getLocationBtn').style.display = 'block';
       document.getElementById('votingResultsImageContainer').classList.add('hidden');
@@ -635,14 +658,14 @@
 
         optionsArray.forEach((option, index) => {
           const optionDiv = document.createElement('div');
-          optionDiv.className = 'mb-3 p-3 border rounded-lg bg-[var(--bg-color)] transition voting-option';
+          optionDiv.className = 'mb-3 p-3 border rounded-lg bg-contrast transition voting-option border-contrast';
 
           let imageHtml = '';
           if (optionImages[index] && optionImages[index].url) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
                 <img src="${optionImages[index].url}" alt="${option}" 
-                     class="w-24 h-24 object-cover rounded-lg border">
+                     class="w-24 h-24 object-cover rounded-lg border border-contrast">
               </div>
             `;
           }
@@ -651,7 +674,7 @@
             <div class="flex items-center justify-between">
               ${imageHtml}
               <div class="flex-grow">
-                <span class="font-medium text-[var(--text-color)]">${option}</span>
+                <span class="font-medium text-contrast">${option}</span>
               </div>
               <button class="vote-button bg-blue-600 text-white px-3 py-1 rounded text-sm transition" 
                       onclick="castVote(${index})" disabled>
@@ -804,8 +827,8 @@
       const isCompleted = voting.Status === 'Completed';
       
       optionsContainer.innerHTML = isCompleted ? 
-        '<h4 class="font-bold mb-2 text-[var(--text-color)]">Финальные результаты:</h4>' : 
-        '<h4 class="font-bold mb-2 text-[var(--text-color)]">Текущие результаты:</h4>';
+        '<h4 class="font-bold mb-2 text-contrast">Финальные результаты:</h4>' : 
+        '<h4 class="font-bold mb-2 text-contrast">Текущие результаты:</h4>';
       
       document.getElementById('getLocationBtn').style.display = 'none';
       
@@ -863,14 +886,14 @@
           const isUserChoice = userVote === index;
           
           const resultDiv = document.createElement('div');
-          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-[var(--bg-color)] voting-option';
+          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-contrast voting-option border-contrast';
           
           let imageHtml = '';
           if (result.image) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
                 <img src="${result.image}" alt="${result.option}" 
-                     class="w-24 h-24 object-cover rounded-lg border">
+                     class="w-24 h-24 object-cover rounded-lg border border-contrast">
               </div>
             `;
           }
@@ -880,7 +903,7 @@
               ${imageHtml}
               <div class="flex-grow">
                 <div class="flex justify-between items-start mb-2">
-                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-[var(--text-color)]'}">
+                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-contrast'}">
                     ${result.option}
                   </span>
                   <span class="text-sm text-[var(--hint-color)] whitespace-nowrap">
@@ -904,10 +927,10 @@
 
         if (isCompleted && voting.Results) {
           const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
-          let resultsHtml = '<h4 class="font-bold mb-2 mt-4 text-[var(--text-color)]">Итоги:</h4>';
+          let resultsHtml = '<h4 class="font-bold mb-2 mt-4 text-contrast">Итоги:</h4>';
           Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
             resultsHtml += `
-              <p class="text-[var(--text-color)]">${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
+              <p class="text-contrast">${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
             `;
           });
           optionsContainer.innerHTML += resultsHtml;
@@ -967,9 +990,9 @@
       const attendeesCount = event.AttendeesCount || 0;
       
       const div = document.createElement('div');
-      div.className = 'event-card p-2 fade-in';
+      div.className = 'event-card p-2 fade-in card-contrast';
       div.innerHTML = `
-        <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
+        <h3 class="text-sm font-bold text-contrast">${event.Title || 'Без названия'}</h3>
         <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
         <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
         <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
@@ -1185,8 +1208,8 @@
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
             div.innerHTML = `
-              <p class="text-sm font-bold">${ad.Title || 'Без названия'}</p>
-              <p class="text-xs">${ad.Description || 'Без описания'}</p>
+              <p class="text-sm font-bold text-contrast">${ad.Title || 'Без названия'}</p>
+              <p class="text-xs text-contrast">${ad.Description || 'Без описания'}</p>
               <p class="text-xs text-[var(--hint-color)]">URL: ${ad.URL || 'Не указан'}</p>
               <div class="flex space-x-2 mt-2">
                 <button onclick="editAd('${record.id}', '${safeTitle}', '${safeDescription}', '${safeUrl}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
@@ -1325,13 +1348,13 @@
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
             div.innerHTML = `
-              <p class="text-sm font-bold">${voting.Title || 'Без названия'} 
+              <p class="text-sm font-bold text-contrast">${voting.Title || 'Без названия'} 
                 <span class="text-xs ${status === 'Completed' ? 'text-green-600' : 'text-red-600'}">
                   (${status === 'Completed' ? 'Завершено' : 'Активно'})
                 </span>
               </p>
-              ${voting.EventID ? `<p class="text-xs">Мероприятие: ${voting.EventID}</p>` : ''}
-              <p class="text-xs">Номинантов: ${options.length}</p>
+              ${voting.EventID ? `<p class="text-xs text-contrast">Мероприятие: ${voting.EventID}</p>` : ''}
+              <p class="text-xs text-contrast">Номинантов: ${options.length}</p>
               <p class="text-xs text-[var(--hint-color)]">Проголосовало: ${voting.VotedUserIDs ? voting.VotedUserIDs.split(',').length : 0} человек</p>
               <div class="flex space-x-2 mt-2 flex-wrap">
                 <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || ''}, ${voting.Longitude || ''}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}', '${JSON.stringify(voting.OptionImages || [])}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition mb-1">Редактировать</button>
@@ -1406,10 +1429,10 @@
     function addOption() {
       const container = document.getElementById('votingOptionsContainer');
       const newOption = document.createElement('div');
-      newOption.className = 'option-item flex flex-col mb-3 p-2 border rounded';
+      newOption.className = 'option-item flex flex-col mb-3 p-2 border rounded border-contrast';
       newOption.innerHTML = `
         <div class="flex mb-2">
-          <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2" required>
+          <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2 bg-contrast text-contrast border-contrast" required>
           <button type="button" onclick="removeOption(this)" class="bg-red-500 text-white px-3 rounded">-</button>
         </div>
         <div class="flex items-center mb-2">
@@ -1546,6 +1569,9 @@
               currentItem.querySelector('.option-preview').src = imagesArray[index].url;
               currentItem.querySelector('.option-preview').classList.remove('hidden');
               currentItem.querySelector('.image-status').textContent = 'Фото загружено';
+              currentItem.querySelector('button').textContent = '✅ Фото загружено';
+              currentItem.querySelector('button').classList.remove('bg-blue-500');
+              currentItem.querySelector('button').classList.add('bg-green-500');
             }
           });
         } else {
@@ -1800,8 +1826,8 @@
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)]';
             div.innerHTML = `
-              <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
-              <p class="text-xs">Идут: ${event.AttendeesCount || 0} человек</p>
+              <p class="text-sm text-contrast">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
+              <p class="text-xs text-contrast">Идут: ${event.AttendeesCount || 0} человек</p>
               <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
               <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
             `;
