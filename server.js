@@ -26,14 +26,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const upload = multer({ 
   dest: 'uploads/',
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB лимит
+    fileSize: 10 * 1024 * 1024,
   }
 });
 
 // Env vars
 const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN;
 const SEATABLE_SERVER_URL = process.env.SEATABLE_SERVER_URL || 'https://cloud.seatable.io';
-const SEATABLE_BASE_UUID = process.env.SEATABLE_BASE_UUID || '1e24960e-ac5a-43b6-8269-e6376b16577a';
 const EVENTS_TABLE = process.env.SEATABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.SEATABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.SEATABLE_VOTINGS_TABLE_NAME || 'Votings';
@@ -45,12 +44,15 @@ const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
 // Хардкод админа
 const ADMIN_ID = 366825437;
 
-if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
-  console.error('Отсутствуют переменные окружения: Установите SEATABLE_API_TOKEN, SEATABLE_BASE_UUID, RADIKAL_API_KEY в Render');
+if (!SEATABLE_API_TOKEN || !RADIKAL_API_KEY) {
+  console.error('Отсутствуют переменные окружения: Установите SEATABLE_API_TOKEN и RADIKAL_API_KEY в Render');
   process.exit(1);
 }
 
-// Функция для получения Base-Token
+// Переменная для хранения Base UUID из токена
+let SEATABLE_BASE_UUID = null;
+
+// Функция для получения Base-Token и Base UUID
 async function getBaseToken() {
   try {
     console.log('Попытка получить Base-Token с помощью GET...');
@@ -65,6 +67,16 @@ async function getBaseToken() {
     );
     
     console.log('Base-Token успешно получен:', response.data.access_token);
+    
+    // Сохраняем Base UUID из ответа
+    if (response.data.dtable_uuid) {
+      SEATABLE_BASE_UUID = response.data.dtable_uuid;
+      console.log('Base UUID получен из токена:', SEATABLE_BASE_UUID);
+    } else {
+      console.error('Base UUID не получен в ответе:', response.data);
+      throw new Error('Не удалось получить Base UUID');
+    }
+    
     return response.data.access_token;
   } catch (error) {
     console.error('Ошибка при получении Base-Token с GET:', error.message);
@@ -73,7 +85,7 @@ async function getBaseToken() {
   }
 }
 
-// Правильные URL для SeaTable API v2.1
+// Функции для формирования URL
 const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
 const getRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
 const appendRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
@@ -81,8 +93,13 @@ const updateRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/d
 const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
 const getUploadLinkUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-upload-link/`;
 
-// Вспомогательная функция для получения токена
+// Вспомогательная функция для получения токена с проверкой Base UUID
 async function getValidatedToken() {
+  if (!SEATABLE_BASE_UUID) {
+    // Если Base UUID еще не получен, получаем токен (и UUID)
+    return await getBaseToken();
+  }
+  // Если Base UUID уже есть, просто получаем свежий токен
   return await getBaseToken();
 }
 
@@ -109,7 +126,8 @@ app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    seatableBaseUUID: SEATABLE_BASE_UUID
   });
 });
 
@@ -168,7 +186,92 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
   }
 }
 
-// Остальные функции Radikal API и endpoints остаются без изменений...
+async function deleteFromRadikal(fileId) {
+  try {
+    await axios.delete(`${RADIKAL_API_URL}/files/${fileId}`, {
+      headers: {
+        'X-API-Key': RADIKAL_API_KEY
+      }
+    });
+    console.log(`Файл ${fileId} удалён из Radikal API`);
+  } catch (error) {
+    console.error('Ошибка удаления файла из Radikal API:', error.message);
+    if (error.response && error.response.status === 404) {
+      console.log('Конечная точка удаления недоступна в Radikal Cloud');
+      return;
+    }
+    throw error;
+  }
+}
+
+// ==================== API ДЛЯ АДМИНА ====================
+
+app.get('/api/is-admin', (req, res) => {
+  const userId = parseInt(req.query.userId, 10);
+  const isAdmin = userId === ADMIN_ID;
+  res.json({ isAdmin });
+});
+
+// ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
+
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Изображение не загружено' });
+    }
+    
+    console.log('Получен запрос на загрузку');
+    
+    const filePath = req.file.path;
+    const fileBuffer = fs.readFileSync(filePath);
+    
+    const uploadResult = await uploadToRadikal(
+      fileBuffer,
+      req.file.originalname || `upload_${Date.now()}.jpg`,
+      req.file.mimetype
+    );
+    
+    try {
+      fs.unlinkSync(filePath);
+    } catch (unlinkError) {
+      console.error('Ошибка удаления временного файла:', unlinkError.message);
+    }
+    
+    console.log('Загрузка успешна, URL:', uploadResult.url);
+    
+    res.json({ 
+      url: uploadResult.url,
+      fileId: uploadResult.fileId,
+      filename: uploadResult.filename
+    });
+    
+  } catch (error) {
+    console.error('Ошибка загрузки:', error.message);
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Ошибка удаления временного файла:', unlinkError.message);
+      }
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Эндпоинт для удаления изображений
+app.delete('/api/upload/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    
+    await deleteFromRadikal(fileId);
+    
+    res.json({ success: true, message: `Файл ${fileId} успешно удалён` });
+    
+  } catch (error) {
+    console.error('Ошибка удаления файла:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ==================== EVENTS API ====================
 
@@ -339,12 +442,28 @@ app.get('/api/votings', async (req, res) => {
   }
 });
 
-// Остальные endpoints для VOTINGS, UPLOAD и других функций остаются без изменений...
+// Остальные эндпоинты (для votings, attend и т.д.) остаются аналогичными...
+
+// Создание папки uploads
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Обработка несуществующих маршрутов
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Маршрут не найден' });
+});
+
+// Глобальный обработчик ошибок
+app.use((error, req, res, next) => {
+  console.error('Необработанная ошибка:', error);
+  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+});
 
 // Запуск сервера
 app.listen(port, () => {
   console.log(`Сервер запущен на порту ${port}`);
-  console.log(`SeaTable Base UUID: ${SEATABLE_BASE_UUID}`);
   console.log(`URL Radikal API: ${RADIKAL_API_URL}`);
-  console.log('Убедитесь, что переменные SEATABLE_API_TOKEN, SEATABLE_BASE_UUID и RADIKAL_API_KEY установлены в переменных окружения');
+  console.log('Убедитесь, что переменные SEATABLE_API_TOKEN и RADIKAL_API_KEY установлены в переменных окружения');
 });
