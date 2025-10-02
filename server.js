@@ -50,18 +50,17 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
   process.exit(1);
 }
 
-// SeaTable API endpoints
+// Правильные URL для SeaTable API
 const getBaseTokenUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-access-token/`;
-const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app/rows/?table_name=${tableName}`;
-const getRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app/rows/${rowId}/?table_name=${tableName}`;
-const appendRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app/rows/?table_name=${tableName}`;
-const updateRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app/rows/${rowId}/?table_name=${tableName}`;
-const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app/rows/${rowId}/?table_name=${tableName}`;
+const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
+const getRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
+const appendRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
+const updateRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
+const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
 const getUploadLinkUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-upload-link/`;
 
-// Переменные для хранения токена и dtable_id
+// Переменные для хранения токена
 let currentAccessToken = null;
-let currentDTableId = null;
 
 // Функция для получения Base-Token
 async function getBaseToken() {
@@ -75,15 +74,10 @@ async function getBaseToken() {
     });
     
     currentAccessToken = response.data.access_token;
-    currentDTableId = response.data.dtable_uuid;
     
     console.log('Base-Token успешно получен:', currentAccessToken);
-    console.log('DTable ID получен:', currentDTableId);
     
-    return {
-      token: currentAccessToken,
-      dtableId: currentDTableId
-    };
+    return currentAccessToken;
   } catch (error) {
     console.error('Ошибка при получении Base-Token:', error.message);
     console.error('Детали ошибки:', error.response ? error.response.data : error.message);
@@ -91,17 +85,18 @@ async function getBaseToken() {
   }
 }
 
-// Функция для получения валидного токена с заголовками
+// Функция для получения валидного токена
 async function getValidatedToken() {
-  const tokenData = await getBaseToken();
-  return tokenData.token;
+  if (!currentAccessToken) {
+    return await getBaseToken();
+  }
+  return currentAccessToken;
 }
 
 // Получить заголовки для SeaTable API
 function getSeatableHeaders(token) {
   return {
-    'Authorization': `Bearer ${token}`,
-    'DTable-Id': currentDTableId,
+    'Authorization': `Token ${token}`,
     'Content-Type': 'application/json'
   };
 }
@@ -132,8 +127,7 @@ app.get('/health', (req, res) => {
     version: '1.0.0',
     seatable: {
       baseUUID: SEATABLE_BASE_UUID,
-      hasToken: !!currentAccessToken,
-      hasDTableId: !!currentDTableId
+      hasToken: !!currentAccessToken
     }
   });
 });
