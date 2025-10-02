@@ -22,24 +22,24 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const upload = multer({ dest: 'uploads/' });
 
 // SeaTable API конфигурация
-const SEATABLE_API_URL = process.env.SEATABLE_API_URL || 'https://cloud.seatable.io';
+const SEATABLE_SERVER_URL = process.env.SEATABLE_SERVER_URL || 'https://cloud.seatable.io';
 const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN;
-const SEATABLE_BASE_ID = process.env.SEATABLE_BASE_ID;
+const SEATABLE_BASE_UUID = process.env.SEATABLE_BASE_UUID;
 
 // Названия таблиц в SeaTable
 const EVENTS_TABLE = process.env.EVENTS_TABLE || 'Events';
 const ADS_TABLE = process.env.ADS_TABLE || 'Ads';
 const VOTINGS_TABLE = process.env.VOTINGS_TABLE || 'Votings';
 
-// Radikal API конфигурация (оставляем для загрузки изображений)
+// Radikal API конфигурация
 const RADIKAL_API_URL = 'https://radikal.cloud/api/1';
 const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
 
-if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_ID || !RADIKAL_API_KEY) {
-  console.error('Missing env vars: Set SEATABLE_API_TOKEN, SEATABLE_BASE_ID, RADIKAL_API_KEY in Render');
+if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
+  console.error('Missing env vars: Set SEATABLE_API_TOKEN, SEATABLE_BASE_UUID, RADIKAL_API_KEY in Render');
   process.exit(1);
 }
 
@@ -48,35 +48,48 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_ID || !RADIKAL_API_KEY) {
 /**
  * Получает заголовки авторизации для SeaTable API
  */
-function getSeaTableHeaders() {
-  return {
-    'Authorization': `Token ${SEATABLE_API_TOKEN}`,
-    'Content-Type': 'application/json'
+function getSeaTableHeaders(contentType = 'application/json') {
+  const headers = {
+    'Authorization': `Token ${SEATABLE_API_TOKEN}`
   };
+  
+  if (contentType) {
+    headers['Content-Type'] = contentType;
+  }
+  
+  return headers;
 }
 
 /**
- * Получает URL для работы с таблицей
+ * Получает базовый URL для работы с таблицей
  */
-function getSeaTableUrl(tableName) {
-  return `${SEATABLE_API_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_ID}/rows/`;
+function getSeaTableBaseUrl() {
+  return `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}`;
 }
 
 /**
  * Получает записи из таблицы SeaTable
  */
-async function getSeaTableRecords(tableName, params = {}) {
+async function getSeaTableRecords(tableName) {
   try {
-    const response = await axios.get(getSeaTableUrl(tableName), {
+    const url = `${getSeaTableBaseUrl()}/rows/`;
+    console.log(`SeaTable GET URL: ${url}`);
+    
+    const response = await axios.get(url, {
       headers: getSeaTableHeaders(),
       params: {
-        table_name: tableName,
-        ...params
+        table_name: tableName
       }
     });
+    
+    console.log(`SeaTable GET response for ${tableName}:`, response.data);
     return response.data;
   } catch (error) {
     console.error(`SeaTable GET error for ${tableName}:`, error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     throw error;
   }
 }
@@ -86,15 +99,23 @@ async function getSeaTableRecords(tableName, params = {}) {
  */
 async function createSeaTableRecord(tableName, data) {
   try {
-    const response = await axios.post(getSeaTableUrl(tableName), {
+    const url = `${getSeaTableBaseUrl()}/rows/`;
+    console.log(`SeaTable POST URL: ${url}`);
+    
+    const response = await axios.post(url, {
       table_name: tableName,
       row: data
     }, {
       headers: getSeaTableHeaders()
     });
+    
     return response.data;
   } catch (error) {
     console.error(`SeaTable POST error for ${tableName}:`, error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     throw error;
   }
 }
@@ -104,16 +125,24 @@ async function createSeaTableRecord(tableName, data) {
  */
 async function updateSeaTableRecord(tableName, rowId, data) {
   try {
-    const response = await axios.put(getSeaTableUrl(tableName), {
+    const url = `${getSeaTableBaseUrl()}/rows/`;
+    console.log(`SeaTable PUT URL: ${url}`);
+    
+    const response = await axios.put(url, {
       table_name: tableName,
       row_id: rowId,
       row: data
     }, {
       headers: getSeaTableHeaders()
     });
+    
     return response.data;
   } catch (error) {
-    console.error(`SeaTable PATCH error for ${tableName}:`, error.message);
+    console.error(`SeaTable PUT error for ${tableName}:`, error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     throw error;
   }
 }
@@ -123,16 +152,45 @@ async function updateSeaTableRecord(tableName, rowId, data) {
  */
 async function deleteSeaTableRecord(tableName, rowId) {
   try {
-    const response = await axios.delete(getSeaTableUrl(tableName), {
+    const url = `${getSeaTableBaseUrl()}/rows/`;
+    console.log(`SeaTable DELETE URL: ${url}`);
+    
+    const response = await axios.delete(url, {
       headers: getSeaTableHeaders(),
       data: {
         table_name: tableName,
         row_ids: [rowId]
       }
     });
+    
     return response.data;
   } catch (error) {
     console.error(`SeaTable DELETE error for ${tableName}:`, error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Получает одну запись по ID
+ */
+async function getSeaTableRecordById(tableName, rowId) {
+  try {
+    // В SeaTable нет прямого endpoint для получения одной записи по ID,
+    // поэтому получаем все и фильтруем
+    const data = await getSeaTableRecords(tableName);
+    const record = data.rows.find(row => row._id === rowId);
+    
+    if (!record) {
+      throw new Error(`Record with id ${rowId} not found in table ${tableName}`);
+    }
+    
+    return record;
+  } catch (error) {
+    console.error(`SeaTable GET by ID error for ${tableName}:`, error.message);
     throw error;
   }
 }
@@ -140,7 +198,7 @@ async function deleteSeaTableRecord(tableName, rowId) {
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ RADIKAL API ====================
 
 /**
- * Загружает файл в Radikal API (Chevereto-совместимое)
+ * Загружает файл в Radikal API
  */
 async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
@@ -154,9 +212,6 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
       filename: filename,
       contentType: contentType
     });
-
-    console.log('Radikal API Key:', RADIKAL_API_KEY ? 'Set' : 'Missing');
-    console.log('API URL:', `${RADIKAL_API_URL}/upload`);
 
     const response = await axios.post(`${RADIKAL_API_URL}/upload`, formData, {
       headers: {
@@ -229,9 +284,6 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     }
     
     console.log('Upload request received');
-    console.log('Original filename:', req.file.originalname);
-    console.log('Mimetype:', req.file.mimetype);
-    console.log('File size:', req.file.size, 'bytes');
     
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
@@ -276,10 +328,6 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
       return res.status(400).json({ error: 'No image file uploaded' });
     }
     
-    console.log('Option image upload request received');
-    console.log('Original filename:', req.file.originalname);
-    console.log('Mimetype:', req.file.mimetype);
-    
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     
@@ -294,8 +342,6 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     } catch (unlinkError) {
       console.error('Error deleting temp file:', unlinkError.message);
     }
-    
-    console.log('Option image upload successful, URL:', uploadResult.url);
     
     res.json({ 
       url: uploadResult.url,
@@ -356,15 +402,8 @@ app.post('/api/events', async (req, res) => {
 
 app.get('/api/events/:id', async (req, res) => {
   try {
-    const data = await getSeaTableRecords(EVENTS_TABLE, {
-      row_id: req.params.id
-    });
-    
-    if (data.rows && data.rows.length > 0) {
-      res.json(data.rows[0]);
-    } else {
-      res.status(404).json({ error: 'Event not found' });
-    }
+    const record = await getSeaTableRecordById(EVENTS_TABLE, req.params.id);
+    res.json(record);
   } catch (error) {
     console.error('Event GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -491,11 +530,7 @@ app.get('/api/events/:eventId/votings', async (req, res) => {
   }
 });
 
-// ==================== ОСТАЛЬНЫЕ ФУНКЦИОНАЛЬНОСТИ ====================
-
-// [Остальной код остается практически без изменений, только замените вызовы Airtable на SeaTable]
-// Функции для голосования, участия в событиях и генерации изображений остаются такими же,
-// но используют обновленные функции SeaTable
+// ==================== ФУНКЦИИ ДЛЯ ГОЛОСОВАНИЯ ====================
 
 // Проголосовать
 app.post('/api/votings/:id/vote', async (req, res) => {
@@ -511,13 +546,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     }
 
     // Получаем данные голосования из SeaTable
-    const votingData = await getSeaTableRecords(VOTINGS_TABLE, { row_id: id });
-    if (!votingData.rows || votingData.rows.length === 0) {
-      console.error('Voting not found');
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    const voting = votingData.rows[0];
+    const voting = await getSeaTableRecordById(VOTINGS_TABLE, id);
 
     if (voting.Status === 'Completed') {
       console.error('Voting is completed');
@@ -574,12 +603,7 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
   try {
     const { id, userId } = req.params;
 
-    const votingData = await getSeaTableRecords(VOTINGS_TABLE, { row_id: id });
-    if (!votingData.rows || votingData.rows.length === 0) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    const voting = votingData.rows[0];
+    const voting = await getSeaTableRecordById(VOTINGS_TABLE, id);
     const votedUserIds = voting.VotedUserIDs || '';
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
     
@@ -602,12 +626,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const votingData = await getSeaTableRecords(VOTINGS_TABLE, { row_id: id });
-    if (!votingData.rows || votingData.rows.length === 0) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    const voting = votingData.rows[0];
+    const voting = await getSeaTableRecordById(VOTINGS_TABLE, id);
     const votes = voting.Votes ? 
       (typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes) 
       : {};
@@ -659,12 +678,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const votingData = await getSeaTableRecords(VOTINGS_TABLE, { row_id: id });
-    if (!votingData.rows || votingData.rows.length === 0) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    const voting = votingData.rows[0];
+    const voting = await getSeaTableRecordById(VOTINGS_TABLE, id);
     if (!voting.Results) {
       return res.status(400).json({ error: 'Результаты голосования недоступны' });
     }
@@ -694,7 +708,6 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     const description = voting.Description || '';
     
     const optionImages = voting.OptionImages || [];
-    console.log('OptionImages from SeaTable:', JSON.stringify(optionImages, null, 2));
 
     let height = 600;
     const hasImages = optionImages && optionImages.length > 0;
@@ -807,12 +820,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const eventData = await getSeaTableRecords(EVENTS_TABLE, { row_id: eventId });
-    if (!eventData.rows || eventData.rows.length === 0) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    const event = eventData.rows[0];
+    const event = await getSeaTableRecordById(EVENTS_TABLE, eventId);
     const currentAttendees = event.AttendeesIDs || '';
     const currentCount = event.AttendeesCount || 0;
     
@@ -869,12 +877,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const eventData = await getSeaTableRecords(EVENTS_TABLE, { row_id: eventId });
-    if (!eventData.rows || eventData.rows.length === 0) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    const event = eventData.rows[0];
+    const event = await getSeaTableRecordById(EVENTS_TABLE, eventId);
     const currentAttendees = event.AttendeesIDs || '';
     const currentCount = event.AttendeesCount || 0;
     
@@ -920,12 +923,7 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
 
     console.log(`Checking attend status for user ${userId} in event ${eventId}`);
 
-    const eventData = await getSeaTableRecords(EVENTS_TABLE, { row_id: eventId });
-    if (!eventData.rows || eventData.rows.length === 0) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    const event = eventData.rows[0];
+    const event = await getSeaTableRecordById(EVENTS_TABLE, eventId);
     const attendees = event.AttendeesIDs || '';
     let attendeesArray = [];
     
@@ -978,7 +976,7 @@ if (!fs.existsSync(uploadsDir)) {
 // Запуск сервера
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`SeaTable API URL: ${SEATABLE_API_URL}`);
-  console.log(`SeaTable Base ID: ${SEATABLE_BASE_ID}`);
+  console.log(`SeaTable Server URL: ${SEATABLE_SERVER_URL}`);
+  console.log(`SeaTable Base UUID: ${SEATABLE_BASE_UUID}`);
   console.log('Make sure SEATABLE_API_TOKEN is set in environment variables');
 });
