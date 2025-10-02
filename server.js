@@ -1,41 +1,12 @@
-const express = require('express');
-const axios = require('axios');
-const multer = require('multer');
-const fs = require('fs');
-const FormData = require('form-data');
-const path = require('path');
-const sharp = require('sharp');
-
-const app = express();
-const port = process.env.PORT || 3000;
-
-// Middleware для CORS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
-
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-const upload = multer({ dest: 'uploads/' });
-
 // Env vars for SeaTable v5.3
 const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN;
 const SEATABLE_DTABLE_UUID = process.env.SEATABLE_DTABLE_UUID;
 const EVENTS_TABLE = process.env.SEATABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.SEATABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.SEATABLE_VOTINGS_TABLE_NAME || 'Votings';
-const SEATABLE_BASE_URL = 'https://cloud.seatable.io/api/v5.3';  // Updated to v5.3
+const SEATABLE_BASE_URL = process.env.SEATABLE_BASE_URL || 'https://cloud.seatable.io/api/v5.3'; // Поддержка кастомного URL
 
-// Radikal API конфигурация
-const RADIKAL_API_URL = 'https://radikal.cloud/api/1';
-const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
-
-// Хардкод админа
-const ADMIN_ID = 366825437;
-
+// Проверка переменных
 if (!SEATABLE_API_TOKEN || !SEATABLE_DTABLE_UUID || !RADIKAL_API_KEY) {
   console.error('Missing env vars: Set SEATABLE_API_TOKEN, SEATABLE_DTABLE_UUID, RADIKAL_API_KEY in Render');
   process.exit(1);
@@ -50,16 +21,21 @@ let baseToken = null;
 async function ensureBaseToken() {
   if (!baseToken) {
     try {
-      console.log('Generating Base-Token (v5.3) with API Token:', SEATABLE_API_TOKEN ? 'Set' : 'Missing');
+      console.log('Generating Base-Token (v5.3) with API Token:', SEATABLE_API_TOKEN ? SEATABLE_API_TOKEN.slice(0, 10) + '...' : 'Missing');
+      console.log('Request URL:', `${SEATABLE_BASE_URL}/auth-token/`);
       const response = await axios.get(`${SEATABLE_BASE_URL}/auth-token/`, {
         params: { api_token: SEATABLE_API_TOKEN }
       });
       baseToken = response.data.access_token;
-      console.log('Base-Token generated successfully (v5.3)');
+      console.log('Base-Token generated:', baseToken.slice(0, 10) + '...');
+      console.log('Returned dtable_uuid:', response.data.dtable_uuid);
+      if (response.data.dtable_uuid !== SEATABLE_DTABLE_UUID) {
+        console.warn('Warning: SEATABLE_DTABLE_UUID does not match returned dtable_uuid:', response.data.dtable_uuid);
+      }
     } catch (error) {
       console.error('Error generating Base-Token (v5.3):', error.response?.data || error.message);
       if (error.response?.status === 404) {
-        console.error('404: Check SEATABLE_API_TOKEN and SEATABLE_DTABLE_UUID. Test in Postman v5.3 collection.');
+        console.error('404: Check SEATABLE_API_TOKEN, SEATABLE_DTABLE_UUID, or SEATABLE_BASE_URL. Test in Postman v5.3.');
       }
       throw new Error('Failed to generate Base-Token');
     }
