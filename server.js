@@ -1,4 +1,4 @@
-const express = require('express');
+Я хочу сменить API с Airtable на Seatable. Вот документация: https://api.seatable.com/reference/introduction, давай сделаем актуальную версию. Вот мой бэкенд: const express = require('express');
 const axios = require('axios');
 const multer = require('multer');
 const fs = require('fs');
