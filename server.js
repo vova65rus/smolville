@@ -24,7 +24,7 @@ const upload = multer({ dest: 'uploads/' });
 // Env vars
 const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN;
 const SEATABLE_SERVER_URL = process.env.SEATABLE_SERVER_URL || 'https://cloud.seatable.io';
-const SEATABLE_BASE_UUID = process.env.SEATABLE_BASE_UUID;
+const SEATABLE_BASE_UUID = process.env.SEATABLE_BASE_UUID || '1e24960e-ac5a-43b6-8269-e6376b16577a';
 const EVENTS_TABLE = process.env.SEATABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.SEATABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.SEATABLE_VOTINGS_TABLE_NAME || 'Votings';
@@ -44,38 +44,22 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
 // Функция для получения Base-Token
 async function getBaseToken() {
   try {
-    console.log('Попытка получить Base-Token с помощью POST...');
-    const response = await axios.post(
+    console.log('Попытка получить Base-Token с помощью GET...');
+    const response = await axios.get(
       `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-access-token/`,
-      { app_token: SEATABLE_API_TOKEN },
-      { headers: { 'Content-Type': 'application/json' } }
+      {
+        headers: {
+          Authorization: `Bearer ${SEATABLE_API_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
     );
     console.log('Base-Token успешно получен:', response.data.access_token);
     return response.data.access_token;
   } catch (error) {
-    console.error('Ошибка при получении Base-Token с POST:', error.message);
+    console.error('Ошибка при получении Base-Token с GET:', error.message);
     console.error('Детали ошибки:', error.response ? error.response.data : error.message);
-    if (error.response && error.response.status === 405) {
-      console.log('Попытка с GET-методом...');
-      try {
-        const response = await axios.get(
-          `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-access-token/`,
-          {
-            headers: {
-              Authorization: `Token ${SEATABLE_API_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        console.log('Base-Token успешно получен с GET:', response.data.access_token);
-        return response.data.access_token;
-      } catch (getError) {
-        console.error('Ошибка при получении Base-Token с GET:', getError.message);
-        console.error('Детали ошибки GET:', getError.response ? getError.response.data : getError.message);
-        throw new Error('Не удалось получить Base-Token');
-      }
-    }
-    throw error;
+    throw new Error('Не удалось получить Base-Token');
   }
 }
 
@@ -328,14 +312,16 @@ app.delete('/api/upload/:fileId', async (req, res) => {
 
 app.get('/api/events', async (req, res) => {
   try {
+    console.log(`Получен запрос к /api/events, таблица: ${EVENTS_TABLE}`);
     const baseToken = await getBaseToken();
     const response = await axios.get(getRowsUrl(EVENTS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
+    console.log('Данные событий получены:', response.data);
     res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Ошибка GET /api/events:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка GET /api/events:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка загрузки событий' });
   }
 });
 
@@ -353,21 +339,22 @@ app.post('/api/events', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ошибка POST /api/events:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка POST /api/events:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка создания события' });
   }
 });
 
 app.get('/api/events/:id', async (req, res) => {
   try {
+    console.log(`Получен запрос к /api/events/${req.params.id}`);
     const baseToken = await getBaseToken();
     const response = await axios.get(getRowUrl(EVENTS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ошибка GET /api/events/:id:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка GET /api/events/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка получения события' });
   }
 });
 
@@ -385,21 +372,22 @@ app.patch('/api/events/:id', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ошибка PATCH /api/events/:id:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка PATCH /api/events/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка обновления события' });
   }
 });
 
 app.delete('/api/events/:id', async (req, res) => {
   try {
+    console.log(`Удаление события ${req.params.id}`);
     const baseToken = await getBaseToken();
     await axios.delete(deleteRowUrl(EVENTS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('Ошибка DELETE /api/events/:id:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка DELETE /api/events/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка удаления события' });
   }
 });
 
@@ -407,19 +395,22 @@ app.delete('/api/events/:id', async (req, res) => {
 
 app.get('/api/ads', async (req, res) => {
   try {
+    console.log(`Получен запрос к /api/ads, таблица: ${ADS_TABLE}`);
     const baseToken = await getBaseToken();
     const response = await axios.get(getRowsUrl(ADS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
+    console.log('Данные объявлений получены:', response.data);
     res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Ошибка GET /api/ads:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка GET /api/ads:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка загрузки объявлений' });
   }
 });
 
 app.post('/api/ads', async (req, res) => {
   try {
+    console.log('Создание объявления с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
     const response = await axios.post(appendRowUrl(ADS_TABLE), {
       row: req.body.fields
@@ -431,13 +422,14 @@ app.post('/api/ads', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ошибка POST /api/ads:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка POST /api/ads:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка создания объявления' });
   }
 });
 
 app.patch('/api/ads/:id', async (req, res) => {
   try {
+    console.log('Обновление объявления с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
     const response = await axios.put(updateRowUrl(ADS_TABLE, req.params.id), {
       row: req.body.fields
@@ -449,21 +441,22 @@ app.patch('/api/ads/:id', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ошибка PATCH /api/ads/:id:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка PATCH /api/ads/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка обновления объявления' });
   }
 });
 
 app.delete('/api/ads/:id', async (req, res) => {
   try {
+    console.log(`Удаление объявления ${req.params.id}`);
     const baseToken = await getBaseToken();
     await axios.delete(deleteRowUrl(ADS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('Ошибка DELETE /api/ads/:id:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка DELETE /api/ads/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка удаления объявления' });
   }
 });
 
@@ -471,19 +464,22 @@ app.delete('/api/ads/:id', async (req, res) => {
 
 app.get('/api/votings', async (req, res) => {
   try {
+    console.log(`Получен запрос к /api/votings, таблица: ${VOTINGS_TABLE}`);
     const baseToken = await getBaseToken();
     const response = await axios.get(getRowsUrl(VOTINGS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
+    console.log('Данные голосований получены:', response.data);
     res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Ошибка GET /api/votings:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка GET /api/votings:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка загрузки голосований' });
   }
 });
 
 app.post('/api/votings', async (req, res) => {
   try {
+    console.log('Создание голосования с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
     const response = await axios.post(appendRowUrl(VOTINGS_TABLE), {
       row: req.body.fields
@@ -495,13 +491,14 @@ app.post('/api/votings', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ошибка POST /api/votings:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка POST /api/votings:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка создания голосования' });
   }
 });
 
 app.patch('/api/votings/:id', async (req, res) => {
   try {
+    console.log('Обновление голосования с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
     const response = await axios.put(updateRowUrl(VOTINGS_TABLE, req.params.id), {
       row: req.body.fields
@@ -513,37 +510,39 @@ app.patch('/api/votings/:id', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ошибка PATCH /api/votings/:id:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка PATCH /api/votings/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка обновления голосования' });
   }
 });
 
 app.delete('/api/votings/:id', async (req, res) => {
   try {
+    console.log(`Удаление голосования ${req.params.id}`);
     const baseToken = await getBaseToken();
     await axios.delete(deleteRowUrl(VOTINGS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('Ошибка DELETE /api/votings/:id:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка DELETE /api/votings/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка удаления голосования' });
   }
 });
 
-// Получить голосования по ID мероприятия
 app.get('/api/events/:eventId/votings', async (req, res) => {
   try {
     const { eventId } = req.params;
+    console.log(`Получен запрос к /api/events/${eventId}/votings, таблица: ${VOTINGS_TABLE}`);
     const baseToken = await getBaseToken();
     const response = await axios.get(getRowsUrl(VOTINGS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` },
       params: { filter: `EventID="${eventId}"` }
     });
+    console.log('Данные голосований для события получены:', response.data);
     res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Ошибка GET /api/events/:eventId/votings:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка GET /api/events/:eventId/votings:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка загрузки голосований для события' });
   }
 });
 
@@ -623,8 +622,8 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     console.log('Голосование успешно обновлено:', updateResponse.data);
     res.json({ success: true, voting: { id: updateResponse.data._id, fields: updateResponse.data } });
   } catch (error) {
-    console.error('Ошибка голосования:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка голосования:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка при голосовании' });
   }
 });
 
@@ -633,6 +632,7 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
   try {
     const { id, userId } = req.params;
 
+    console.log(`Проверка статуса голосования для пользователя ${userId}, ID голосования: ${id}`);
     const baseToken = await getBaseToken();
     const votingResponse = await axios.get(getRowUrl(VOTINGS_TABLE, id), {
       headers: { Authorization: `Bearer ${baseToken}` }
@@ -655,8 +655,8 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
 
     res.json({ hasVoted, userVote });
   } catch (error) {
-    console.error('Ошибка проверки статуса голосования:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка проверки статуса голосования:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка проверки статуса голосования' });
   }
 });
 
@@ -665,6 +665,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
   try {
     const { id } = req.params;
 
+    console.log(`Завершение голосования ${id}`);
     const baseToken = await getBaseToken();
     const votingResponse = await axios.get(getRowUrl(VOTINGS_TABLE, id), {
       headers: { Authorization: `Bearer ${baseToken}` }
@@ -721,8 +722,8 @@ app.post('/api/votings/:id/complete', async (req, res) => {
 
     res.json({ success: true, results: results, voting: { id: updateResponse.data._id, fields: updateResponse.data } });
   } catch (error) {
-    console.error('Ошибка завершения голосования:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка завершения голосования:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка завершения голосования' });
   }
 });
 
@@ -731,6 +732,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
   try {
     const { id } = req.params;
 
+    console.log(`Генерация изображения результатов для голосования ${id}`);
     const baseToken = await getBaseToken();
     const votingResponse = await axios.get(getRowUrl(VOTINGS_TABLE, id), {
       headers: { Authorization: `Bearer ${baseToken}` }
@@ -872,8 +874,8 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ошибка генерации изображения результатов:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка генерации изображения результатов:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка генерации изображения результатов' });
   }
 });
 
@@ -945,8 +947,8 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     res.json({ success: true, count: newCount, attending: true });
 
   } catch (error) {
-    console.error('Ошибка участия:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка участия:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка при регистрации на событие' });
   }
 });
 
@@ -1009,8 +1011,8 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     res.json({ success: true, count: newCount, attending: false });
 
   } catch (error) {
-    console.error('Ошибка отказа от участия:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка отказа от участия:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка при отмене участия' });
   }
 });
 
@@ -1044,8 +1046,8 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
     res.json({ isAttending });
 
   } catch (error) {
-    console.error('Ошибка проверки статуса участия:', error.message);
-    res.status(500).json({ error: error.message });
+    console.error('Ошибка проверки статуса участия:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка проверки статуса участия' });
   }
 });
 
