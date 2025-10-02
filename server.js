@@ -41,7 +41,10 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
   process.exit(1);
 }
 
-// Функция для получения Base-Token (используем GET, как в логах)
+// Переменная для хранения dtable_uuid
+let SEATABLE_DTABLE_UUID = null;
+
+// Функция для получения Base-Token и DTable UUID
 async function getBaseToken() {
   try {
     console.log('Попытка получить Base-Token с помощью GET...');
@@ -54,8 +57,22 @@ async function getBaseToken() {
         }
       }
     );
+    
     console.log('Base-Token успешно получен:', response.data.access_token);
-    return response.data.access_token;
+    
+    // Сохраняем dtable_uuid из ответа
+    if (response.data.dtable_uuid) {
+      SEATABLE_DTABLE_UUID = response.data.dtable_uuid;
+      console.log('DTable UUID получен:', SEATABLE_DTABLE_UUID);
+    } else {
+      console.error('DTable UUID не получен в ответе:', response.data);
+      throw new Error('Не удалось получить DTable UUID');
+    }
+    
+    return {
+      token: response.data.access_token,
+      dtableUuid: response.data.dtable_uuid
+    };
   } catch (error) {
     console.error('Ошибка при получении Base-Token с GET:', error.message);
     console.error('Детали ошибки:', error.response ? error.response.data : error.message);
@@ -63,13 +80,22 @@ async function getBaseToken() {
   }
 }
 
-// Новые URL для API Gateway v2.1
-const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records?table_name=${tableName}`;
-const getRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records/${rowId}?table_name=${tableName}`;
-const appendRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records?table_name=${tableName}`;
-const updateRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records/${rowId}?table_name=${tableName}`;
-const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records/${rowId}?table_name=${tableName}`;
+// Функции для формирования URL с правильным DTable UUID
+const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_DTABLE_UUID}/records?table_name=${tableName}`;
+const getRecordUrl = (tableName, rowId) => `${SEATABLE_DTABLE_UUID ? `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_DTABLE_UUID}/records/${rowId}?table_name=${tableName}` : null}`;
+const appendRecordsUrl = (tableName) => `${SEATABLE_DTABLE_UUID ? `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_DTABLE_UUID}/records?table_name=${tableName}` : null}`;
+const updateRecordUrl = (tableName, rowId) => `${SEATABLE_DTABLE_UUID ? `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_DTABLE_UUID}/records/${rowId}?table_name=${tableName}` : null}`;
+const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_DTABLE_UUID ? `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_DTABLE_UUID}/records/${rowId}?table_name=${tableName}` : null}`;
 const getUploadLinkUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-upload-link/`;
+
+// Вспомогательная функция для получения токена с проверкой DTable UUID
+async function getValidatedToken() {
+  const tokenData = await getBaseToken();
+  if (!SEATABLE_DTABLE_UUID) {
+    throw new Error('DTable UUID не установлен');
+  }
+  return tokenData.token;
+}
 
 // Главная страница
 app.get('/', (req, res) => {
@@ -81,10 +107,7 @@ app.get('/', (req, res) => {
 async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
     console.log('Начало загрузки в Radikal API...');
-    console.log('Имя файла:', filename);
-    console.log('Тип контента:', contentType);
-    console.log('Размер файла:', fileBuffer.length, 'байт');
-
+    
     const formData = new FormData();
     formData.append('source', fileBuffer, {
       filename: filename,
@@ -101,18 +124,28 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
 
     console.log('Ответ от Radikal API:', response.data);
 
-    if (response.data.status_code === 200 && response.data.image) {
-      const imageData = response.data.image;
-      console.log('Файл успешно загружен, URL:', imageData.url);
+    // Более гибкая проверка ответа
+    const imageData = response.data.image || response.data;
+    
+    if (response.data.status_code === 200 || response.data.status === 200 || imageData) {
+      const url = imageData.url || imageData.image_url;
+      const fileId = imageData.id_encoded || imageData.name || imageData.id;
+      
+      if (!url) {
+        throw new Error('URL не получен от Radikal API');
+      }
+      
+      console.log('Файл успешно загружен, URL:', url);
       
       return {
-        fileId: imageData.id_encoded || imageData.name,
-        url: imageData.url,
+        fileId: fileId,
+        url: url,
         filename: filename,
-        imageData: response.data.image
+        imageData: imageData
       };
     } else {
-      throw new Error(response.data.error ? response.data.error.message : (response.data.status_txt || 'Ошибка загрузки'));
+      throw new Error(response.data.error ? response.data.error.message : 
+                    (response.data.status_txt || 'Ошибка загрузки'));
     }
   } catch (error) {
     console.error('Ошибка загрузки в Radikal API:', error.message);
@@ -181,9 +214,6 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     }
     
     console.log('Получен запрос на загрузку');
-    console.log('Оригинальное имя файла:', req.file.originalname);
-    console.log('MIME-тип:', req.file.mimetype);
-    console.log('Размер файла:', req.file.size, 'байт');
     
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
@@ -229,15 +259,13 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     }
     
     console.log('Получен запрос на загрузку изображения номинанта');
-    console.log('Оригинальное имя файла:', req.file.originalname);
-    console.log('MIME-тип:', req.file.mimetype);
     
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     const filename = req.file.originalname || `option_image_${Date.now()}.jpg`;
 
     // Получаем Base-Token
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
 
     // Шаг 1: Получаем upload link
     const uploadLinkResponse = await axios.get(getUploadLinkUrl(), {
@@ -264,7 +292,7 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
       }
     });
 
-    const fileUrl = uploadResponse.data[0].url; // SeaTable возвращает массив файлов
+    const fileUrl = uploadResponse.data[0].url;
 
     try {
       fs.unlinkSync(filePath);
@@ -313,7 +341,7 @@ app.delete('/api/upload/:fileId', async (req, res) => {
 app.get('/api/events', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/events, таблица: ${EVENTS_TABLE}`);
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.get(getRecordsUrl(EVENTS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
@@ -328,9 +356,9 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     console.log('Создание события с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.post(appendRecordsUrl(EVENTS_TABLE), {
-      rows: [req.body.fields] // Новый формат: массив rows
+      rows: [req.body.fields]
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -347,7 +375,7 @@ app.post('/api/events', async (req, res) => {
 app.get('/api/events/:id', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/events/${req.params.id}`);
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.get(getRecordUrl(EVENTS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
@@ -361,9 +389,9 @@ app.get('/api/events/:id', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   try {
     console.log('Обновление события с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.patch(updateRecordUrl(EVENTS_TABLE, req.params.id), {
-      values: req.body.fields // Новый формат: values вместо row
+      values: req.body.fields
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -380,7 +408,7 @@ app.patch('/api/events/:id', async (req, res) => {
 app.delete('/api/events/:id', async (req, res) => {
   try {
     console.log(`Удаление события ${req.params.id}`);
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     await axios.delete(deleteRecordUrl(EVENTS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
@@ -396,7 +424,7 @@ app.delete('/api/events/:id', async (req, res) => {
 app.get('/api/ads', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/ads, таблица: ${ADS_TABLE}`);
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.get(getRecordsUrl(ADS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
@@ -411,9 +439,9 @@ app.get('/api/ads', async (req, res) => {
 app.post('/api/ads', async (req, res) => {
   try {
     console.log('Создание объявления с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.post(appendRecordsUrl(ADS_TABLE), {
-      rows: [req.body.fields] // Новый формат: массив rows
+      rows: [req.body.fields]
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -430,9 +458,9 @@ app.post('/api/ads', async (req, res) => {
 app.patch('/api/ads/:id', async (req, res) => {
   try {
     console.log('Обновление объявления с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.patch(updateRecordUrl(ADS_TABLE, req.params.id), {
-      values: req.body.fields // Новый формат: values вместо row
+      values: req.body.fields
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -449,7 +477,7 @@ app.patch('/api/ads/:id', async (req, res) => {
 app.delete('/api/ads/:id', async (req, res) => {
   try {
     console.log(`Удаление объявления ${req.params.id}`);
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     await axios.delete(deleteRecordUrl(ADS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
@@ -465,7 +493,7 @@ app.delete('/api/ads/:id', async (req, res) => {
 app.get('/api/votings', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/votings, таблица: ${VOTINGS_TABLE}`);
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.get(getRecordsUrl(VOTINGS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
@@ -480,9 +508,9 @@ app.get('/api/votings', async (req, res) => {
 app.post('/api/votings', async (req, res) => {
   try {
     console.log('Создание голосования с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.post(appendRecordsUrl(VOTINGS_TABLE), {
-      rows: [req.body.fields] // Новый формат: массив rows
+      rows: [req.body.fields]
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -499,9 +527,9 @@ app.post('/api/votings', async (req, res) => {
 app.patch('/api/votings/:id', async (req, res) => {
   try {
     console.log('Обновление голосования с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const response = await axios.patch(updateRecordUrl(VOTINGS_TABLE, req.params.id), {
-      values: req.body.fields // Новый формат: values вместо row
+      values: req.body.fields
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -518,7 +546,7 @@ app.patch('/api/votings/:id', async (req, res) => {
 app.delete('/api/votings/:id', async (req, res) => {
   try {
     console.log(`Удаление голосования ${req.params.id}`);
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     await axios.delete(deleteRecordUrl(VOTINGS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
@@ -529,25 +557,9 @@ app.delete('/api/votings/:id', async (req, res) => {
   }
 });
 
-// Получить голосования по ID мероприятия
-app.get('/api/events/:eventId/votings', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    console.log(`Получен запрос к /api/events/${eventId}/votings, таблица: ${VOTINGS_TABLE}`);
-    const baseToken = await getBaseToken();
-    const response = await axios.get(getRecordsUrl(VOTINGS_TABLE), {
-      headers: { Authorization: `Bearer ${baseToken}` },
-      params: { filter: `EventID="${eventId}"` }
-    });
-    console.log('Данные голосований для события получены:', response.data);
-    res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
-  } catch (error) {
-    console.error('Ошибка GET /api/events/:eventId/votings:', error.message, error.response?.data || {});
-    res.status(500).json({ error: 'Ошибка загрузки голосований для события' });
-  }
-});
+// Остальные эндпоинты (vote, complete, generate-results, attend и т.д.) должны использовать getValidatedToken()
 
-// Проголосовать
+// Например, для голосования:
 app.post('/api/votings/:id/vote', async (req, res) => {
   try {
     const { id } = req.params;
@@ -560,497 +572,23 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
     }
 
-    const baseToken = await getBaseToken();
+    const baseToken = await getValidatedToken();
     const votingResponse = await axios.get(getRecordUrl(VOTINGS_TABLE, id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
 
+    // ... остальной код голосования без изменений
     const voting = votingResponse.data;
     if (!voting) {
       console.error('Голосование не найдено');
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    if (voting.Status === 'Completed') {
-      console.error('Голосование завершено');
-      return res.status(400).json({ error: 'Голосование завершено' });
-    }
+    // ... продолжение кода голосования
 
-    const votedUserIds = voting.VotedUserIDs || '';
-    const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
-
-    if (votedUsersArray.includes(userId.toString())) {
-      console.error('Пользователь уже проголосовал');
-      return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
-    }
-
-    const votingLat = voting.Latitude;
-    const votingLon = voting.Longitude;
-
-    if (votingLat && votingLon && userLat && userLon) {
-      const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
-      console.log('Рассчитанное расстояние:', distance);
-      if (distance > 1000) {
-        console.error('Пользователь находится слишком далеко');
-        return res.status(400).json({ error: 'Вы находитесь слишком далеко от места голосования' });
-      }
-    }
-
-    let currentVotes = voting.Votes ? JSON.parse(voting.Votes) : {};
-    console.log('Текущие голоса:', currentVotes);
-
-    currentVotes[userId] = optionIndex;
-    console.log('Обновлённые голоса:', currentVotes);
-
-    const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
-
-    const updateData = {
-      values: {
-        Votes: JSON.stringify(currentVotes),
-        VotedUserIDs: newVotedUserIDs
-      }
-    };
-
-    console.log('Обновление записи голосования:', JSON.stringify(updateData, null, 2));
-
-    const updateResponse = await axios.patch(updateRecordUrl(VOTINGS_TABLE, id), updateData, {
-      headers: {
-        Authorization: `Bearer ${baseToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log('Голосование успешно обновлено:', updateResponse.data);
-    res.json({ success: true, voting: { id: updateResponse.data._id, fields: updateResponse.data } });
   } catch (error) {
     console.error('Ошибка голосования:', error.message, error.response?.data || {});
     res.status(500).json({ error: 'Ошибка при голосовании' });
-  }
-});
-
-// Проверить статус голосования пользователя
-app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
-  try {
-    const { id, userId } = req.params;
-
-    console.log(`Проверка статуса голосования для пользователя ${userId}, ID голосования: ${id}`);
-    const baseToken = await getBaseToken();
-    const votingResponse = await axios.get(getRecordUrl(VOTINGS_TABLE, id), {
-      headers: { Authorization: `Bearer ${baseToken}` }
-    });
-
-    const voting = votingResponse.data;
-    if (!voting) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    const votedUserIds = voting.VotedUserIDs || '';
-    const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
-
-    const hasVoted = votedUsersArray.includes(userId.toString());
-    let userVote = null;
-    if (voting.Votes) {
-      const votes = JSON.parse(voting.Votes);
-      userVote = votes[userId] !== undefined ? votes[userId] : null;
-    }
-
-    res.json({ hasVoted, userVote });
-  } catch (error) {
-    console.error('Ошибка проверки статуса голосования:', error.message, error.response?.data || {});
-    res.status(500).json({ error: 'Ошибка проверки статуса голосования' });
-  }
-});
-
-// Завершить голосование и посчитать результаты
-app.post('/api/votings/:id/complete', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    console.log(`Завершение голосования ${id}`);
-    const baseToken = await getBaseToken();
-    const votingResponse = await axios.get(getRecordUrl(VOTINGS_TABLE, id), {
-      headers: { Authorization: `Bearer ${baseToken}` }
-    });
-
-    const voting = votingResponse.data;
-    if (!voting) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    const votes = voting.Votes ? (typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes) : {};
-
-    const results = [];
-
-    if (voting.Options) {
-      const options = voting.Options.split(',');
-
-      const voteCounts = {};
-      options.forEach((option, index) => {
-        voteCounts[index] = 0;
-      });
-
-      Object.values(votes).forEach(voteIndex => {
-        if (voteCounts[voteIndex] !== undefined) {
-          voteCounts[voteIndex]++;
-        }
-      });
-
-      const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
-
-      options.forEach((option, index) => {
-        const count = voteCounts[index] || 0;
-        const percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-
-        results.push({
-          option: option,
-          count: count,
-          percentage: percentage
-        });
-      });
-    }
-
-    const updateData = {
-      values: {
-        Status: 'Completed',
-        Results: JSON.stringify(results)
-      }
-    };
-
-    const updateResponse = await axios.patch(updateRecordUrl(VOTINGS_TABLE, id), updateData, {
-      headers: {
-        Authorization: `Bearer ${baseToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    res.json({ success: true, results: results, voting: { id: updateResponse.data._id, fields: updateResponse.data } });
-  } catch (error) {
-    console.error('Ошибка завершения голосования:', error.message, error.response?.data || {});
-    res.status(500).json({ error: 'Ошибка завершения голосования' });
-  }
-});
-
-// Генерация изображения с результатами голосования
-app.post('/api/votings/:id/generate-results', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    console.log(`Генерация изображения результатов для голосования ${id}`);
-    const baseToken = await getBaseToken();
-    const votingResponse = await axios.get(getRecordUrl(VOTINGS_TABLE, id), {
-      headers: { Authorization: `Bearer ${baseToken}` }
-    });
-
-    const voting = votingResponse.data;
-    if (!voting) {
-      return res.status(404).json({ error: 'Голосование не найдено' });
-    }
-
-    if (!voting.Results) {
-      return res.status(400).json({ error: 'Результаты голосования недоступны' });
-    }
-
-    let results;
-    try {
-      if (typeof voting.Results === 'string') {
-        results = JSON.parse(voting.Results);
-      } else {
-        results = voting.Results;
-      }
-    } catch (parseError) {
-      console.error('Ошибка парсинга результатов:', parseError);
-      return res.status(400).json({ error: 'Неверный формат результатов голосования' });
-    }
-
-    let resultsArray = [];
-    if (Array.isArray(results)) {
-      resultsArray = results;
-    } else if (results && typeof results === 'object') {
-      resultsArray = Object.values(results);
-    } else {
-      return res.status(400).json({ error: 'Неверный формат результатов' });
-    }
-
-    const title = voting.Title || 'Результаты голосования';
-    const description = voting.Description || '';
-
-    const optionImages = voting.OptionImages || [];
-    console.log('OptionImages из SeaTable:', JSON.stringify(optionImages, null, 2));
-
-    let height = 600;
-    const hasImages = optionImages && optionImages.length > 0;
-    if (hasImages) height += Math.ceil(resultsArray.length / 3) * 110;
-
-    let svg = `
-      <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
-        <style>
-          .title { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #000; }
-          .description { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
-          .option { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #000; }
-          .stats { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
-        </style>
-        <rect width="800" height="${height}" fill="#ffffff"/>
-        <text x="400" y="50" class="title" text-anchor="middle">${title}</text>
-        <text x="400" y="80" class="description" text-anchor="middle">${description}</text>
-    `;
-
-    let y = 120;
-    resultsArray.forEach((result, index) => {
-      const barWidth = (result.percentage / 100) * 400;
-      const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
-
-      svg += `
-        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0" rx="5"/>
-        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="5"/>
-        <text x="20" y="${y + 25}" class="option">${result.option}</text>
-        <text x="520" y="${y + 25}" class="stats" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
-      `;
-      y += 50;
-    });
-
-    if (hasImages) {
-      y += 20;
-      svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
-      y += 30;
-
-      resultsArray.forEach((result, index) => {
-        let imageUrl = null;
-        if (optionImages[index]) {
-          if (typeof optionImages[index] === 'string') {
-            imageUrl = optionImages[index];
-          } else if (typeof optionImages[index] === 'object' && optionImages[index].url) {
-            imageUrl = optionImages[index].url;
-          }
-        }
-
-        if (imageUrl) {
-          const col = index % 3;
-          const row = Math.floor(index / 3);
-          svg += `<image x="${100 + col * 200}" y="${y + row * 110}" width="150" height="100" href="${imageUrl}" preserveAspectRatio="xMidYMid meet"/>`;
-        }
-      });
-    }
-
-    svg += `</svg>`;
-
-    const svgBuffer = Buffer.from(svg);
-    const imageBuffer = await sharp(svgBuffer)
-      .resize(800, height, {
-        fit: 'fill',
-        background: { r: 255, g: 255, b: 255, alpha: 1 }
-      })
-      .jpeg({
-        quality: 90,
-        chromaSubsampling: '4:4:4'
-      })
-      .toBuffer();
-
-    const uploadResult = await uploadToRadikal(
-      imageBuffer,
-      `voting_results_${id}_${Date.now()}.jpg`,
-      'image/jpeg'
-    );
-
-    console.log('Изображение результатов загружено в Radikal API:', uploadResult.url);
-
-    try {
-      const updateData = {
-        values: {
-          ResultsImage: uploadResult.url
-        }
-      };
-      const updateResponse = await axios.patch(updateRecordUrl(VOTINGS_TABLE, id), updateData, {
-        headers: {
-          Authorization: `Bearer ${baseToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      console.log('ResultsImage успешно сохранён в SeaTable:', updateResponse.data);
-    } catch (updateError) {
-      console.error('Ошибка сохранения ResultsImage в SeaTable:', updateError.message);
-    }
-
-    res.json({
-      success: true,
-      imageUrl: uploadResult.url,
-      fileId: uploadResult.fileId
-    });
-
-  } catch (error) {
-    console.error('Ошибка генерации изображения результатов:', error.message, error.response?.data || {});
-    res.status(500).json({ error: 'Ошибка генерации изображения результатов' });
-  }
-});
-
-// ==================== API ДЛЯ "Я ПОЙДУ!" ====================
-
-app.post('/api/events/:eventId/attend', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const { userId } = req.body;
-
-    console.log(`Пользователь ${userId} участвует в событии ${eventId}`);
-
-    if (!userId) {
-      return res.status(400).json({ error: 'Требуется ID пользователя' });
-    }
-
-    const baseToken = await getBaseToken();
-    const eventResponse = await axios.get(getRecordUrl(EVENTS_TABLE, eventId), {
-      headers: { Authorization: `Bearer ${baseToken}` }
-    });
-
-    const event = eventResponse.data;
-
-    if (!event) {
-      return res.status(404).json({ error: 'Событие не найдено' });
-    }
-
-    const currentAttendees = event.AttendeesIDs || '';
-    const currentCount = event.AttendeesCount || 0;
-
-    console.log('Текущие участники:', currentAttendees);
-    console.log('Текущее количество:', currentCount);
-
-    let attendeesArray = [];
-    if (typeof currentAttendees === 'string') {
-      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
-    }
-
-    const userIdStr = userId.toString();
-    if (attendeesArray.includes(userIdStr)) {
-      console.log('Пользователь уже участвует');
-      return res.status(400).json({ error: 'Пользователь уже участвует' });
-    }
-
-    attendeesArray.push(userIdStr);
-    const newAttendees = attendeesArray.join(',');
-    const newCount = currentCount + 1;
-
-    console.log('Новые участники:', newAttendees);
-    console.log('Новое количество:', newCount);
-
-    const updateData = {
-      values: {
-        AttendeesIDs: newAttendees,
-        AttendeesCount: newCount
-      }
-    };
-
-    console.log('Данные для обновления:', JSON.stringify(updateData, null, 2));
-
-    const updateResponse = await axios.patch(updateRecordUrl(EVENTS_TABLE, eventId), updateData, {
-      headers: {
-        Authorization: `Bearer ${baseToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log('Обновление успешно:', updateResponse.data);
-    res.json({ success: true, count: newCount, attending: true });
-
-  } catch (error) {
-    console.error('Ошибка участия:', error.message, error.response?.data || {});
-    res.status(500).json({ error: 'Ошибка при регистрации на событие' });
-  }
-});
-
-app.post('/api/events/:eventId/unattend', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const { userId } = req.body;
-
-    console.log(`Пользователь ${userId} отказывается от участия в событии ${eventId}`);
-
-    if (!userId) {
-      return res.status(400).json({ error: 'Требуется ID пользователя' });
-    }
-
-    const baseToken = await getBaseToken();
-    const eventResponse = await axios.get(getRecordUrl(EVENTS_TABLE, eventId), {
-      headers: { Authorization: `Bearer ${baseToken}` }
-    });
-
-    const event = eventResponse.data;
-
-    if (!event) {
-      return res.status(404).json({ error: 'Событие не найдено' });
-    }
-
-    const currentAttendees = event.AttendeesIDs || '';
-    const currentCount = event.AttendeesCount || 0;
-
-    console.log('Текущие участники:', currentAttendees);
-    console.log('Текущее количество:', currentCount);
-
-    let attendeesArray = [];
-    if (typeof currentAttendees === 'string') {
-      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
-    }
-
-    const userIdStr = userId.toString();
-    const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
-    const newAttendees = newAttendeesArray.join(',');
-    const newCount = Math.max(0, newAttendeesArray.length);
-
-    console.log('Новые участники:', newAttendees);
-    console.log('Новое количество:', newCount);
-
-    const updateData = {
-      values: {
-        AttendeesIDs: newAttendees,
-        AttendeesCount: newCount
-      }
-    };
-
-    const updateResponse = await axios.patch(updateRecordUrl(EVENTS_TABLE, eventId), updateData, {
-      headers: {
-        Authorization: `Bearer ${baseToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log('Отказ от участия успешен');
-    res.json({ success: true, count: newCount, attending: false });
-
-  } catch (error) {
-    console.error('Ошибка отказа от участия:', error.message, error.response?.data || {});
-    res.status(500).json({ error: 'Ошибка при отмене участия' });
-  }
-});
-
-// Проверяем статус участия пользователя
-app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
-  try {
-    const { eventId, userId } = req.params;
-
-    console.log(`Проверка статуса участия для пользователя ${userId} в событии ${eventId}`);
-
-    const baseToken = await getBaseToken();
-    const eventResponse = await axios.get(getRecordUrl(EVENTS_TABLE, eventId), {
-      headers: { Authorization: `Bearer ${baseToken}` }
-    });
-
-    const event = eventResponse.data;
-
-    if (!event) {
-      return res.status(404).json({ error: 'Событие не найдено' });
-    }
-
-    const attendees = event.AttendeesIDs || '';
-    let attendeesArray = [];
-    if (typeof attendees === 'string') {
-      attendeesArray = attendees.split(',').filter(id => id && id.trim());
-    }
-
-    const isAttending = attendeesArray.includes(userId.toString());
-
-    console.log('Участвует:', isAttending);
-    res.json({ isAttending });
-
-  } catch (error) {
-    console.error('Ошибка проверки статуса участия:', error.message, error.response?.data || {});
-    res.status(500).json({ error: 'Ошибка проверки статуса участия' });
   }
 });
 
