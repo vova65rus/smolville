@@ -85,12 +85,12 @@ async function getBaseToken() {
   }
 }
 
-// Функции для формирования URL
-const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
-const getRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
-const appendRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
-const updateRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
-const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-tables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
+// ПРАВИЛЬНЫЕ URL для SeaTable API v2.1
+const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
+const getRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
+const appendRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
+const updateRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
+const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
 const getUploadLinkUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-upload-link/`;
 
 // Вспомогательная функция для получения токена с проверкой Base UUID
@@ -442,7 +442,57 @@ app.get('/api/votings', async (req, res) => {
   }
 });
 
-// Остальные эндпоинты (для votings, attend и т.д.) остаются аналогичными...
+app.post('/api/votings', async (req, res) => {
+  try {
+    console.log('Создание голосования с данными:', JSON.stringify(req.body, null, 2));
+    const baseToken = await getValidatedToken();
+    const response = await axios.post(appendRecordsUrl(VOTINGS_TABLE), {
+      rows: [req.body.fields]
+    }, {
+      headers: {
+        Authorization: `Bearer ${baseToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json({ id: response.data.rows[0]._id, fields: response.data.rows[0] });
+  } catch (error) {
+    console.error('Ошибка POST /api/votings:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка создания голосования' });
+  }
+});
+
+app.put('/api/votings/:id', async (req, res) => {
+  try {
+    console.log('Обновление голосования с данными:', JSON.stringify(req.body, null, 2));
+    const baseToken = await getValidatedToken();
+    const response = await axios.put(updateRecordUrl(VOTINGS_TABLE, req.params.id), {
+      row: req.body.fields
+    }, {
+      headers: {
+        Authorization: `Bearer ${baseToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json({ id: response.data._id, fields: response.data });
+  } catch (error) {
+    console.error('Ошибка PUT /api/votings/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка обновления голосования' });
+  }
+});
+
+app.delete('/api/votings/:id', async (req, res) => {
+  try {
+    console.log(`Удаление голосования ${req.params.id}`);
+    const baseToken = await getValidatedToken();
+    await axios.delete(deleteRecordUrl(VOTINGS_TABLE, req.params.id), {
+      headers: { Authorization: `Bearer ${baseToken}` }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Ошибка DELETE /api/votings/:id:', error.message, error.response?.data || {});
+    res.status(500).json({ error: 'Ошибка удаления голосования' });
+  }
+});
 
 // Создание папки uploads
 const uploadsDir = path.join(__dirname, 'uploads');
