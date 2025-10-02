@@ -21,8 +21,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const upload = multer({ dest: 'uploads/' });
 
-// SeaTable API конфигурация
-const SEATABLE_SERVER_URL = process.env.SEATABLE_SERVER_URL || 'https://cloud.seatable.io';
+// SeaTable API конфигурация - используем новый API Gateway
+const SEATABLE_API_URL = process.env.SEATABLE_API_URL || 'https://api.seatable.io';
 const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN;
 const SEATABLE_BASE_UUID = process.env.SEATABLE_BASE_UUID;
 
@@ -43,14 +43,15 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
   process.exit(1);
 }
 
-// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ SEATABLE API ====================
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ SEATABLE API (обновленные) ====================
 
 /**
- * Получает заголовки авторизации для SeaTable API
+ * Получает заголовки авторизации для нового SeaTable API
  */
 function getSeaTableHeaders(contentType = 'application/json') {
   const headers = {
-    'Authorization': `Token ${SEATABLE_API_TOKEN}`
+    'Authorization': `Token ${SEATABLE_API_TOKEN}`,
+    'Accept': 'application/json'
   };
   
   if (contentType) {
@@ -61,19 +62,20 @@ function getSeaTableHeaders(contentType = 'application/json') {
 }
 
 /**
- * Получает базовый URL для работы с таблицей
+ * Получает базовый URL для работы с таблицей через API Gateway
  */
 function getSeaTableBaseUrl() {
-  return `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}`;
+  return `${SEATABLE_API_URL}/api/v2.1/dtable-server/dtables/${SEATABLE_BASE_UUID}`;
 }
 
 /**
- * Получает записи из таблицы SeaTable
+ * Получает записи из таблицы SeaTable через новый API
  */
 async function getSeaTableRecords(tableName) {
   try {
     const url = `${getSeaTableBaseUrl()}/rows/`;
     console.log(`SeaTable GET URL: ${url}`);
+    console.log(`Table: ${tableName}`);
     
     const response = await axios.get(url, {
       headers: getSeaTableHeaders(),
@@ -82,7 +84,7 @@ async function getSeaTableRecords(tableName) {
       }
     });
     
-    console.log(`SeaTable GET response for ${tableName}:`, response.data);
+    console.log(`SeaTable GET successful for ${tableName}`);
     return response.data;
   } catch (error) {
     console.error(`SeaTable GET error for ${tableName}:`, error.message);
@@ -95,7 +97,7 @@ async function getSeaTableRecords(tableName) {
 }
 
 /**
- * Создает запись в SeaTable
+ * Создает запись в SeaTable через новый API
  */
 async function createSeaTableRecord(tableName, data) {
   try {
@@ -109,6 +111,7 @@ async function createSeaTableRecord(tableName, data) {
       headers: getSeaTableHeaders()
     });
     
+    console.log('SeaTable POST successful');
     return response.data;
   } catch (error) {
     console.error(`SeaTable POST error for ${tableName}:`, error.message);
@@ -121,7 +124,7 @@ async function createSeaTableRecord(tableName, data) {
 }
 
 /**
- * Обновляет запись в SeaTable
+ * Обновляет запись в SeaTable через новый API
  */
 async function updateSeaTableRecord(tableName, rowId, data) {
   try {
@@ -136,6 +139,7 @@ async function updateSeaTableRecord(tableName, rowId, data) {
       headers: getSeaTableHeaders()
     });
     
+    console.log('SeaTable PUT successful');
     return response.data;
   } catch (error) {
     console.error(`SeaTable PUT error for ${tableName}:`, error.message);
@@ -148,7 +152,7 @@ async function updateSeaTableRecord(tableName, rowId, data) {
 }
 
 /**
- * Удаляет запись из SeaTable
+ * Удаляет запись из SeaTable через новый API
  */
 async function deleteSeaTableRecord(tableName, rowId) {
   try {
@@ -163,6 +167,7 @@ async function deleteSeaTableRecord(tableName, rowId) {
       }
     });
     
+    console.log('SeaTable DELETE successful');
     return response.data;
   } catch (error) {
     console.error(`SeaTable DELETE error for ${tableName}:`, error.message);
@@ -179,8 +184,7 @@ async function deleteSeaTableRecord(tableName, rowId) {
  */
 async function getSeaTableRecordById(tableName, rowId) {
   try {
-    // В SeaTable нет прямого endpoint для получения одной записи по ID,
-    // поэтому получаем все и фильтруем
+    // В новом SeaTable API также получаем все записи и фильтруем
     const data = await getSeaTableRecords(tableName);
     const record = data.rows.find(row => row._id === rowId);
     
@@ -203,9 +207,6 @@ async function getSeaTableRecordById(tableName, rowId) {
 async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
     console.log('Starting Radikal API upload...');
-    console.log('Filename:', filename);
-    console.log('Content type:', contentType);
-    console.log('File size:', fileBuffer.length, 'bytes');
 
     const formData = new FormData();
     formData.append('source', fileBuffer, {
@@ -220,8 +221,6 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
       },
       timeout: 30000
     });
-
-    console.log('Radikal API upload response:', response.data);
 
     if (response.data.status_code === 200 && response.data.image) {
       const imageData = response.data.image;
@@ -283,8 +282,6 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
     
-    console.log('Upload request received');
-    
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
     
@@ -299,8 +296,6 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     } catch (unlinkError) {
       console.error('Error deleting temp file:', unlinkError.message);
     }
-    
-    console.log('Upload successful, URL:', uploadResult.url);
     
     res.json({ 
       url: uploadResult.url,
@@ -976,7 +971,7 @@ if (!fs.existsSync(uploadsDir)) {
 // Запуск сервера
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`SeaTable Server URL: ${SEATABLE_SERVER_URL}`);
+  console.log(`SeaTable API URL: ${SEATABLE_API_URL}`);
   console.log(`SeaTable Base UUID: ${SEATABLE_BASE_UUID}`);
   console.log('Make sure SEATABLE_API_TOKEN is set in environment variables');
 });
