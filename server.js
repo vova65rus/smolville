@@ -37,22 +37,45 @@ const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
 const ADMIN_ID = 366825437;
 
 if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
-  console.error('Missing env vars: Set SEATABLE_API_TOKEN, SEATABLE_BASE_UUID, RADIKAL_API_KEY in Render');
+  console.error('Отсутствуют переменные окружения: Установите SEATABLE_API_TOKEN, SEATABLE_BASE_UUID, RADIKAL_API_KEY в Render');
   process.exit(1);
 }
 
 // Функция для получения Base-Token
 async function getBaseToken() {
   try {
+    console.log('Попытка получить Base-Token с помощью POST...');
     const response = await axios.post(
       `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-access-token/`,
       { app_token: SEATABLE_API_TOKEN },
       { headers: { 'Content-Type': 'application/json' } }
     );
+    console.log('Base-Token успешно получен:', response.data.access_token);
     return response.data.access_token;
   } catch (error) {
-    console.error('Error getting Base-Token:', error.message);
-    throw new Error('Failed to get Base-Token');
+    console.error('Ошибка при получении Base-Token с POST:', error.message);
+    console.error('Детали ошибки:', error.response ? error.response.data : error.message);
+    if (error.response && error.response.status === 405) {
+      console.log('Попытка с GET-методом...');
+      try {
+        const response = await axios.get(
+          `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-access-token/`,
+          {
+            headers: {
+              Authorization: `Token ${SEATABLE_API_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        console.log('Base-Token успешно получен с GET:', response.data.access_token);
+        return response.data.access_token;
+      } catch (getError) {
+        console.error('Ошибка при получении Base-Token с GET:', getError.message);
+        console.error('Детали ошибки GET:', getError.response ? getError.response.data : getError.message);
+        throw new Error('Не удалось получить Base-Token');
+      }
+    }
+    throw error;
   }
 }
 
@@ -66,17 +89,17 @@ const getUploadLinkUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-uploa
 
 // Главная страница
 app.get('/', (req, res) => {
-  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
+  res.send('Бэкенд Smolville запущен! Конечные точки API: /api/events, /api/ads, /api/votings, /api/upload');
 });
 
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ RADIKAL API ====================
 
 async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
-    console.log('Starting Radikal API upload...');
-    console.log('Filename:', filename);
-    console.log('Content type:', contentType);
-    console.log('File size:', fileBuffer.length, 'bytes');
+    console.log('Начало загрузки в Radikal API...');
+    console.log('Имя файла:', filename);
+    console.log('Тип контента:', contentType);
+    console.log('Размер файла:', fileBuffer.length, 'байт');
 
     const formData = new FormData();
     formData.append('source', fileBuffer, {
@@ -92,11 +115,11 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
       timeout: 30000
     });
 
-    console.log('Radikal API upload response:', response.data);
+    console.log('Ответ от Radikal API:', response.data);
 
     if (response.data.status_code === 200 && response.data.image) {
       const imageData = response.data.image;
-      console.log('File uploaded successfully, URL:', imageData.url);
+      console.log('Файл успешно загружен, URL:', imageData.url);
       
       return {
         fileId: imageData.id_encoded || imageData.name,
@@ -105,13 +128,13 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
         imageData: response.data.image
       };
     } else {
-      throw new Error(response.data.error ? response.data.error.message : (response.data.status_txt || 'Upload failed'));
+      throw new Error(response.data.error ? response.data.error.message : (response.data.status_txt || 'Ошибка загрузки'));
     }
   } catch (error) {
-    console.error('Radikal API upload error:', error.message);
+    console.error('Ошибка загрузки в Radikal API:', error.message);
     if (error.response) {
-      console.error('Radikal API response status:', error.response.status);
-      console.error('Radikal API response data:', error.response.data);
+      console.error('Статус ответа Radikal API:', error.response.status);
+      console.error('Данные ответа Radikal API:', error.response.data);
     }
     throw error;
   }
@@ -119,7 +142,7 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
 
 async function getRadikalFileInfo(fileId) {
   try {
-    console.log('Getting file info for:', fileId);
+    console.log('Получение информации о файле:', fileId);
     
     const response = await axios.get(`${RADIKAL_API_URL}/files/${fileId}`, {
       headers: {
@@ -127,12 +150,12 @@ async function getRadikalFileInfo(fileId) {
       }
     });
     
-    console.log('File info retrieved successfully');
+    console.log('Информация о файле успешно получена');
     return response.data;
   } catch (error) {
-    console.error('Error getting file info from Radikal API:', error.message);
+    console.error('Ошибка получения информации о файле из Radikal API:', error.message);
     if (error.response && error.response.status === 404) {
-      console.log('File info endpoint not available in Radikal Cloud');
+      console.log('Конечная точка информации о файле недоступна в Radikal Cloud');
       return null;
     }
     throw error;
@@ -146,11 +169,11 @@ async function deleteFromRadikal(fileId) {
         'X-API-Key': RADIKAL_API_KEY
       }
     });
-    console.log(`File ${fileId} deleted from Radikal API`);
+    console.log(`Файл ${fileId} удалён из Radikal API`);
   } catch (error) {
-    console.error('Error deleting file from Radikal API:', error.message);
+    console.error('Ошибка удаления файла из Radikal API:', error.message);
     if (error.response && error.response.status === 404) {
-      console.log('Delete endpoint not available in Radikal Cloud');
+      console.log('Конечная точка удаления недоступна в Radikal Cloud');
       return;
     }
     throw error;
@@ -170,13 +193,13 @@ app.get('/api/is-admin', (req, res) => {
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
+      return res.status(400).json({ error: 'Изображение не загружено' });
     }
     
-    console.log('Upload request received');
-    console.log('Original filename:', req.file.originalname);
-    console.log('Mimetype:', req.file.mimetype);
-    console.log('File size:', req.file.size, 'bytes');
+    console.log('Получен запрос на загрузку');
+    console.log('Оригинальное имя файла:', req.file.originalname);
+    console.log('MIME-тип:', req.file.mimetype);
+    console.log('Размер файла:', req.file.size, 'байт');
     
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
@@ -190,10 +213,10 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     try {
       fs.unlinkSync(filePath);
     } catch (unlinkError) {
-      console.error('Error deleting temp file:', unlinkError.message);
+      console.error('Ошибка удаления временного файла:', unlinkError.message);
     }
     
-    console.log('Upload successful, URL:', uploadResult.url);
+    console.log('Загрузка успешна, URL:', uploadResult.url);
     
     res.json({ 
       url: uploadResult.url,
@@ -202,12 +225,12 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Upload error:', error.message);
+    console.error('Ошибка загрузки:', error.message);
     if (req.file) {
       try {
         fs.unlinkSync(req.file.path);
       } catch (unlinkError) {
-        console.error('Error deleting temp file:', unlinkError.message);
+        console.error('Ошибка удаления временного файла:', unlinkError.message);
       }
     }
     res.status(500).json({ error: error.message });
@@ -218,12 +241,12 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
 app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
+      return res.status(400).json({ error: 'Изображение не загружено' });
     }
     
-    console.log('Option image upload request received');
-    console.log('Original filename:', req.file.originalname);
-    console.log('Mimetype:', req.file.mimetype);
+    console.log('Получен запрос на загрузку изображения номинанта');
+    console.log('Оригинальное имя файла:', req.file.originalname);
+    console.log('MIME-тип:', req.file.mimetype);
     
     const filePath = req.file.path;
     const fileBuffer = fs.readFileSync(filePath);
@@ -262,10 +285,10 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     try {
       fs.unlinkSync(filePath);
     } catch (unlinkError) {
-      console.error('Error deleting temp file:', unlinkError.message);
+      console.error('Ошибка удаления временного файла:', unlinkError.message);
     }
 
-    console.log('Option image upload successful, URL:', fileUrl);
+    console.log('Загрузка изображения номинанта успешна, URL:', fileUrl);
 
     res.json({
       url: fileUrl,
@@ -274,12 +297,12 @@ app.post('/api/votings/upload-option-image', upload.single('image'), async (req,
     });
 
   } catch (error) {
-    console.error('Option image upload error:', error.message);
+    console.error('Ошибка загрузки изображения номинанта:', error.message);
     if (req.file) {
       try {
         fs.unlinkSync(req.file.path);
       } catch (unlinkError) {
-        console.error('Error deleting temp file:', unlinkError.message);
+        console.error('Ошибка удаления временного файла:', unlinkError.message);
       }
     }
     res.status(500).json({ error: error.message });
@@ -293,10 +316,10 @@ app.delete('/api/upload/:fileId', async (req, res) => {
     
     await deleteFromRadikal(fileId);
     
-    res.json({ success: true, message: `File ${fileId} deleted successfully` });
+    res.json({ success: true, message: `Файл ${fileId} успешно удалён` });
     
   } catch (error) {
-    console.error('Delete file error:', error.message);
+    console.error('Ошибка удаления файла:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -311,14 +334,14 @@ app.get('/api/events', async (req, res) => {
     });
     res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Events GET error:', error.message);
+    console.error('Ошибка GET /api/events:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/events', async (req, res) => {
   try {
-    console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
+    console.log('Создание события с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
     const response = await axios.post(appendRowUrl(EVENTS_TABLE), {
       row: req.body.fields
@@ -330,7 +353,7 @@ app.post('/api/events', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Events POST error:', error.message);
+    console.error('Ошибка POST /api/events:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -343,14 +366,14 @@ app.get('/api/events/:id', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Event GET error:', error.message);
+    console.error('Ошибка GET /api/events/:id:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.patch('/api/events/:id', async (req, res) => {
   try {
-    console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
+    console.log('Обновление события с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
     const response = await axios.put(updateRowUrl(EVENTS_TABLE, req.params.id), {
       row: req.body.fields
@@ -362,7 +385,7 @@ app.patch('/api/events/:id', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Event PATCH error:', error.message);
+    console.error('Ошибка PATCH /api/events/:id:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -375,7 +398,7 @@ app.delete('/api/events/:id', async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('Event DELETE error:', error.message);
+    console.error('Ошибка DELETE /api/events/:id:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -390,7 +413,7 @@ app.get('/api/ads', async (req, res) => {
     });
     res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Ads GET error:', error.message);
+    console.error('Ошибка GET /api/ads:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -408,7 +431,7 @@ app.post('/api/ads', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ads POST error:', error.message);
+    console.error('Ошибка POST /api/ads:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -426,7 +449,7 @@ app.patch('/api/ads/:id', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Ads PATCH error:', error.message);
+    console.error('Ошибка PATCH /api/ads/:id:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -439,7 +462,7 @@ app.delete('/api/ads/:id', async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('Ad DELETE error:', error.message);
+    console.error('Ошибка DELETE /api/ads/:id:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -454,7 +477,7 @@ app.get('/api/votings', async (req, res) => {
     });
     res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Votings GET error:', error.message);
+    console.error('Ошибка GET /api/votings:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -472,7 +495,7 @@ app.post('/api/votings', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Votings POST error:', error.message);
+    console.error('Ошибка POST /api/votings:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -490,7 +513,7 @@ app.patch('/api/votings/:id', async (req, res) => {
     });
     res.json({ id: response.data._id, fields: response.data });
   } catch (error) {
-    console.error('Votings PATCH error:', error.message);
+    console.error('Ошибка PATCH /api/votings/:id:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -503,7 +526,7 @@ app.delete('/api/votings/:id', async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('Votings DELETE error:', error.message);
+    console.error('Ошибка DELETE /api/votings/:id:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -519,7 +542,7 @@ app.get('/api/events/:eventId/votings', async (req, res) => {
     });
     res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Event votings GET error:', error.message);
+    console.error('Ошибка GET /api/events/:eventId/votings:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -530,11 +553,11 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     const { id } = req.params;
     const { userId, optionIndex, userLat, userLon } = req.body;
 
-    console.log('Received vote request:', { id, userId, optionIndex, userLat, userLon });
+    console.log('Получен запрос на голосование:', { id, userId, optionIndex, userLat, userLon });
 
     if (!userId || optionIndex === undefined || userLat === undefined || userLon === undefined) {
-      console.error('Missing required fields');
-      return res.status(400).json({ error: 'Missing required fields' });
+      console.error('Отсутствуют обязательные поля');
+      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
     }
 
     const baseToken = await getBaseToken();
@@ -544,20 +567,20 @@ app.post('/api/votings/:id/vote', async (req, res) => {
 
     const voting = votingResponse.data;
     if (!voting) {
-      console.error('Voting not found');
+      console.error('Голосование не найдено');
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
     if (voting.Status === 'Completed') {
-      console.error('Voting is completed');
-      return res.status(400).json({ error: 'Voting is completed' });
+      console.error('Голосование завершено');
+      return res.status(400).json({ error: 'Голосование завершено' });
     }
 
     const votedUserIds = voting.VotedUserIDs || '';
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
 
     if (votedUsersArray.includes(userId.toString())) {
-      console.error('User has already voted');
+      console.error('Пользователь уже проголосовал');
       return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
     }
 
@@ -566,18 +589,18 @@ app.post('/api/votings/:id/vote', async (req, res) => {
 
     if (votingLat && votingLon && userLat && userLon) {
       const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
-      console.log('Calculated distance:', distance);
+      console.log('Рассчитанное расстояние:', distance);
       if (distance > 1000) {
-        console.error('User is too far away');
+        console.error('Пользователь находится слишком далеко');
         return res.status(400).json({ error: 'Вы находитесь слишком далеко от места голосования' });
       }
     }
 
     let currentVotes = voting.Votes ? JSON.parse(voting.Votes) : {};
-    console.log('Current votes:', currentVotes);
+    console.log('Текущие голоса:', currentVotes);
 
     currentVotes[userId] = optionIndex;
-    console.log('Updated votes:', currentVotes);
+    console.log('Обновлённые голоса:', currentVotes);
 
     const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
 
@@ -588,7 +611,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       }
     };
 
-    console.log('Updating voting record with:', JSON.stringify(updateData, null, 2));
+    console.log('Обновление записи голосования:', JSON.stringify(updateData, null, 2));
 
     const updateResponse = await axios.put(updateRowUrl(VOTINGS_TABLE, id), updateData, {
       headers: {
@@ -597,10 +620,10 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       }
     });
 
-    console.log('Vote updated successfully:', updateResponse.data);
+    console.log('Голосование успешно обновлено:', updateResponse.data);
     res.json({ success: true, voting: { id: updateResponse.data._id, fields: updateResponse.data } });
   } catch (error) {
-    console.error('Vote error:', error.message);
+    console.error('Ошибка голосования:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -632,7 +655,7 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
 
     res.json({ hasVoted, userVote });
   } catch (error) {
-    console.error('Vote status error:', error.message);
+    console.error('Ошибка проверки статуса голосования:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -698,7 +721,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
 
     res.json({ success: true, results: results, voting: { id: updateResponse.data._id, fields: updateResponse.data } });
   } catch (error) {
-    console.error('Complete voting error:', error.message);
+    console.error('Ошибка завершения голосования:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -730,7 +753,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
         results = voting.Results;
       }
     } catch (parseError) {
-      console.error('Error parsing results:', parseError);
+      console.error('Ошибка парсинга результатов:', parseError);
       return res.status(400).json({ error: 'Неверный формат результатов голосования' });
     }
 
@@ -747,7 +770,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     const description = voting.Description || '';
 
     const optionImages = voting.OptionImages || [];
-    console.log('OptionImages from SeaTable:', JSON.stringify(optionImages, null, 2));
+    console.log('OptionImages из SeaTable:', JSON.stringify(optionImages, null, 2));
 
     let height = 600;
     const hasImages = optionImages && optionImages.length > 0;
@@ -823,7 +846,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       'image/jpeg'
     );
 
-    console.log('Results image uploaded to Radikal API:', uploadResult.url);
+    console.log('Изображение результатов загружено в Radikal API:', uploadResult.url);
 
     try {
       const updateResponse = await axios.put(updateRowUrl(VOTINGS_TABLE, id), {
@@ -837,9 +860,9 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
         }
       });
 
-      console.log('ResultsImage saved to SeaTable successfully');
+      console.log('ResultsImage успешно сохранён в SeaTable');
     } catch (updateError) {
-      console.error('Error saving ResultsImage to SeaTable:', updateError.message);
+      console.error('Ошибка сохранения ResultsImage в SeaTable:', updateError.message);
     }
 
     res.json({
@@ -849,7 +872,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Generate results image error:', error.message);
+    console.error('Ошибка генерации изображения результатов:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -861,10 +884,10 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     const { eventId } = req.params;
     const { userId } = req.body;
 
-    console.log(`User ${userId} attending event ${eventId}`);
+    console.log(`Пользователь ${userId} участвует в событии ${eventId}`);
 
     if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
+      return res.status(400).json({ error: 'Требуется ID пользователя' });
     }
 
     const baseToken = await getBaseToken();
@@ -875,14 +898,14 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     const event = eventResponse.data;
 
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ error: 'Событие не найдено' });
     }
 
     const currentAttendees = event.AttendeesIDs || '';
     const currentCount = event.AttendeesCount || 0;
 
-    console.log('Current attendees:', currentAttendees);
-    console.log('Current count:', currentCount);
+    console.log('Текущие участники:', currentAttendees);
+    console.log('Текущее количество:', currentCount);
 
     let attendeesArray = [];
     if (typeof currentAttendees === 'string') {
@@ -891,16 +914,16 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
 
     const userIdStr = userId.toString();
     if (attendeesArray.includes(userIdStr)) {
-      console.log('User already attending');
-      return res.status(400).json({ error: 'User already attending' });
+      console.log('Пользователь уже участвует');
+      return res.status(400).json({ error: 'Пользователь уже участвует' });
     }
 
     attendeesArray.push(userIdStr);
     const newAttendees = attendeesArray.join(',');
     const newCount = currentCount + 1;
 
-    console.log('New attendees:', newAttendees);
-    console.log('New count:', newCount);
+    console.log('Новые участники:', newAttendees);
+    console.log('Новое количество:', newCount);
 
     const updateData = {
       row: {
@@ -909,7 +932,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       }
     };
 
-    console.log('Update data:', JSON.stringify(updateData, null, 2));
+    console.log('Данные для обновления:', JSON.stringify(updateData, null, 2));
 
     const updateResponse = await axios.put(updateRowUrl(EVENTS_TABLE, eventId), updateData, {
       headers: {
@@ -918,11 +941,11 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       }
     });
 
-    console.log('Update successful:', updateResponse.data);
+    console.log('Обновление успешно:', updateResponse.data);
     res.json({ success: true, count: newCount, attending: true });
 
   } catch (error) {
-    console.error('Attend error:', error.message);
+    console.error('Ошибка участия:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -932,10 +955,10 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     const { eventId } = req.params;
     const { userId } = req.body;
 
-    console.log(`User ${userId} unattending event ${eventId}`);
+    console.log(`Пользователь ${userId} отказывается от участия в событии ${eventId}`);
 
     if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
+      return res.status(400).json({ error: 'Требуется ID пользователя' });
     }
 
     const baseToken = await getBaseToken();
@@ -946,14 +969,14 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     const event = eventResponse.data;
 
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ error: 'Событие не найдено' });
     }
 
     const currentAttendees = event.AttendeesIDs || '';
     const currentCount = event.AttendeesCount || 0;
 
-    console.log('Current attendees:', currentAttendees);
-    console.log('Current count:', currentCount);
+    console.log('Текущие участники:', currentAttendees);
+    console.log('Текущее количество:', currentCount);
 
     let attendeesArray = [];
     if (typeof currentAttendees === 'string') {
@@ -965,8 +988,8 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     const newAttendees = newAttendeesArray.join(',');
     const newCount = Math.max(0, newAttendeesArray.length);
 
-    console.log('New attendees:', newAttendees);
-    console.log('New count:', newCount);
+    console.log('Новые участники:', newAttendees);
+    console.log('Новое количество:', newCount);
 
     const updateData = {
       row: {
@@ -982,11 +1005,11 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       }
     });
 
-    console.log('Unattend successful');
+    console.log('Отказ от участия успешен');
     res.json({ success: true, count: newCount, attending: false });
 
   } catch (error) {
-    console.error('Unattend error:', error.message);
+    console.error('Ошибка отказа от участия:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -996,7 +1019,7 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
   try {
     const { eventId, userId } = req.params;
 
-    console.log(`Checking attend status for user ${userId} in event ${eventId}`);
+    console.log(`Проверка статуса участия для пользователя ${userId} в событии ${eventId}`);
 
     const baseToken = await getBaseToken();
     const eventResponse = await axios.get(getRowUrl(EVENTS_TABLE, eventId), {
@@ -1006,7 +1029,7 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
     const event = eventResponse.data;
 
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ error: 'Событие не найдено' });
     }
 
     const attendees = event.AttendeesIDs || '';
@@ -1017,11 +1040,11 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
 
     const isAttending = attendeesArray.includes(userId.toString());
 
-    console.log('Is attending:', isAttending);
+    console.log('Участвует:', isAttending);
     res.json({ isAttending });
 
   } catch (error) {
-    console.error('Attend status error:', error.message);
+    console.error('Ошибка проверки статуса участия:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1052,7 +1075,7 @@ if (!fs.existsSync(uploadsDir)) {
 
 // Запуск сервера
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-  console.log(`Radikal API URL: ${RADIKAL_API_URL}`);
-  console.log('Make sure SEATABLE_API_TOKEN, SEATABLE_BASE_UUID, and RADIKAL_API_KEY are set in environment variables');
+  console.log(`Сервер запущен на порту ${port}`);
+  console.log(`URL Radikal API: ${RADIKAL_API_URL}`);
+  console.log('Убедитесь, что переменные SEATABLE_API_TOKEN, SEATABLE_BASE_UUID и RADIKAL_API_KEY установлены в переменных окружения');
 });
