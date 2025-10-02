@@ -21,32 +21,121 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const upload = multer({ dest: 'uploads/' });
 
-// Env vars
-const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY;
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
-const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
-const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
-const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
+// SeaTable API конфигурация
+const SEATABLE_API_URL = process.env.SEATABLE_API_URL || 'https://cloud.seatable.io';
+const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN;
+const SEATABLE_BASE_ID = process.env.SEATABLE_BASE_ID;
 
-// Radikal API конфигурация (Chevereto-совместимое)
+// Названия таблиц в SeaTable
+const EVENTS_TABLE = process.env.EVENTS_TABLE || 'Events';
+const ADS_TABLE = process.env.ADS_TABLE || 'Ads';
+const VOTINGS_TABLE = process.env.VOTINGS_TABLE || 'Votings';
+
+// Radikal API конфигурация (оставляем для загрузки изображений)
 const RADIKAL_API_URL = 'https://radikal.cloud/api/1';
-const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY; // ← ИМЕННО ТАК!
+const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
 
-if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !RADIKAL_API_KEY) {
-  console.error('Missing env vars: Set AIRTABLE_API_KEY, AIRTABLE_BASE_ID, RADIKAL_API_KEY in Render');
+if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_ID || !RADIKAL_API_KEY) {
+  console.error('Missing env vars: Set SEATABLE_API_TOKEN, SEATABLE_BASE_ID, RADIKAL_API_KEY in Render');
   process.exit(1);
 }
 
-const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${EVENTS_TABLE}`;
-const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ADS_TABLE}`;
-const VOTINGS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${VOTINGS_TABLE}`;
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ SEATABLE API ====================
 
-app.get('/', (req, res) => {
-  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
-});
+/**
+ * Получает заголовки авторизации для SeaTable API
+ */
+function getSeaTableHeaders() {
+  return {
+    'Authorization': `Token ${SEATABLE_API_TOKEN}`,
+    'Content-Type': 'application/json'
+  };
+}
+
+/**
+ * Получает URL для работы с таблицей
+ */
+function getSeaTableUrl(tableName) {
+  return `${SEATABLE_API_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_ID}/rows/`;
+}
+
+/**
+ * Получает записи из таблицы SeaTable
+ */
+async function getSeaTableRecords(tableName, params = {}) {
+  try {
+    const response = await axios.get(getSeaTableUrl(tableName), {
+      headers: getSeaTableHeaders(),
+      params: {
+        table_name: tableName,
+        ...params
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`SeaTable GET error for ${tableName}:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Создает запись в SeaTable
+ */
+async function createSeaTableRecord(tableName, data) {
+  try {
+    const response = await axios.post(getSeaTableUrl(tableName), {
+      table_name: tableName,
+      row: data
+    }, {
+      headers: getSeaTableHeaders()
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`SeaTable POST error for ${tableName}:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Обновляет запись в SeaTable
+ */
+async function updateSeaTableRecord(tableName, rowId, data) {
+  try {
+    const response = await axios.put(getSeaTableUrl(tableName), {
+      table_name: tableName,
+      row_id: rowId,
+      row: data
+    }, {
+      headers: getSeaTableHeaders()
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`SeaTable PATCH error for ${tableName}:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Удаляет запись из SeaTable
+ */
+async function deleteSeaTableRecord(tableName, rowId) {
+  try {
+    const response = await axios.delete(getSeaTableUrl(tableName), {
+      headers: getSeaTableHeaders(),
+      data: {
+        table_name: tableName,
+        row_ids: [rowId]
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`SeaTable DELETE error for ${tableName}:`, error.message);
+    throw error;
+  }
+}
 
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ RADIKAL API ====================
 
@@ -71,7 +160,7 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
 
     const response = await axios.post(`${RADIKAL_API_URL}/upload`, formData, {
       headers: {
-        'X-API-Key': RADIKAL_API_KEY, // ← ЗДЕСЬ используем X-API-Key как заголовок!
+        'X-API-Key': RADIKAL_API_KEY,
         ...formData.getHeaders(),
       },
       timeout: 30000
@@ -97,31 +186,6 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
     if (error.response) {
       console.error('Radikal API response status:', error.response.status);
       console.error('Radikal API response data:', error.response.data);
-    }
-    throw error;
-  }
-}
-
-/**
- * Получает информацию о файле из Radikal API
- */
-async function getRadikalFileInfo(fileId) {
-  try {
-    console.log('Getting file info for:', fileId);
-    
-    const response = await axios.get(`${RADIKAL_API_URL}/files/${fileId}`, {
-      headers: {
-        'X-API-Key': RADIKAL_API_KEY
-      }
-    });
-    
-    console.log('File info retrieved successfully');
-    return response.data;
-  } catch (error) {
-    console.error('Error getting file info from Radikal API:', error.message);
-    if (error.response && error.response.status === 404) {
-      console.log('File info endpoint not available in Radikal Cloud');
-      return null;
     }
     throw error;
   }
@@ -267,16 +331,12 @@ app.delete('/api/upload/:fileId', async (req, res) => {
   }
 });
 
-// ==================== ОСТАЛЬНЫЕ API (без изменений) ====================
+// ==================== EVENTS API ====================
 
-// [Здесь остальной код без изменений - события, реклама, голосования и т.д.]
-// Events API
 app.get('/api/events', async (req, res) => {
   try {
-    const response = await axios.get(EVENTS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
+    const data = await getSeaTableRecords(EVENTS_TABLE);
+    res.json({ records: data.rows || [] });
   } catch (error) {
     console.error('Events GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -286,13 +346,8 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
-    const response = await axios.post(EVENTS_URL, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
+    const response = await createSeaTableRecord(EVENTS_TABLE, req.body.fields || req.body);
+    res.json(response);
   } catch (error) {
     console.error('Events POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -301,10 +356,15 @@ app.post('/api/events', async (req, res) => {
 
 app.get('/api/events/:id', async (req, res) => {
   try {
-    const response = await axios.get(`${EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+    const data = await getSeaTableRecords(EVENTS_TABLE, {
+      row_id: req.params.id
     });
-    res.json(response.data);
+    
+    if (data.rows && data.rows.length > 0) {
+      res.json(data.rows[0]);
+    } else {
+      res.status(404).json({ error: 'Event not found' });
+    }
   } catch (error) {
     console.error('Event GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -314,13 +374,8 @@ app.get('/api/events/:id', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   try {
     console.log('Updating event with data:', JSON.stringify(req.body, null, 2));
-    const response = await axios.patch(`${EVENTS_URL}/${req.params.id}`, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
+    const response = await updateSeaTableRecord(EVENTS_TABLE, req.params.id, req.body.fields || req.body);
+    res.json(response);
   } catch (error) {
     console.error('Event PATCH error:', error.message);
     res.status(500).json({ error: error.message });
@@ -329,23 +384,20 @@ app.patch('/api/events/:id', async (req, res) => {
 
 app.delete('/api/events/:id', async (req, res) => {
   try {
-    const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
+    const response = await deleteSeaTableRecord(EVENTS_TABLE, req.params.id);
+    res.json(response);
   } catch (error) {
     console.error('Event DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Ads API
+// ==================== ADS API ====================
+
 app.get('/api/ads', async (req, res) => {
   try {
-    const response = await axios.get(ADS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
+    const data = await getSeaTableRecords(ADS_TABLE);
+    res.json({ records: data.rows || [] });
   } catch (error) {
     console.error('Ads GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -354,13 +406,8 @@ app.get('/api/ads', async (req, res) => {
 
 app.post('/api/ads', async (req, res) => {
   try {
-    const response = await axios.post(ADS_URL, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
+    const response = await createSeaTableRecord(ADS_TABLE, req.body.fields || req.body);
+    res.json(response);
   } catch (error) {
     console.error('Ads POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -369,13 +416,8 @@ app.post('/api/ads', async (req, res) => {
 
 app.patch('/api/ads/:id', async (req, res) => {
   try {
-    const response = await axios.patch(`${ADS_URL}/${req.params.id}`, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
+    const response = await updateSeaTableRecord(ADS_TABLE, req.params.id, req.body.fields || req.body);
+    res.json(response);
   } catch (error) {
     console.error('Ads PATCH error:', error.message);
     res.status(500).json({ error: error.message });
@@ -384,23 +426,20 @@ app.patch('/api/ads/:id', async (req, res) => {
 
 app.delete('/api/ads/:id', async (req, res) => {
   try {
-    const response = await axios.delete(`${ADS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
+    const response = await deleteSeaTableRecord(ADS_TABLE, req.params.id);
+    res.json(response);
   } catch (error) {
     console.error('Ad DELETE error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Votings API
+// ==================== VOTINGS API ====================
+
 app.get('/api/votings', async (req, res) => {
   try {
-    const response = await axios.get(VOTINGS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
+    const data = await getSeaTableRecords(VOTINGS_TABLE);
+    res.json({ records: data.rows || [] });
   } catch (error) {
     console.error('Votings GET error:', error.message);
     res.status(500).json({ error: error.message });
@@ -409,13 +448,8 @@ app.get('/api/votings', async (req, res) => {
 
 app.post('/api/votings', async (req, res) => {
   try {
-    const response = await axios.post(VOTINGS_URL, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
+    const response = await createSeaTableRecord(VOTINGS_TABLE, req.body.fields || req.body);
+    res.json(response);
   } catch (error) {
     console.error('Votings POST error:', error.message);
     res.status(500).json({ error: error.message });
@@ -424,13 +458,8 @@ app.post('/api/votings', async (req, res) => {
 
 app.patch('/api/votings/:id', async (req, res) => {
   try {
-    const response = await axios.patch(`${VOTINGS_URL}/${req.params.id}`, req.body, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-    res.json(response.data);
+    const response = await updateSeaTableRecord(VOTINGS_TABLE, req.params.id, req.body.fields || req.body);
+    res.json(response);
   } catch (error) {
     console.error('Votings PATCH error:', error.message);
     res.status(500).json({ error: error.message });
@@ -439,10 +468,8 @@ app.patch('/api/votings/:id', async (req, res) => {
 
 app.delete('/api/votings/:id', async (req, res) => {
   try {
-    const response = await axios.delete(`${VOTINGS_URL}/${req.params.id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    res.json(response.data);
+    const response = await deleteSeaTableRecord(VOTINGS_TABLE, req.params.id);
+    res.json(response);
   } catch (error) {
     console.error('Votings DELETE error:', error.message);
     res.status(500).json({ error: error.message });
@@ -453,18 +480,22 @@ app.delete('/api/votings/:id', async (req, res) => {
 app.get('/api/events/:eventId/votings', async (req, res) => {
   try {
     const { eventId } = req.params;
-    const response = await axios.get(VOTINGS_URL, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-      params: {
-        filterByFormula: `{EventID} = '${eventId}'`
-      }
-    });
-    res.json(response.data);
+    const data = await getSeaTableRecords(VOTINGS_TABLE);
+    
+    // Фильтруем голосования по EventID
+    const filteredVotings = data.rows.filter(row => row.EventID === eventId);
+    res.json({ records: filteredVotings });
   } catch (error) {
     console.error('Event votings GET error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
+
+// ==================== ОСТАЛЬНЫЕ ФУНКЦИОНАЛЬНОСТИ ====================
+
+// [Остальной код остается практически без изменений, только замените вызовы Airtable на SeaTable]
+// Функции для голосования, участия в событиях и генерации изображений остаются такими же,
+// но используют обновленные функции SeaTable
 
 // Проголосовать
 app.post('/api/votings/:id/vote', async (req, res) => {
@@ -479,22 +510,21 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    
-    const voting = votingResponse.data;
-    if (!voting.fields) {
+    // Получаем данные голосования из SeaTable
+    const votingData = await getSeaTableRecords(VOTINGS_TABLE, { row_id: id });
+    if (!votingData.rows || votingData.rows.length === 0) {
       console.error('Voting not found');
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    if (voting.fields.Status === 'Completed') {
+    const voting = votingData.rows[0];
+
+    if (voting.Status === 'Completed') {
       console.error('Voting is completed');
       return res.status(400).json({ error: 'Voting is completed' });
     }
 
-    const votedUserIds = voting.fields.VotedUserIDs || '';
+    const votedUserIds = voting.VotedUserIDs || '';
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
     
     if (votedUsersArray.includes(userId.toString())) {
@@ -502,8 +532,8 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
     }
 
-    const votingLat = voting.fields.Latitude;
-    const votingLon = voting.fields.Longitude;
+    const votingLat = voting.Latitude;
+    const votingLon = voting.Longitude;
     
     if (votingLat && votingLon && userLat && userLon) {
       const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
@@ -514,7 +544,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       }
     }
 
-    let currentVotes = voting.fields.Votes ? JSON.parse(voting.fields.Votes) : {};
+    let currentVotes = voting.Votes ? (typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes) : {};
     console.log('Current votes:', currentVotes);
 
     currentVotes[userId] = optionIndex;
@@ -523,23 +553,16 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
 
     const updateData = {
-      fields: { 
-        Votes: JSON.stringify(currentVotes),
-        VotedUserIDs: newVotedUserIDs
-      }
+      Votes: JSON.stringify(currentVotes),
+      VotedUserIDs: newVotedUserIDs
     };
 
     console.log('Updating voting record with:', JSON.stringify(updateData, null, 2));
 
-    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, updateData, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
+    const updateResponse = await updateSeaTableRecord(VOTINGS_TABLE, id, updateData);
 
-    console.log('Vote updated successfully:', updateResponse.data);
-    res.json({ success: true, voting: updateResponse.data });
+    console.log('Vote updated successfully');
+    res.json({ success: true, voting: updateResponse });
   } catch (error) {
     console.error('Vote error:', error.message);
     res.status(500).json({ error: error.message });
@@ -551,22 +574,19 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
   try {
     const { id, userId } = req.params;
 
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    
-    const voting = votingResponse.data;
-    if (!voting.fields) {
+    const votingData = await getSeaTableRecords(VOTINGS_TABLE, { row_id: id });
+    if (!votingData.rows || votingData.rows.length === 0) {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    const votedUserIds = voting.fields.VotedUserIDs || '';
+    const voting = votingData.rows[0];
+    const votedUserIds = voting.VotedUserIDs || '';
     const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
     
     const hasVoted = votedUsersArray.includes(userId.toString());
     let userVote = null;
-    if (voting.fields.Votes) {
-      const votes = JSON.parse(voting.fields.Votes);
+    if (voting.Votes) {
+      const votes = typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes;
       userVote = votes[userId] !== undefined ? votes[userId] : null;
     }
 
@@ -582,23 +602,20 @@ app.post('/api/votings/:id/complete', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-    
-    const voting = votingResponse.data;
-    if (!voting.fields) {
+    const votingData = await getSeaTableRecords(VOTINGS_TABLE, { row_id: id });
+    if (!votingData.rows || votingData.rows.length === 0) {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    const votes = voting.fields.Votes ? 
-      (typeof voting.fields.Votes === 'string' ? JSON.parse(voting.fields.Votes) : voting.fields.Votes) 
+    const voting = votingData.rows[0];
+    const votes = voting.Votes ? 
+      (typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes) 
       : {};
     
     const results = [];
     
-    if (voting.fields.Options) {
-      const options = voting.fields.Options.split(',');
+    if (voting.Options) {
+      const options = voting.Options.split(',');
       
       const voteCounts = {};
       options.forEach((option, index) => {
@@ -625,19 +642,12 @@ app.post('/api/votings/:id/complete', async (req, res) => {
       });
     }
 
-    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
-      fields: { 
-        Status: 'Completed',
-        Results: JSON.stringify(results)
-      }
-    }, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
+    const updateResponse = await updateSeaTableRecord(VOTINGS_TABLE, id, {
+      Status: 'Completed',
+      Results: JSON.stringify(results)
     });
 
-    res.json({ success: true, results: results, voting: updateResponse.data });
+    res.json({ success: true, results: results, voting: updateResponse });
   } catch (error) {
     console.error('Complete voting error:', error.message);
     res.status(500).json({ error: error.message });
@@ -649,25 +659,22 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const voting = votingResponse.data;
-    if (!voting.fields) {
+    const votingData = await getSeaTableRecords(VOTINGS_TABLE, { row_id: id });
+    if (!votingData.rows || votingData.rows.length === 0) {
       return res.status(404).json({ error: 'Голосование не найдено' });
     }
 
-    if (!voting.fields.Results) {
+    const voting = votingData.rows[0];
+    if (!voting.Results) {
       return res.status(400).json({ error: 'Результаты голосования недоступны' });
     }
 
     let results;
     try {
-      if (typeof voting.fields.Results === 'string') {
-        results = JSON.parse(voting.fields.Results);
+      if (typeof voting.Results === 'string') {
+        results = JSON.parse(voting.Results);
       } else {
-        results = voting.fields.Results;
+        results = voting.Results;
       }
     } catch (parseError) {
       console.error('Error parsing results:', parseError);
@@ -683,11 +690,11 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
       return res.status(400).json({ error: 'Неверный формат результатов' });
     }
 
-    const title = voting.fields.Title || 'Результаты голосования';
-    const description = voting.fields.Description || '';
+    const title = voting.Title || 'Результаты голосования';
+    const description = voting.Description || '';
     
-    const optionImages = voting.fields.OptionImages || [];
-    console.log('OptionImages from Airtable:', JSON.stringify(optionImages, null, 2));
+    const optionImages = voting.OptionImages || [];
+    console.log('OptionImages from SeaTable:', JSON.stringify(optionImages, null, 2));
 
     let height = 600;
     const hasImages = optionImages && optionImages.length > 0;
@@ -766,20 +773,13 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     console.log('Results image uploaded to Radikal API:', uploadResult.url);
     
     try {
-      const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
-        fields: { 
-          ResultsImage: uploadResult.url
-        }
-      }, {
-        headers: { 
-          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          'Content-Type': 'application/json' 
-        }
+      await updateSeaTableRecord(VOTINGS_TABLE, id, {
+        ResultsImage: uploadResult.url
       });
       
-      console.log('ResultsImage saved to Airtable successfully');
+      console.log('ResultsImage saved to SeaTable successfully');
     } catch (updateError) {
-      console.error('Error saving ResultsImage to Airtable:', updateError.message);
+      console.error('Error saving ResultsImage to SeaTable:', updateError.message);
     }
 
     res.json({ 
@@ -807,18 +807,14 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const event = eventResponse.data;
-    
-    if (!event.fields) {
+    const eventData = await getSeaTableRecords(EVENTS_TABLE, { row_id: eventId });
+    if (!eventData.rows || eventData.rows.length === 0) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const currentAttendees = event.fields.AttendeesIDs || '';
-    const currentCount = event.fields.AttendeesCount || 0;
+    const event = eventData.rows[0];
+    const currentAttendees = event.AttendeesIDs || '';
+    const currentCount = event.AttendeesCount || 0;
     
     console.log('Current attendees:', currentAttendees);
     console.log('Current count:', currentCount);
@@ -845,22 +841,15 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     console.log('New count:', newCount);
 
     const updateData = {
-      fields: {
-        AttendeesIDs: newAttendees,
-        AttendeesCount: newCount
-      }
+      AttendeesIDs: newAttendees,
+      AttendeesCount: newCount
     };
 
     console.log('Update data:', JSON.stringify(updateData, null, 2));
 
-    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
+    const updateResponse = await updateSeaTableRecord(EVENTS_TABLE, eventId, updateData);
 
-    console.log('Update successful:', updateResponse.data);
+    console.log('Update successful');
     res.json({ success: true, count: newCount, attending: true });
     
   } catch (error) {
@@ -880,18 +869,14 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const event = eventResponse.data;
-    
-    if (!event.fields) {
+    const eventData = await getSeaTableRecords(EVENTS_TABLE, { row_id: eventId });
+    if (!eventData.rows || eventData.rows.length === 0) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const currentAttendees = event.fields.AttendeesIDs || '';
-    const currentCount = event.fields.AttendeesCount || 0;
+    const event = eventData.rows[0];
+    const currentAttendees = event.AttendeesIDs || '';
+    const currentCount = event.AttendeesCount || 0;
     
     console.log('Current attendees:', currentAttendees);
     console.log('Current count:', currentCount);
@@ -913,18 +898,11 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     console.log('New count:', newCount);
 
     const updateData = {
-      fields: {
-        AttendeesIDs: newAttendees,
-        AttendeesCount: newCount
-      }
+      AttendeesIDs: newAttendees,
+      AttendeesCount: newCount
     };
 
-    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
+    const updateResponse = await updateSeaTableRecord(EVENTS_TABLE, eventId, updateData);
 
     console.log('Unattend successful');
     res.json({ success: true, count: newCount, attending: false });
@@ -942,17 +920,13 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
 
     console.log(`Checking attend status for user ${userId} in event ${eventId}`);
 
-    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const event = eventResponse.data;
-    
-    if (!event.fields) {
+    const eventData = await getSeaTableRecords(EVENTS_TABLE, { row_id: eventId });
+    if (!eventData.rows || eventData.rows.length === 0) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const attendees = event.fields.AttendeesIDs || '';
+    const event = eventData.rows[0];
+    const attendees = event.AttendeesIDs || '';
     let attendeesArray = [];
     
     if (Array.isArray(attendees)) {
@@ -990,6 +964,11 @@ function deg2rad(deg) {
   return deg * (Math.PI/180);
 }
 
+// Корневой эндпоинт
+app.get('/', (req, res) => {
+  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
+});
+
 // Создание папки uploads
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -999,6 +978,7 @@ if (!fs.existsSync(uploadsDir)) {
 // Запуск сервера
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`Radikal API URL: ${RADIKAL_API_URL}`);
-  console.log('Make sure RADIKAL_API_KEY is set in environment variables');
+  console.log(`SeaTable API URL: ${SEATABLE_API_URL}`);
+  console.log(`SeaTable Base ID: ${SEATABLE_BASE_ID}`);
+  console.log('Make sure SEATABLE_API_TOKEN is set in environment variables');
 });
