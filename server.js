@@ -43,24 +43,29 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
   process.exit(1);
 }
 
-// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ SEATABLE API (исправленные) ====================
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ SEATABLE API (обновленные) ====================
 
 /**
  * Получает заголовки авторизации для нового SeaTable API
  */
-function getSeaTableHeaders() {
-  return {
+function getSeaTableHeaders(contentType = 'application/json') {
+  const headers = {
     'Authorization': `Token ${SEATABLE_API_TOKEN}`,
-    'Accept': 'application/json',
-    'Content-Type': 'application/json'
+    'Accept': 'application/json'
   };
+  
+  if (contentType) {
+    headers['Content-Type'] = contentType;
+  }
+  
+  return headers;
 }
 
 /**
- * Получает базовый URL для работы с таблицей через новый API Gateway
+ * Получает базовый URL для работы с таблицей через API Gateway
  */
 function getSeaTableBaseUrl() {
-  return `${SEATABLE_API_URL}/api/v2.1/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}`;
+  return `${SEATABLE_API_URL}/api/v2.1/dtable-server/dtables/${SEATABLE_BASE_UUID}`;
 }
 
 /**
@@ -76,8 +81,7 @@ async function getSeaTableRecords(tableName) {
       headers: getSeaTableHeaders(),
       params: {
         table_name: tableName
-      },
-      timeout: 10000
+      }
     });
     
     console.log(`SeaTable GET successful for ${tableName}`);
@@ -86,14 +90,7 @@ async function getSeaTableRecords(tableName) {
     console.error(`SeaTable GET error for ${tableName}:`, error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
-      console.error('Response headers:', error.response.headers);
-      // Логируем только начало ответа чтобы избежать огромных логов
-      const responseData = error.response.data;
-      if (typeof responseData === 'string' && responseData.length > 500) {
-        console.error('Response data (first 500 chars):', responseData.substring(0, 500));
-      } else {
-        console.error('Response data:', responseData);
-      }
+      console.error('Response data:', error.response.data);
     }
     throw error;
   }
@@ -107,16 +104,11 @@ async function createSeaTableRecord(tableName, data) {
     const url = `${getSeaTableBaseUrl()}/rows/`;
     console.log(`SeaTable POST URL: ${url}`);
     
-    const requestData = {
+    const response = await axios.post(url, {
       table_name: tableName,
       row: data
-    };
-    
-    console.log('Request data:', JSON.stringify(requestData, null, 2));
-    
-    const response = await axios.post(url, requestData, {
-      headers: getSeaTableHeaders(),
-      timeout: 10000
+    }, {
+      headers: getSeaTableHeaders()
     });
     
     console.log('SeaTable POST successful');
@@ -125,14 +117,7 @@ async function createSeaTableRecord(tableName, data) {
     console.error(`SeaTable POST error for ${tableName}:`, error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
-      if (error.response.data) {
-        const responseData = error.response.data;
-        if (typeof responseData === 'string' && responseData.length > 500) {
-          console.error('Response data (first 500 chars):', responseData.substring(0, 500));
-        } else {
-          console.error('Response data:', responseData);
-        }
-      }
+      console.error('Response data:', error.response.data);
     }
     throw error;
   }
@@ -146,17 +131,12 @@ async function updateSeaTableRecord(tableName, rowId, data) {
     const url = `${getSeaTableBaseUrl()}/rows/`;
     console.log(`SeaTable PUT URL: ${url}`);
     
-    const requestData = {
+    const response = await axios.put(url, {
       table_name: tableName,
       row_id: rowId,
       row: data
-    };
-    
-    console.log('Request data:', JSON.stringify(requestData, null, 2));
-    
-    const response = await axios.put(url, requestData, {
-      headers: getSeaTableHeaders(),
-      timeout: 10000
+    }, {
+      headers: getSeaTableHeaders()
     });
     
     console.log('SeaTable PUT successful');
@@ -165,14 +145,7 @@ async function updateSeaTableRecord(tableName, rowId, data) {
     console.error(`SeaTable PUT error for ${tableName}:`, error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
-      if (error.response.data) {
-        const responseData = error.response.data;
-        if (typeof responseData === 'string' && responseData.length > 500) {
-          console.error('Response data (first 500 chars):', responseData.substring(0, 500));
-        } else {
-          console.error('Response data:', responseData);
-        }
-      }
+      console.error('Response data:', error.response.data);
     }
     throw error;
   }
@@ -191,8 +164,7 @@ async function deleteSeaTableRecord(tableName, rowId) {
       data: {
         table_name: tableName,
         row_ids: [rowId]
-      },
-      timeout: 10000
+      }
     });
     
     console.log('SeaTable DELETE successful');
@@ -201,14 +173,7 @@ async function deleteSeaTableRecord(tableName, rowId) {
     console.error(`SeaTable DELETE error for ${tableName}:`, error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
-      if (error.response.data) {
-        const responseData = error.response.data;
-        if (typeof responseData === 'string' && responseData.length > 500) {
-          console.error('Response data (first 500 chars):', responseData.substring(0, 500));
-        } else {
-          console.error('Response data:', responseData);
-        }
-      }
+      console.error('Response data:', error.response.data);
     }
     throw error;
   }
@@ -726,572 +691,287 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     }
 
     let resultsArray = [];
-       let resultsArray = [];
-    if (Array if (Array.isArray(results)) {
-      resultsArray = results;
-    } else.isArray(results)) {
+    if (Array.isArray(results)) {
       resultsArray = results;
     } else if (results && typeof results === 'object') {
- if (results && typeof results      resultsArray = Object.values(results);
-    } else {
- === 'object') {
       resultsArray = Object.values(results);
     } else {
-           return res.status(400).json({ error: return res.status(400).json({ error: ' 'Неверный формат результатов' });
+      return res.status(400).json({ error: 'Неверный формат результатов' });
     }
 
-   Неверный формат результатов' });
-    }
-
-    const title const title = voting.Title || 'Результаты голос = voting.Title || 'Результаты голосования';
+    const title = voting.Title || 'Результаты голосования';
     const description = voting.Description || '';
     
-ования';
-    const description = voting.Description || '';
-    
-       const optionImages = voting const optionImages = voting.OptionImages || [];
+    const optionImages = voting.OptionImages || [];
 
-    let.OptionImages || [];
-
-    height = 600;
-    const hasImages = option let height = 600;
+    let height = 600;
     const hasImages = optionImages && optionImages.length > 0;
-    if (Images && optionImages.length > 0;
-   hasImages) height += Math if (hasImages) height.ceil(resultsArray.length / 3) * += Math.ceil(resultsArray.length 110;
+    if (hasImages) height += Math.ceil(resultsArray.length / 3) * 110;
 
     let svg = `
-      <svg width / 3) * 110;
-
-    let svg = `
-      <svg="800" height="${height}" xmlns="http:// width="800" height="${height}" xmlns="http://www.w3www.w3.org/2000/svg">
-       .org/2000/svg">
+      <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <style>
- <style>
-          .title { font-family: Arial,          .title { font-family: A sans-serif; font-size: 24px; fontrial, sans-serif; font-size: 24px;-weight: bold; fill: #000; }
-          font-weight: bold; fill .description { font: #000; }
-          .description { font-family: A-family: Arial, sans-serifrial, sans-serif; font; font-size: 16px; fill: #666; }
-          .option { font-family: Arial-size: 16px; fill: #666; }
-          .option { font-family: Arial, sans, sans-serif; font-size:-serif; font-size: 16 16px; font-weight: bold; fill:px; font-weight: bold; fill: #000; }
-          .stats { #000; }
-          .stats { font-family: A font-family: Arial,rial, sans-serif; font-size: 16px; sans-serif; font-size: 16px; fill: fill: #666; }
+          .title { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #000; }
+          .description { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+          .option { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #000; }
+          .stats { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
         </style>
- #666; }
-        </style>
-        <rect width        <rect width="800" height="${height}" fill="#ffffff"/>
-       ="800" height="${height}" fill="# <text x="400" y="50" classffffff"/>
-        <text x="400" y="50" class="title"="title" text-anchor text-anchor="middle">${title}</text>
-       ="middle">${title}</ <text x="400" y="80" class="text>
-        <text x="400" y="80" class="description" textdescription" text-anchor="-anchor="middle">middle">${description}</text>
+        <rect width="800" height="${height}" fill="#ffffff"/>
+        <text x="400" y="50" class="title" text-anchor="middle">${title}</text>
+        <text x="400" y="80" class="description" text-anchor="middle">${description}</text>
     `;
 
-    let${description}</text>
-    `;
-
-    let y = y = 120;
-    resultsArray.forEach((result 120;
-   , index) => {
-      const barWidth = (result resultsArray.forEach((result, index) => {
-      const barWidth.percentage / 100 = (result.percentage / 100) * 400) * 400;
-      const barColor = index %;
-      const barColor = index % 2 ===  2 === 0 ? '#4CAF50'0 ? '# : '#2196F3';
-      
-     4CAF50' : '#2196F3 svg += `
-        <rect x="100" y="${';
+    let y = 120;
+    resultsArray.forEach((result, index) => {
+      const barWidth = (result.percentage / 100) * 400;
+      const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
       
       svg += `
-        <rect x="y}" width="400" height100" y="${y}" width="400" height="="40" fill="#e0e0e0"40" fill="#e0e0e0" rx rx="5"/>
-        <rect x="5"/>
-        <rect x="100" y="${y}" width="${bar="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="Width}" height="40" fill="${barColor}" rx5"/>
-        <text="5"/>
-        <text x="20" y="${y + x="20" y="${ 25}" class="option">${result.optiony + 25}" class="option">${result.}</text>
-        <text x="option}</text>
-        <text x="520" y520" y="${y="${y + 25}" class + 25}" class="stats" text="stats"-anchor="end">${result.count} голосов (${result.percentage}%)</text>
-      ` text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
+        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0" rx="5"/>
+        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="5"/>
+        <text x="20" y="${y + 25}" class="option">${result.option}</text>
+        <text x="520" y="${y + 25}" class="stats" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
       `;
       y += 50;
     });
 
-    if (;
-      y += 50;
-    });
-
-    ifhasImages) {
-      y +=  (hasImages) {
+    if (hasImages) {
       y += 20;
-      svg += `<text20;
-      svg += x="400" y="${y}" class="description" `<text x="400" y="${y}" class=" text-anchor="middle">description" text-anchor="Изображения номинантов</text>`;
-     middle">Изображения номинантов</text y += 30;
-      
-      resultsArray.forEach((result>`;
+      svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
       y += 30;
       
-      results, index) => {
-        let imageUrl = nullArray.forEach((result, index) => {
+      resultsArray.forEach((result, index) => {
         let imageUrl = null;
-        if;
-        if (optionImages (optionImages[index]) {
-          if (typeof optionImages[index]) {
-          if (typeof optionImages[index] ===[index] === 'object' 'object' && option && optionImages[index].url) {
-            imageUrl =Images[index].url) {
+        if (optionImages[index]) {
+          if (typeof optionImages[index] === 'object' && optionImages[index].url) {
             imageUrl = optionImages[index].url;
-          } optionImages[index].url;
-          } else if (Array.isArray else if (Array.isArray(optionImages) && optionImages[index] && optionImages(optionImages) && optionImages[index] && optionImages[index].url) {
-            imageUrl[index].url) {
-            imageUrl = optionImages[index]. = optionImages[index].url;
+          } else if (Array.isArray(optionImages) && optionImages[index] && optionImages[index].url) {
+            imageUrl = optionImages[index].url;
           }
         }
         
         if (imageUrl) {
-url;
-          }
-        }
-        
-        if (imageUrl) {
-          const col = index %          const col = index % 3;
-          const row = Math 3;
-          const row.floor(index / 3);
-          svg += `<image = Math.floor(index / 3);
-          svg += x="${100 + col * 200 `<image x="${100 + col * 200}" y="${y + row * }" y="${y + row110}" width="150" height="100" href * 110}" width="150" height="100" href="${imageUrl}"="${imageUrl}" preserveAspectRatio="xMid preserveAspectRatio="xYMid meet"/>`;
+          const col = index % 3;
+          const row = Math.floor(index / 3);
+          svg += `<image x="${100 + col * 200}" y="${y + row * 110}" width="150" height="100" href="${imageUrl}" preserveAspectRatio="xMidYMid meet"/>`;
         }
       });
     }
 
-   MidYMid meet"/>`;
-        }
-      });
-    svg += `</svg }
-
-    svg += `>`;
-
-    const svgBuffer = Buffer.from(svg</svg>`;
+    svg += `</svg>`;
 
     const svgBuffer = Buffer.from(svg);
-    const image);
-    const imageBuffer = await sharp(svgBuffer = await sharp(svgBuffer)
+    const imageBuffer = await sharp(svgBuffer)
       .resize(800, height, {
-        fitBuffer)
-      .resize(800,: 'fill',
-        background: { r:  height, {
         fit: 'fill',
-        background: { r: 255, g255, g: 255: 255, b: , b: 255, alpha: 1 }
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
       })
-      .jpeg({ 
-255, alpha: 1 }
-             quality: 90,
-        chromaSubsampling: ' })
       .jpeg({ 
         quality: 90,
-        chromaSubsampling: '4:4:4:4'
+        chromaSubsampling: '4:4:4'
       })
-      .toBuffer4:4'
-      })
-();
+      .toBuffer();
 
-    const uploadResult =      .toBuffer();
-
-    const uploadResult = await upload await uploadToRadikal(
-      imageToRadikal(
+    const uploadResult = await uploadToRadikal(
       imageBuffer, 
-      `vBuffer, 
-      `voting_results_${id}_${Dateoting_results_${id}_${Date.now()}..now()}.jpg`,
-      'image/jpeg'
-   jpg`,
+      `voting_results_${id}_${Date.now()}.jpg`,
       'image/jpeg'
     );
 
-    console );
-
-    console.log('Results image uploaded to Rad.log('Results image uploaded to Radikal API:', uploadResult.url);
+    console.log('Results image uploaded to Radikal API:', uploadResult.url);
     
-    tryikal API:', uploadResult.url);
- {
-      await updateSeaTableRecord(VOTINGS_TABLE    
     try {
-      await updateSeaTableRecord(VOTINGS, id, {
+      await updateSeaTableRecord(VOTINGS_TABLE, id, {
         ResultsImage: uploadResult.url
-_TABLE, id, {
-        Results      });
-      
-      console.logImage: uploadResult.url
       });
       
-      console.log('Results('ResultsImage saved to SeaTable successfully');
-    } catch (updateImage saved to SeaTable successfully');
+      console.log('ResultsImage saved to SeaTable successfully');
     } catch (updateError) {
-      console.error('Error saving ResultsImage toError) {
       console.error('Error saving ResultsImage to SeaTable:', updateError.message);
-    }
-
-    res.json SeaTable:', updateError.message);
     }
 
     res.json({ 
       success: true, 
-({ 
-      success: true, 
-      imageUrl:      imageUrl: uploadResult uploadResult.url,
-      fileId: uploadResult.file.url,
+      imageUrl: uploadResult.url,
       fileId: uploadResult.fileId
     });
 
-  }Id
-    });
-
-  catch (error) {
-    console.error('Generate results } catch (error) {
+  } catch (error) {
     console.error('Generate results image error:', error.message);
-    res image error:', error.message);
-    res.status(500).json({ error:.status(500).json({ error error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ==================== API ДЛЯ "Я ПОЙДУ!": error.message });
-  }
-});
+// ==================== API ДЛЯ "Я ПОЙДУ!" ====================
 
-// ==================== API ДЛЯ "Я ПОЙДУ ====================
-
-app.post('/api/events/:!" ====================
-
-app.post('/api/events/:eventId/attend', async (reqeventId/attend', async (req, res) => {
-  try {
-    const, res) => {
+app.post('/api/events/:eventId/attend', async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { userId { eventId } = req.params;
     const { userId } = req.body;
 
-    console.log(`User } = req.body;
-
-    console.log(`User ${userId} attending event ${event ${userId} attending event ${eventId}`);
-
-    if (!Id}`);
+    console.log(`User ${userId} attending event ${eventId}`);
 
     if (!userId) {
-      return res.status(400).jsonuserId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-({ error: 'User ID is required' });
-    }
-
-    const event = await getSeaTableRecordById(EV    const event = await getSeaTableRecordById(EVENTS_TABLE,ENTS_TABLE, eventId);
-    const eventId);
-    currentAttendees = event.AttendeesIDs || '';
-    const const currentAttendees = event.AttendeesIDs || '';
-    currentCount = event.AttendeesCount || 0;
+    const event = await getSeaTableRecordById(EVENTS_TABLE, eventId);
+    const currentAttendees = event.AttendeesIDs || '';
+    const currentCount = event.AttendeesCount || 0;
     
- const currentCount = event.AttendeesCount || 0;
     console.log('Current attendees:', currentAttendees);
-    
-    console.log('Current attendees:', currentAttend    console.log('Current count:', currentCount);
-
-ees);
     console.log('Current count:', currentCount);
 
     let attendeesArray = [];
     
-       let attendeesArray = [];
-    
-    if (Array.is if (ArrayArray(currentAttendees)) {
-      attendeesArray = currentAttendees.filter(id => id &&.isArray(currentAttendees)) {
-      attendeesArray = currentAttendees.filter(id id.toString().trim());
-    } else if (typeof currentAttendees === => id && id.toString().trim());
-    } else if (typeof currentAttend 'string') {
-      attendeesArray = currentAttendeesees === 'string') {
-      attendeesArray = currentAttend.split(',').filter(id => id && id.trim());
-ees.split(',').filter(id => id && id.trim());
+    if (Array.isArray(currentAttendees)) {
+      attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
+    } else if (typeof currentAttendees === 'string') {
+      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
     }
 
-    const userIdStr    }
-
     const userIdStr = userId.toString();
-    if (attendeesArray.includes(user = userId.toString();
     if (attendeesArray.includes(userIdStr)) {
-IdStr)) {
-           console.log('User already attending');
-      return res.status(400).json({ error console.log('User already attending');
+      console.log('User already attending');
       return res.status(400).json({ error: 'User already attending' });
-: 'User already attending'    }
-
-    attendeesArray.push(userIdStr);
-    });
     }
 
     attendeesArray.push(userIdStr);
     const newAttendees = attendeesArray.join(',');
-    const const newAttendees = attendeesArray.join(',');
-    const newCount = newCount = currentCount + 1;
+    const newCount = currentCount + 1;
 
-    console.log currentCount + 1;
-
-    console.log('New('New attendees:', newAttendees);
-    console attendees:', newAttendees);
-    console.log.log('New count:', newCount);
+    console.log('New attendees:', newAttendees);
+    console.log('New count:', newCount);
 
     const updateData = {
-      Attend('New count:', newCount);
-
-    const updateData = {
-      AttendeesIDseesIDs: newAttendees,
-      AttendeesCount: newAttendees,
+      AttendeesIDs: newAttendees,
       AttendeesCount: newCount
     };
 
-    console.log('Update: newCount
-    };
+    console.log('Update data:', JSON.stringify(updateData, null, 2));
 
-    console.log('Update data:', JSON data:', JSON.stringify(updateData, null, 2));
+    const updateResponse = await updateSeaTableRecord(EVENTS_TABLE, eventId, updateData);
 
-    const updateResponse.stringify(updateData, null, 2 = await updateSeaTableRecord(EVENTS_TABLE));
-
-    const updateResponse = await updateSeaTableRecord(EVENTS, eventId, updateData);
-
-    console.log('_TABLE, eventId, updateData);
-
-    consoleUpdate successful');
-    res.json({ success: true, count:.log('Update successful');
-    res.json({ success: true newCount,, count: newCount, attending: true });
+    console.log('Update successful');
+    res.json({ success: true, count: newCount, attending: true });
     
-  } catch attending: true });
-    
-  } catch (error) (error) {
+  } catch (error) {
     console.error('Attend error:', error.message);
-    res.status(500). {
-    console.error('Attend error:', error.message);
-    res.status(500).json({ error:json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/ error.message });
-  }
-});
-
-app.post('/api/events/:events/:eventId/unattend', async (req, reseventId/unattend', async (req, res) => {
-) => {
+app.post('/api/events/:eventId/unattend', async (req, res) => {
   try {
-    const { eventId }  try {
     const { eventId } = req.params;
-    const { userId = req.params;
-    const } = req.body;
+    const { userId } = req.body;
 
-    console.log(`User ${userId} unatt { userId } = req.body;
-
-    console.log(`User ${userId} unattending eventending event ${eventId}`);
-
-    if (!userId) ${eventId}`);
+    console.log(`User ${userId} unattending event ${eventId}`);
 
     if (!userId) {
-      {
-      return res.status(400).json({ error: return res.status(400).json({ error: ' 'User ID isUser ID is required' });
+      return res.status(400).json({ error: 'User ID is required' });
     }
-
-    const event = await getSeaTableRecordById(EVENTS required' });
-    }
-
-    const event = await getSeaTableRecord_TABLE, eventId);
-    const currentAttendById(EVENTS_TABLE, eventId);
-    const currentAttendees = eventees = event.AttendeesIDs || '';
-    const currentCount.AttendeesIDs || = event.AttendeesCount || 0;
-    
-    '';
-    const currentCount = event.AttendeesCount || 0;
-    
-    console console.log('Current attendees:',.log('Current attendees:', currentAttendees);
-    console.log('Current count currentAttendees);
-    console.log('Current count:', currentCount);
-
-:', currentCount);
-
-    let    let attendeesArray = [];
-    
-    if (Array.isArray(currentAttendees)) {
-      attendeesArray = currentAttendees.filter(id attendeesArray = [];
-    
-    if (Array.isArray(currentAttendees)) {
-      attendees => id && id.toString().trim());
-    } else if (Array = currentAttendees.filter(id => id && id.toString().trimtypeof currentAttendees === 'string') {
-      attendees());
-    } else if (typeof currentAttendees === 'string') {
-      attendeesArray =Array = currentAttendees.split(',').filter currentAttendees.split(',').filter(id => id(id => id && id.trim());
-    && id.trim());
-    }
-
- }
-
-    const userIdStr = userId.toString();
-    const newAttendeesArray    const userIdStr = userId.toString();
-    const newAttendeesArray = attendeesArray.filter(id => id !== = attendeesArray.filter(id => userIdStr);
-    const newAttendees = newAtt id !== userIdStr);
-    const newAttendeesendeesArray.join(',');
-    const newCount = Math = newAttendeesArray.join(',');
-    const newCount = Math.max(0,.max(0, newAttendeesArray.length);
-
-    newAttendeesArray.length);
-
-    console.log('New console.log('New attendees:', newAttendees);
-    console.log('New count attendees:', newAttendees);
-    console:', newCount);
-
-    const updateData = {
-.log('New count:', newCount);
-
-    const updateData      AttendeesIDs: newAttendees,
-      AttendeesCount: = {
-      AttendeesIDs: newAttendees,
-      Attendees newCount
-    };
-
-    const updateResponse = await updateCount: newCount
-    };
-
-    const updateResponse =SeaTableRecord(EVENTS_TABLE, eventId, await updateSeaTableRecord(EVENTS_TABLE, event updateData);
-
-    console.log('Unattend successful');
-   Id, updateData);
-
-    console.log('Unattend successful');
-    res.json({ success res.json({ success: true, count: newCount: true, count: newCount, attending:, attending: false });
-    
-  } catch (error) {
-    false });
-    
-  } catch (error) {
- console.error('    console.error('UnattendUnattend error:', error.message);
-    res.status(500).json({ error: error:', error.message);
-    res.status(500).json({ error: error error.message });
-  }
-});
-
-// Проверяем статус участия пользователя
-app.get.message });
-  }
-});
-
-// Проверяем статус участия пользователя
-app.get('/('/api/events/:eventapi/events/:eventIdId/attend-status/:userId', async (req, res) => {
-  try/attend-status/:userId', async (req, res) => {
-  try {
-    const { eventId, userId } = req.params {
-    const { eventId, userId } = req.params;
-
-    console.log(`Checking attend status for user ${userId;
-
-    console.log(`Checking attend status for user ${userId} in event ${eventId} in event ${eventId}`);
-
-    const event =}`);
 
     const event = await getSeaTableRecordById(EVENTS_TABLE, eventId);
- await getSeaTableRecordById(EVENTS_TABLE,    const attendees = event.AttendeesIDs || '';
-    eventId);
-    const attendees = event.AttendeesIDs || '';
-    let attendeesArray let attendeesArray = [];
+    const currentAttendees = event.AttendeesIDs || '';
+    const currentCount = event.AttendeesCount || 0;
     
-    if (Array.isArray( = [];
+    console.log('Current attendees:', currentAttendees);
+    console.log('Current count:', currentCount);
+
+    let attendeesArray = [];
     
-    if (Array.isArray(attendees)) {
-      attendeesArray =attendees)) {
-      attendeesArray = attendees.filter(id => id && id.toString attendees.filter(id => id && id.toString().trim());
-   ().trim());
-    } else } else if (typeof attendees === 'string') {
-      attendeesArray = attendees if (typeof attendees === 'string') {
-      attendeesArray.split(',').filter(id => id && id.trim());
- = attendees.split(',').filter(id => id && id    }
-    
-    const isAttending = attendeesArray.includes.trim());
+    if (Array.isArray(currentAttendees)) {
+      attendeesArray = currentAttendees.filter(id => id && id.toString().trim());
+    } else if (typeof currentAttendees === 'string') {
+      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
     }
-    
-    const isAttending = attendees(userId.toString());
 
-    console.log('Is attending:', isArray.includes(userId.toString());
+    const userIdStr = userId.toString();
+    const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
+    const newAttendees = newAttendeesArray.join(',');
+    const newCount = Math.max(0, newAttendeesArray.length);
 
-    console.log('Is attending:', isAttending);
-Attending);
-    res.json({ isAttending });
+    console.log('New attendees:', newAttendees);
+    console.log('New count:', newCount);
+
+    const updateData = {
+      AttendeesIDs: newAttendees,
+      AttendeesCount: newCount
+    };
+
+    const updateResponse = await updateSeaTableRecord(EVENTS_TABLE, eventId, updateData);
+
+    console.log('Unattend successful');
+    res.json({ success: true, count: newCount, attending: false });
     
-  } catch (error)    res.json({ isAttending });
-    
-  } {
-    console.error('Attend status error:', error.message catch (error) {
-    console.error('Attend status error:', error.message);
-    res.status);
-    res.status(500(500).json({ error: error.message });
-  }
-).json({ error: error.message });
+  } catch (error) {
+    console.error('Unattend error:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// =});
+// Проверяем статус участия пользователя
+app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
+  try {
+    const { eventId, userId } = req.params;
 
-// ==================== ВСПОМОГАТЕЛЬНЫЕ Ф=================== ВСПОМОГАТЕЛЬУННЫЕ ФУНКЦИИКЦИИ ====================
+    console.log(`Checking attend status for user ${userId} in event ${eventId}`);
 
-function calculateDistance(lat1, ====================
+    const event = await getSeaTableRecordById(EVENTS_TABLE, eventId);
+    const attendees = event.AttendeesIDs || '';
+    let attendeesArray = [];
+    
+    if (Array.isArray(attendees)) {
+      attendeesArray = attendees.filter(id => id && id.toString().trim());
+    } else if (typeof attendees === 'string') {
+      attendeesArray = attendees.split(',').filter(id => id && id.trim());
+    }
+    
+    const isAttending = attendeesArray.includes(userId.toString());
+
+    console.log('Is attending:', isAttending);
+    res.json({ isAttending });
+    
+  } catch (error) {
+    console.error('Attend status error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371000;
-  const d lon1, lat2, lon2) {
-  const R = 6371000;
   const dLat = deg2rad(lat2 - lat1);
-Lat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(l  const dLon = deg2rad(lon2 - lon1);
-  const a = 
-    Math.sin(dLat/2on2 - lon1);
+  const dLon = deg2rad(lon2 - lon1);
   const a = 
     Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos) * Math.sin(dLat/2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat(deg2rad(lat1)) * Math.cos(deg2rad(lat22)) * 
-    Math)) * 
-    Math.sin(dLon/2.sin(dLon/2) * Math.sin(dLon/2); 
- ) * Math.sin(dLon/2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 const c = 2 * Math.atan2(Math.sqrt-a)); 
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
   return R * c;
 }
 
-function(a), Math.sqrt(1-a)); 
-  return R * c;
+function deg2rad(deg) {
+  return deg * (Math.PI/180);
 }
 
-function deg deg2rad(deg) {
-  return deg * (2rad(deg) {
-  return deg * (MathMath.PI/180);
-}
-
-.PI/180);
-}
-
-// Корневой эндпоин// Корневой эндпоинт
-т
+// Корневой эндпоинт
 app.get('/', (req, res) => {
-app.get('/', (req, res) => {
-  res  res.send('Smolville Backend is running! API endpoints: /api/.send('Smolville Backend is running! API endpointsevents, /api/ads, /api/votings: /api/events, /api/ads, /api/votings,, /api/upload');
+  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload');
 });
 
-// Создание /api/upload');
-});
-
-// Создание пап папки uploads
-const uploadsDir = path.join(__dirname, 'ки uploads
-const uploaduploads');
-if (!fs.existsSync(uploadsDirsDir = path.join(__dirname, 'uploads');
+// Создание папки uploads
+const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-)) {
-  fs.mkdirSync  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Запуск сервера(uploadsDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // Запуск сервера
 app.listen(port, () => {
-  console.log(`Server running on port ${
-app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`SeaTable API URLport}`);
-  console.log(`SeaTable API: ${SEATABLE_API_URL}`);
-  console.log(`Sea URL: ${SEATABLE_API_URL}`);
+  console.log(`SeaTable API URL: ${SEATABLE_API_URL}`);
   console.log(`SeaTable Base UUID: ${SEATABLE_BASE_UUID}`);
-  console.log('MakeTable Base UUID: ${SEATABLE_BASE_UUID}`);
-  console.log('Make sure sure SEATABLE_API_TOKEN is set in environment variables');
- SEATABLE_API_TOKEN is set in environment variables');
-});
+  console.log('Make sure SEATABLE_API_TOKEN is set in environment variables');
 });
