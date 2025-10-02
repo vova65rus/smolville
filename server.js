@@ -41,7 +41,7 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
   process.exit(1);
 }
 
-// Функция для получения Base-Token
+// Функция для получения Base-Token (используем GET, как в логах)
 async function getBaseToken() {
   try {
     console.log('Попытка получить Base-Token с помощью GET...');
@@ -63,12 +63,12 @@ async function getBaseToken() {
   }
 }
 
-// Базовые URL для SeaTable API
-const getRowsUrl = (tableName) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
-const getRowUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
-const appendRowUrl = (tableName) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
-const updateRowUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
-const deleteRowUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
+// Новые URL для API Gateway v2.1
+const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records?table_name=${tableName}`;
+const getRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records/${rowId}?table_name=${tableName}`;
+const appendRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records?table_name=${tableName}`;
+const updateRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records/${rowId}?table_name=${tableName}`;
+const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/records/${rowId}?table_name=${tableName}`;
 const getUploadLinkUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-upload-link/`;
 
 // Главная страница
@@ -314,7 +314,7 @@ app.get('/api/events', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/events, таблица: ${EVENTS_TABLE}`);
     const baseToken = await getBaseToken();
-    const response = await axios.get(getRowsUrl(EVENTS_TABLE), {
+    const response = await axios.get(getRecordsUrl(EVENTS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     console.log('Данные событий получены:', response.data);
@@ -329,15 +329,15 @@ app.post('/api/events', async (req, res) => {
   try {
     console.log('Создание события с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
-    const response = await axios.post(appendRowUrl(EVENTS_TABLE), {
-      row: req.body.fields
+    const response = await axios.post(appendRecordsUrl(EVENTS_TABLE), {
+      rows: [req.body.fields] // Новый формат: массив rows
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
         'Content-Type': 'application/json'
       }
     });
-    res.json({ id: response.data._id, fields: response.data });
+    res.json({ id: response.data.rows[0]._id, fields: response.data.rows[0] });
   } catch (error) {
     console.error('Ошибка POST /api/events:', error.message, error.response?.data || {});
     res.status(500).json({ error: 'Ошибка создания события' });
@@ -348,7 +348,7 @@ app.get('/api/events/:id', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/events/${req.params.id}`);
     const baseToken = await getBaseToken();
-    const response = await axios.get(getRowUrl(EVENTS_TABLE, req.params.id), {
+    const response = await axios.get(getRecordUrl(EVENTS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     res.json({ id: response.data._id, fields: response.data });
@@ -362,8 +362,8 @@ app.patch('/api/events/:id', async (req, res) => {
   try {
     console.log('Обновление события с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
-    const response = await axios.put(updateRowUrl(EVENTS_TABLE, req.params.id), {
-      row: req.body.fields
+    const response = await axios.patch(updateRecordUrl(EVENTS_TABLE, req.params.id), {
+      values: req.body.fields // Новый формат: values вместо row
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -381,7 +381,7 @@ app.delete('/api/events/:id', async (req, res) => {
   try {
     console.log(`Удаление события ${req.params.id}`);
     const baseToken = await getBaseToken();
-    await axios.delete(deleteRowUrl(EVENTS_TABLE, req.params.id), {
+    await axios.delete(deleteRecordUrl(EVENTS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     res.json({ success: true });
@@ -397,7 +397,7 @@ app.get('/api/ads', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/ads, таблица: ${ADS_TABLE}`);
     const baseToken = await getBaseToken();
-    const response = await axios.get(getRowsUrl(ADS_TABLE), {
+    const response = await axios.get(getRecordsUrl(ADS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     console.log('Данные объявлений получены:', response.data);
@@ -412,15 +412,15 @@ app.post('/api/ads', async (req, res) => {
   try {
     console.log('Создание объявления с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
-    const response = await axios.post(appendRowUrl(ADS_TABLE), {
-      row: req.body.fields
+    const response = await axios.post(appendRecordsUrl(ADS_TABLE), {
+      rows: [req.body.fields] // Новый формат: массив rows
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
         'Content-Type': 'application/json'
       }
     });
-    res.json({ id: response.data._id, fields: response.data });
+    res.json({ id: response.data.rows[0]._id, fields: response.data.rows[0] });
   } catch (error) {
     console.error('Ошибка POST /api/ads:', error.message, error.response?.data || {});
     res.status(500).json({ error: 'Ошибка создания объявления' });
@@ -431,8 +431,8 @@ app.patch('/api/ads/:id', async (req, res) => {
   try {
     console.log('Обновление объявления с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
-    const response = await axios.put(updateRowUrl(ADS_TABLE, req.params.id), {
-      row: req.body.fields
+    const response = await axios.patch(updateRecordUrl(ADS_TABLE, req.params.id), {
+      values: req.body.fields // Новый формат: values вместо row
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -450,7 +450,7 @@ app.delete('/api/ads/:id', async (req, res) => {
   try {
     console.log(`Удаление объявления ${req.params.id}`);
     const baseToken = await getBaseToken();
-    await axios.delete(deleteRowUrl(ADS_TABLE, req.params.id), {
+    await axios.delete(deleteRecordUrl(ADS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     res.json({ success: true });
@@ -466,7 +466,7 @@ app.get('/api/votings', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/votings, таблица: ${VOTINGS_TABLE}`);
     const baseToken = await getBaseToken();
-    const response = await axios.get(getRowsUrl(VOTINGS_TABLE), {
+    const response = await axios.get(getRecordsUrl(VOTINGS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     console.log('Данные голосований получены:', response.data);
@@ -481,15 +481,15 @@ app.post('/api/votings', async (req, res) => {
   try {
     console.log('Создание голосования с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
-    const response = await axios.post(appendRowUrl(VOTINGS_TABLE), {
-      row: req.body.fields
+    const response = await axios.post(appendRecordsUrl(VOTINGS_TABLE), {
+      rows: [req.body.fields] // Новый формат: массив rows
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
         'Content-Type': 'application/json'
       }
     });
-    res.json({ id: response.data._id, fields: response.data });
+    res.json({ id: response.data.rows[0]._id, fields: response.data.rows[0] });
   } catch (error) {
     console.error('Ошибка POST /api/votings:', error.message, error.response?.data || {});
     res.status(500).json({ error: 'Ошибка создания голосования' });
@@ -500,8 +500,8 @@ app.patch('/api/votings/:id', async (req, res) => {
   try {
     console.log('Обновление голосования с данными:', JSON.stringify(req.body, null, 2));
     const baseToken = await getBaseToken();
-    const response = await axios.put(updateRowUrl(VOTINGS_TABLE, req.params.id), {
-      row: req.body.fields
+    const response = await axios.patch(updateRecordUrl(VOTINGS_TABLE, req.params.id), {
+      values: req.body.fields // Новый формат: values вместо row
     }, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
@@ -519,7 +519,7 @@ app.delete('/api/votings/:id', async (req, res) => {
   try {
     console.log(`Удаление голосования ${req.params.id}`);
     const baseToken = await getBaseToken();
-    await axios.delete(deleteRowUrl(VOTINGS_TABLE, req.params.id), {
+    await axios.delete(deleteRecordUrl(VOTINGS_TABLE, req.params.id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
     res.json({ success: true });
@@ -529,12 +529,13 @@ app.delete('/api/votings/:id', async (req, res) => {
   }
 });
 
+// Получить голосования по ID мероприятия
 app.get('/api/events/:eventId/votings', async (req, res) => {
   try {
     const { eventId } = req.params;
     console.log(`Получен запрос к /api/events/${eventId}/votings, таблица: ${VOTINGS_TABLE}`);
     const baseToken = await getBaseToken();
-    const response = await axios.get(getRowsUrl(VOTINGS_TABLE), {
+    const response = await axios.get(getRecordsUrl(VOTINGS_TABLE), {
       headers: { Authorization: `Bearer ${baseToken}` },
       params: { filter: `EventID="${eventId}"` }
     });
@@ -560,7 +561,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     }
 
     const baseToken = await getBaseToken();
-    const votingResponse = await axios.get(getRowUrl(VOTINGS_TABLE, id), {
+    const votingResponse = await axios.get(getRecordUrl(VOTINGS_TABLE, id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
 
@@ -604,7 +605,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
 
     const updateData = {
-      row: {
+      values: {
         Votes: JSON.stringify(currentVotes),
         VotedUserIDs: newVotedUserIDs
       }
@@ -612,7 +613,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
 
     console.log('Обновление записи голосования:', JSON.stringify(updateData, null, 2));
 
-    const updateResponse = await axios.put(updateRowUrl(VOTINGS_TABLE, id), updateData, {
+    const updateResponse = await axios.patch(updateRecordUrl(VOTINGS_TABLE, id), updateData, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
         'Content-Type': 'application/json'
@@ -634,7 +635,7 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
 
     console.log(`Проверка статуса голосования для пользователя ${userId}, ID голосования: ${id}`);
     const baseToken = await getBaseToken();
-    const votingResponse = await axios.get(getRowUrl(VOTINGS_TABLE, id), {
+    const votingResponse = await axios.get(getRecordUrl(VOTINGS_TABLE, id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
 
@@ -667,7 +668,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
 
     console.log(`Завершение голосования ${id}`);
     const baseToken = await getBaseToken();
-    const votingResponse = await axios.get(getRowUrl(VOTINGS_TABLE, id), {
+    const votingResponse = await axios.get(getRecordUrl(VOTINGS_TABLE, id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
 
@@ -708,12 +709,14 @@ app.post('/api/votings/:id/complete', async (req, res) => {
       });
     }
 
-    const updateResponse = await axios.put(updateRowUrl(VOTINGS_TABLE, id), {
-      row: {
+    const updateData = {
+      values: {
         Status: 'Completed',
         Results: JSON.stringify(results)
       }
-    }, {
+    };
+
+    const updateResponse = await axios.patch(updateRecordUrl(VOTINGS_TABLE, id), updateData, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
         'Content-Type': 'application/json'
@@ -734,7 +737,7 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
 
     console.log(`Генерация изображения результатов для голосования ${id}`);
     const baseToken = await getBaseToken();
-    const votingResponse = await axios.get(getRowUrl(VOTINGS_TABLE, id), {
+    const votingResponse = await axios.get(getRecordUrl(VOTINGS_TABLE, id), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
 
@@ -851,18 +854,18 @@ app.post('/api/votings/:id/generate-results', async (req, res) => {
     console.log('Изображение результатов загружено в Radikal API:', uploadResult.url);
 
     try {
-      const updateResponse = await axios.put(updateRowUrl(VOTINGS_TABLE, id), {
-        row: {
+      const updateData = {
+        values: {
           ResultsImage: uploadResult.url
         }
-      }, {
+      };
+      const updateResponse = await axios.patch(updateRecordUrl(VOTINGS_TABLE, id), updateData, {
         headers: {
           Authorization: `Bearer ${baseToken}`,
           'Content-Type': 'application/json'
         }
       });
-
-      console.log('ResultsImage успешно сохранён в SeaTable');
+      console.log('ResultsImage успешно сохранён в SeaTable:', updateResponse.data);
     } catch (updateError) {
       console.error('Ошибка сохранения ResultsImage в SeaTable:', updateError.message);
     }
@@ -893,7 +896,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     }
 
     const baseToken = await getBaseToken();
-    const eventResponse = await axios.get(getRowUrl(EVENTS_TABLE, eventId), {
+    const eventResponse = await axios.get(getRecordUrl(EVENTS_TABLE, eventId), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
 
@@ -928,7 +931,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
     console.log('Новое количество:', newCount);
 
     const updateData = {
-      row: {
+      values: {
         AttendeesIDs: newAttendees,
         AttendeesCount: newCount
       }
@@ -936,7 +939,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
 
     console.log('Данные для обновления:', JSON.stringify(updateData, null, 2));
 
-    const updateResponse = await axios.put(updateRowUrl(EVENTS_TABLE, eventId), updateData, {
+    const updateResponse = await axios.patch(updateRecordUrl(EVENTS_TABLE, eventId), updateData, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
         'Content-Type': 'application/json'
@@ -964,7 +967,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     }
 
     const baseToken = await getBaseToken();
-    const eventResponse = await axios.get(getRowUrl(EVENTS_TABLE, eventId), {
+    const eventResponse = await axios.get(getRecordUrl(EVENTS_TABLE, eventId), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
 
@@ -994,13 +997,13 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
     console.log('Новое количество:', newCount);
 
     const updateData = {
-      row: {
+      values: {
         AttendeesIDs: newAttendees,
         AttendeesCount: newCount
       }
     };
 
-    const updateResponse = await axios.put(updateRowUrl(EVENTS_TABLE, eventId), updateData, {
+    const updateResponse = await axios.patch(updateRecordUrl(EVENTS_TABLE, eventId), updateData, {
       headers: {
         Authorization: `Bearer ${baseToken}`,
         'Content-Type': 'application/json'
@@ -1024,7 +1027,7 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
     console.log(`Проверка статуса участия для пользователя ${userId} в событии ${eventId}`);
 
     const baseToken = await getBaseToken();
-    const eventResponse = await axios.get(getRowUrl(EVENTS_TABLE, eventId), {
+    const eventResponse = await axios.get(getRecordUrl(EVENTS_TABLE, eventId), {
       headers: { Authorization: `Bearer ${baseToken}` }
     });
 
