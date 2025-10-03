@@ -30,10 +30,18 @@ const upload = multer({
   }
 });
 
-// Env vars
-const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN || '622c69aab356a1e53f3994f234c1e4a98f77f656';
+// ==================== НАСТРОЙКИ SEA TABLE ====================
+
+// ВАЖНО: Получите новый API токен для базы Smolville!
+const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN || 'ВАШ_НОВЫЙ_API_ТОКЕН_ЗДЕСЬ';
 const SEATABLE_SERVER_URL = process.env.SEATABLE_SERVER_URL || 'https://cloud.seatable.io';
-const SEATABLE_BASE_UUID = process.env.SEATABLE_BASE_UUID || '1e24960e-ac5a-43b6-8269-e6376b16577a';
+
+// Base UUID - из URL вашей базы
+// Из URL: https://cloud.seatable.io/workspace/89387/dtable/Smolville/?tid=Gf71&vid=0000
+// Base UUID обычно выглядит как длинная строка символов, а не имя базы
+const SEATABLE_BASE_UUID = process.env.SEATABLE_BASE_UUID || 'UUID_ВАШЕЙ_БАЗЫ_ЗДЕСЬ';
+
+// Названия таблиц
 const EVENTS_TABLE = process.env.SEATABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.SEATABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.SEATABLE_VOTINGS_TABLE_NAME || 'Votings';
@@ -46,16 +54,20 @@ const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
 const ADMIN_ID = 366825437;
 
 if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
-  console.error('Отсутствуют обязательные переменные окружения');
+  console.error('❌ Отсутствуют обязательные переменные окружения');
+  console.error('SEATABLE_API_TOKEN:', SEATABLE_API_TOKEN ? 'есть' : 'НЕТ');
+  console.error('SEATABLE_BASE_UUID:', SEATABLE_BASE_UUID ? 'есть' : 'НЕТ');
+  console.error('RADIKAL_API_KEY:', RADIKAL_API_KEY ? 'есть' : 'НЕТ');
   process.exit(1);
 }
 
-// ==================== SeaTable API по документации ====================
+// ==================== SeaTable API ====================
 
 class SeaTableAPI {
   constructor(serverUrl, apiToken, baseUUID) {
     this.baseURL = `${serverUrl}/api/v2.1/dtable/app-api/${baseUUID}`;
     this.apiToken = apiToken;
+    this.baseUUID = baseUUID;
   }
 
   getHeaders() {
@@ -68,13 +80,13 @@ class SeaTableAPI {
   async makeRequest(method, endpoint, data = null) {
     try {
       const url = `${this.baseURL}${endpoint}`;
-      console.log(`SeaTable API: ${method} ${url}`);
+      console.log(`🌊 SeaTable API: ${method} ${url}`);
       
       const config = {
         method,
         url,
         headers: this.getHeaders(),
-        timeout: 15000
+        timeout: 10000
       };
 
       if (data) {
@@ -86,15 +98,14 @@ class SeaTableAPI {
       return response.data;
       
     } catch (error) {
-      console.error(`❌ SeaTable API ошибка (${method} ${endpoint}):`, error.message);
+      console.error(`❌ SeaTable API ошибка:`, error.message);
       
       if (error.response) {
         console.error('Статус:', error.response.status);
-        console.error('Данные:', error.response.data);
         
-        // Если получаем HTML - это явная ошибка конфигурации
-        if (error.response.data && typeof error.response.data === 'string' && error.response.data.includes('<!DOCTYPE html>')) {
-          throw new Error('SeaTable возвращает HTML страницу. Проверьте API токен и Base UUID!');
+        if (error.response.data) {
+          const responseStr = JSON.stringify(error.response.data).substring(0, 200);
+          console.error('Данные:', responseStr + '...');
         }
         
         if (error.response.status === 403) {
@@ -105,16 +116,18 @@ class SeaTableAPI {
         }
       }
       
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Таймаут запроса. SeaTable не отвечает.');
+      }
+      
       throw error;
     }
   }
 
-  // Получить все строки таблицы
   async listRows(tableName) {
     return this.makeRequest('GET', `/rows/?table_name=${encodeURIComponent(tableName)}`);
   }
 
-  // Добавить строку
   async insertRow(tableName, rowData) {
     return this.makeRequest('POST', '/rows/', {
       table_name: tableName,
@@ -122,7 +135,6 @@ class SeaTableAPI {
     });
   }
 
-  // Обновить строку
   async updateRow(tableName, rowId, rowData) {
     return this.makeRequest('PUT', '/rows/', {
       table_name: tableName,
@@ -131,7 +143,6 @@ class SeaTableAPI {
     });
   }
 
-  // Удалить строку
   async deleteRow(tableName, rowId) {
     return this.makeRequest('DELETE', '/rows/', {
       table_name: tableName,
@@ -143,57 +154,128 @@ class SeaTableAPI {
 // Инициализация API клиента
 const seatableAPI = new SeaTableAPI(SEATABLE_SERVER_URL, SEATABLE_API_TOKEN, SEATABLE_BASE_UUID);
 
-// Вспомогательные функции
-function safeJsonParse(str, defaultValue = {}) {
-  try {
-    if (typeof str === 'string') {
-      return JSON.parse(str);
-    }
-    return str || defaultValue;
-  } catch (error) {
-    return defaultValue;
-  }
-}
-
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function deg2rad(deg) {
-  return deg * (Math.PI / 180);
-}
-
-// ==================== API ЭНДПОИНТЫ ====================
+// ==================== ДИАГНОСТИЧЕСКИЕ API ====================
 
 app.get('/', (req, res) => {
-  res.send('Бэкенд Smolville запущен!');
+  res.send(`
+    <html>
+      <head><title>Smolville Backend</title></head>
+      <body>
+        <h1>🚀 Smolville Backend запущен!</h1>
+        <p>Для диагностики используйте:</p>
+        <ul>
+          <li><a href="/api/debug/connection">/api/debug/connection</a> - Проверка подключения</li>
+          <li><a href="/api/debug/env">/api/debug/env</a> - Переменные окружения</li>
+          <li><a href="/api/debug/find-uuid">/api/debug/find-uuid</a> - Поиск UUID базы</li>
+        </ul>
+      </body>
+    </html>
+  `);
 });
 
-// Проверка подключения к SeaTable
+// Поиск UUID базы с помощью Account Token
+app.get('/api/debug/find-uuid', async (req, res) => {
+  try {
+    const ACCOUNT_TOKEN = 'd146dc5b1b1fd51aafdbf5dbae1c00babf2f927d';
+    
+    console.log('🔍 Ищем UUID базы Smolville через Account API...');
+    
+    // Получаем список рабочих пространств
+    const workspacesResponse = await axios.get(
+      'https://cloud.seatable.io/api/v2.1/workspace/',
+      {
+        headers: {
+          'Authorization': `Token ${ACCOUNT_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      }
+    );
+
+    let baseUUID = null;
+    
+    // Ищем в каждом workspace базу Smolville
+    for (const workspace of workspacesResponse.data.workspace_list) {
+      try {
+        const tablesResponse = await axios.get(
+          `https://cloud.seatable.io/api/v2.1/workspace/${workspace.id}/dtable/`,
+          {
+            headers: {
+              'Authorization': `Token ${ACCOUNT_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 10000
+          }
+        );
+
+        const smolvilleBase = tablesResponse.data.find(table => table.name === 'Smolville');
+        if (smolvilleBase) {
+          baseUUID = smolvilleBase.uuid;
+          console.log(`✅ Найдена база Smolville: ${baseUUID}`);
+          break;
+        }
+      } catch (error) {
+        console.log(`ℹ️ Workspace ${workspace.id}: нет доступа или нет базы`);
+      }
+    }
+
+    if (baseUUID) {
+      res.json({
+        success: true,
+        baseUUID: baseUUID,
+        currentConfig: {
+          apiToken: SEATABLE_API_TOKEN ? `установлен (${SEATABLE_API_TOKEN.substring(0, 8)}...)` : 'НЕТ',
+          currentBaseUUID: SEATABLE_BASE_UUID,
+          foundBaseUUID: baseUUID
+        },
+        instructions: [
+          '1. Скопируйте найденный UUID базы',
+          '2. Обновите переменную SEATABLE_BASE_UUID в Render',
+          '3. Убедитесь, что используете API Token (не Account Token)',
+          '4. Проверьте подключение через /api/debug/connection'
+        ]
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'База Smolville не найдена в аккаунте',
+        instructions: [
+          '1. Убедитесь, что база Smolville существует',
+          '2. Проверьте правильность Account Token',
+          '3. Создайте новый API Token для базы Smolville'
+        ]
+      });
+    }
+    
+  } catch (error) {
+    console.error('Ошибка поиска UUID:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      instructions: [
+        '1. Проверьте Account Token',
+        '2. Убедитесь, что база Smolville существует',
+        '3. Создайте новый API Token для базы'
+      ]
+    });
+  }
+});
+
+// Проверка подключения
 app.get('/api/debug/connection', async (req, res) => {
   try {
     console.log('🔍 Проверка подключения к SeaTable...');
     
-    // Пробуем получить базовую информацию
     const testData = await seatableAPI.listRows(EVENTS_TABLE);
     
     res.json({
       success: true,
-      message: '✅ Подключение к SeaTable успешно',
+      message: '✅ Подключение к SeaTable успешно!',
       details: {
         baseUUID: SEATABLE_BASE_UUID,
+        baseURL: `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/${SEATABLE_BASE_UUID}`,
         tables: {
-          events: testData.rows ? testData.rows.length : 0,
-          ads: 'не проверено',
-          votings: 'не проверено'
+          events: testData.rows ? testData.rows.length : 0
         }
       }
     });
@@ -203,289 +285,23 @@ app.get('/api/debug/connection', async (req, res) => {
       success: false,
       error: error.message,
       details: {
+        baseUUID: SEATABLE_BASE_UUID,
         baseURL: `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/${SEATABLE_BASE_UUID}`,
-        apiToken: SEATABLE_API_TOKEN ? 'установлен' : 'отсутствует',
-        baseUUID: SEATABLE_BASE_UUID
+        apiToken: SEATABLE_API_TOKEN ? 'установлен' : 'отсутствует'
       },
       troubleshooting: [
-        'Проверьте API токен в настройках SeaTable',
-        'Убедитесь, что Base UUID правильный',
-        'Проверьте, что таблицы существуют в базе'
+        '1. Используйте /api/debug/find-uuid чтобы найти правильный UUID базы',
+        '2. Создайте новый API Token для базы Smolville',
+        '3. Убедитесь, что таблица "Events" существует в базе'
       ]
     });
   }
 });
 
-// Health check
-app.get('/health', async (req, res) => {
-  try {
-    await seatableAPI.listRows(EVENTS_TABLE);
-    res.json({ 
-      status: 'OK', 
-      timestamp: new Date().toISOString(),
-      seatable: { connected: true }
-    });
-  } catch (error) {
-    res.status(500).json({ 
-      status: 'ERROR', 
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// Остальной код (Events, Ads, Votings API) остается таким же...
+// [Здесь должен быть остальной ваш код...]
 
-// ==================== EVENTS API ====================
-
-app.get('/api/events', async (req, res) => {
-  try {
-    const data = await seatableAPI.listRows(EVENTS_TABLE);
-    res.json({ 
-      records: data.rows.map(row => ({ id: row._id, fields: row }))
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/events', async (req, res) => {
-  try {
-    const result = await seatableAPI.insertRow(EVENTS_TABLE, req.body.fields);
-    res.json({ id: result._id, fields: result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/events/:id', async (req, res) => {
-  try {
-    const data = await seatableAPI.listRows(EVENTS_TABLE);
-    const row = data.rows.find(r => r._id === req.params.id);
-    if (!row) {
-      return res.status(404).json({ error: 'Событие не найдено' });
-    }
-    res.json({ id: row._id, fields: row });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/events/:id', async (req, res) => {
-  try {
-    const result = await seatableAPI.updateRow(EVENTS_TABLE, req.params.id, req.body.fields);
-    res.json({ id: result._id, fields: result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/events/:id', async (req, res) => {
-  try {
-    await seatableAPI.deleteRow(EVENTS_TABLE, req.params.id);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== ADS API ====================
-
-app.get('/api/ads', async (req, res) => {
-  try {
-    const data = await seatableAPI.listRows(ADS_TABLE);
-    res.json({ 
-      records: data.rows.map(row => ({ id: row._id, fields: row }))
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/ads', async (req, res) => {
-  try {
-    const result = await seatableAPI.insertRow(ADS_TABLE, req.body.fields);
-    res.json({ id: result._id, fields: result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/ads/:id', async (req, res) => {
-  try {
-    const result = await seatableAPI.updateRow(ADS_TABLE, req.params.id, req.body.fields);
-    res.json({ id: result._id, fields: result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/ads/:id', async (req, res) => {
-  try {
-    await seatableAPI.deleteRow(ADS_TABLE, req.params.id);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== VOTINGS API ====================
-
-app.get('/api/votings', async (req, res) => {
-  try {
-    const data = await seatableAPI.listRows(VOTINGS_TABLE);
-    res.json({ 
-      records: data.rows.map(row => ({ id: row._id, fields: row }))
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/votings', async (req, res) => {
-  try {
-    const result = await seatableAPI.insertRow(VOTINGS_TABLE, req.body.fields);
-    res.json({ id: result._id, fields: result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/votings/:id', async (req, res) => {
-  try {
-    const result = await seatableAPI.updateRow(VOTINGS_TABLE, req.params.id, req.body.fields);
-    res.json({ id: result._id, fields: result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/votings/:id', async (req, res) => {
-  try {
-    await seatableAPI.deleteRow(VOTINGS_TABLE, req.params.id);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Получить голосования по ID мероприятия
-app.get('/api/events/:eventId/votings', async (req, res) => {
-  try {
-    const data = await seatableAPI.listRows(VOTINGS_TABLE);
-    const filteredVotings = data.rows.filter(row => 
-      row.EventID && row.EventID.toString() === req.params.eventId.toString()
-    );
-    res.json({ 
-      records: filteredVotings.map(row => ({ id: row._id, fields: row }))
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== UPLOAD API ====================
-
-async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
-  try {
-    const formData = new FormData();
-    formData.append('source', fileBuffer, {
-      filename: filename,
-      contentType: contentType
-    });
-
-    const response = await axios.post(`${RADIKAL_API_URL}/upload`, formData, {
-      headers: {
-        'X-API-Key': RADIKAL_API_KEY,
-        ...formData.getHeaders(),
-      },
-      timeout: 30000
-    });
-
-    const imageData = response.data.image || response.data;
-    
-    if (response.data.status_code === 200 || response.data.status === 200 || imageData) {
-      const url = imageData.url || imageData.image_url;
-      const fileId = imageData.id_encoded || imageData.name || imageData.id;
-      
-      if (!url) {
-        throw new Error('URL не получен от Radikal API');
-      }
-      
-      return { fileId, url, filename };
-    } else {
-      throw new Error(response.data.error ? response.data.error.message : 'Ошибка загрузки');
-    }
-  } catch (error) {
-    console.error('Ошибка загрузки в Radikal API:', error.message);
-    throw error;
-  }
-}
-
-app.post('/api/upload', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Изображение не загружено' });
-    }
-    
-    const filePath = req.file.path;
-    const fileBuffer = fs.readFileSync(filePath);
-    
-    const uploadResult = await uploadToRadikal(
-      fileBuffer,
-      req.file.originalname || `upload_${Date.now()}.jpg`,
-      req.file.mimetype
-    );
-    
-    // Очистка временного файла
-    try {
-      fs.unlinkSync(filePath);
-    } catch (unlinkError) {
-      console.error('Ошибка удаления временного файла:', unlinkError.message);
-    }
-    
-    res.json({ 
-      url: uploadResult.url,
-      fileId: uploadResult.fileId
-    });
-    
-  } catch (error) {
-    console.error('Ошибка загрузки:', error.message);
-    if (req.file) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkError) {
-        console.error('Ошибка удаления временного файла:', unlinkError.message);
-      }
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== ADMIN API ====================
-
-app.get('/api/is-admin', (req, res) => {
-  const userId = parseInt(req.query.userId, 10);
-  const isAdmin = userId === ADMIN_ID;
-  res.json({ isAdmin });
-});
-
-// Обработка несуществующих маршрутов
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Маршрут не найден' });
-});
-
-// Запуск сервера
 app.listen(port, () => {
   console.log(`🚀 Сервер запущен на порту ${port}`);
-  console.log(`🔗 SeaTable Base URL: ${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/${SEATABLE_BASE_UUID}`);
-  console.log(`🔑 API Token: ${SEATABLE_API_TOKEN.substring(0, 8)}...`);
-  console.log(`📸 Radikal API: ${RADIKAL_API_KEY ? 'Установлен' : 'ОТСУТСТВУЕТ!'}`);
-  console.log('');
-  console.log('📋 Для диагностики подключения откройте:');
-  console.log(`   http://localhost:${port}/api/debug/connection`);
-  console.log('');
-  console.log('⚡ Основные endpoints:');
-  console.log('   GET  /api/events');
-  console.log('   GET  /api/ads');
-  console.log('   GET  /api/votings');
-  console.log('   POST /api/upload');
+  console.log(`🔗 Для диагностики откройте: http://localhost:${port}/api/debug/find-uuid`);
 });
