@@ -5,7 +5,6 @@ const fs = require('fs');
 const FormData = require('form-data');
 const path = require('path');
 const sharp = require('sharp');
-const { SeaTable } = require('seatable-api');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -51,32 +50,101 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
   process.exit(1);
 }
 
-// Инициализация SeaTable SDK
-let seatable = null;
+// ==================== SeaTable REST API функции ====================
 
-async function initializeSeaTable() {
+// Получить заголовки для авторизации
+function getSeaTableHeaders() {
+  return {
+    'Authorization': `Token ${SEATABLE_API_TOKEN}`,
+    'Content-Type': 'application/json'
+  };
+}
+
+// Базовый URL для API
+function getSeaTableBaseURL() {
+  return `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}`;
+}
+
+// Получить все строки таблицы
+async function listRows(tableName) {
   try {
-    seatable = new SeaTable({
-      server: SEATABLE_SERVER_URL,
-      api_token: SEATABLE_API_TOKEN,
-      dtable_uuid: SEATABLE_BASE_UUID
-    });
-    
-    await seatable.auth();
-    console.log('SeaTable SDK успешно инициализирован');
-    return seatable;
+    const response = await axios.get(
+      `${getSeaTableBaseURL()}/rows/?table_name=${encodeURIComponent(tableName)}`,
+      { headers: getSeaTableHeaders() }
+    );
+    return response.data.rows || [];
   } catch (error) {
-    console.error('Ошибка инициализации SeaTable SDK:', error.message);
+    console.error(`Ошибка получения строк таблицы ${tableName}:`, error.message);
     throw error;
   }
 }
 
-// Вспомогательная функция для получения экземпляра SeaTable
-async function getSeaTable() {
-  if (!seatable) {
-    return await initializeSeaTable();
+// Получить конкретную строку
+async function getRow(tableName, rowId) {
+  try {
+    const rows = await listRows(tableName);
+    return rows.find(row => row._id === rowId) || null;
+  } catch (error) {
+    console.error(`Ошибка получения строки ${rowId} из таблицы ${tableName}:`, error.message);
+    throw error;
   }
-  return seatable;
+}
+
+// Добавить строку
+async function insertRow(tableName, rowData) {
+  try {
+    const response = await axios.post(
+      `${getSeaTableBaseURL()}/rows/`,
+      {
+        table_name: tableName,
+        row: rowData
+      },
+      { headers: getSeaTableHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error(`Ошибка добавления строки в таблицу ${tableName}:`, error.message);
+    throw error;
+  }
+}
+
+// Обновить строку
+async function updateRow(tableName, rowId, rowData) {
+  try {
+    const response = await axios.put(
+      `${getSeaTableBaseURL()}/rows/`,
+      {
+        table_name: tableName,
+        row_id: rowId,
+        row: rowData
+      },
+      { headers: getSeaTableHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error(`Ошибка обновления строки ${rowId} в таблице ${tableName}:`, error.message);
+    throw error;
+  }
+}
+
+// Удалить строку
+async function deleteRow(tableName, rowId) {
+  try {
+    await axios.delete(
+      `${getSeaTableBaseURL()}/rows/`,
+      {
+        headers: getSeaTableHeaders(),
+        data: {
+          table_name: tableName,
+          row_id: rowId
+        }
+      }
+    );
+    return { success: true };
+  } catch (error) {
+    console.error(`Ошибка удаления строки ${rowId} из таблицы ${tableName}:`, error.message);
+    throw error;
+  }
 }
 
 // Вспомогательная функция для безопасного парсинга JSON
@@ -105,7 +173,7 @@ app.get('/health', (req, res) => {
     version: '1.0.0',
     seatable: {
       baseUUID: SEATABLE_BASE_UUID,
-      initialized: !!seatable
+      server: SEATABLE_SERVER_URL
     }
   });
 });
@@ -257,10 +325,9 @@ app.delete('/api/upload/:fileId', async (req, res) => {
 app.get('/api/events', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/events, таблица: ${EVENTS_TABLE}`);
-    const seatable = await getSeaTable();
     
-    const rows = await seatable.listRows(EVENTS_TABLE);
-    console.log('Данные событий получены:', rows);
+    const rows = await listRows(EVENTS_TABLE);
+    console.log('Данные событий получены:', rows.length, 'записей');
     
     res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
@@ -272,9 +339,8 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     console.log('Создание события с данными:', JSON.stringify(req.body, null, 2));
-    const seatable = await getSeaTable();
     
-    const result = await seatable.insertRow(EVENTS_TABLE, req.body.fields);
+    const result = await insertRow(EVENTS_TABLE, req.body.fields);
     console.log('Событие создано:', result);
     
     res.json({ id: result._id, fields: result });
@@ -287,9 +353,8 @@ app.post('/api/events', async (req, res) => {
 app.get('/api/events/:id', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/events/${req.params.id}`);
-    const seatable = await getSeaTable();
     
-    const row = await seatable.getRow(EVENTS_TABLE, req.params.id);
+    const row = await getRow(EVENTS_TABLE, req.params.id);
     
     if (!row) {
       return res.status(404).json({ error: 'Событие не найдено' });
@@ -305,9 +370,8 @@ app.get('/api/events/:id', async (req, res) => {
 app.put('/api/events/:id', async (req, res) => {
   try {
     console.log('Обновление события с данными:', JSON.stringify(req.body, null, 2));
-    const seatable = await getSeaTable();
     
-    const result = await seatable.updateRow(EVENTS_TABLE, req.params.id, req.body.fields);
+    const result = await updateRow(EVENTS_TABLE, req.params.id, req.body.fields);
     console.log('Событие обновлено:', result);
     
     res.json({ id: result._id, fields: result });
@@ -320,9 +384,8 @@ app.put('/api/events/:id', async (req, res) => {
 app.delete('/api/events/:id', async (req, res) => {
   try {
     console.log(`Удаление события ${req.params.id}`);
-    const seatable = await getSeaTable();
     
-    await seatable.deleteRow(EVENTS_TABLE, req.params.id);
+    await deleteRow(EVENTS_TABLE, req.params.id);
     
     res.json({ success: true });
   } catch (error) {
@@ -336,10 +399,9 @@ app.delete('/api/events/:id', async (req, res) => {
 app.get('/api/ads', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/ads, таблица: ${ADS_TABLE}`);
-    const seatable = await getSeaTable();
     
-    const rows = await seatable.listRows(ADS_TABLE);
-    console.log('Данные объявлений получены:', rows);
+    const rows = await listRows(ADS_TABLE);
+    console.log('Данные объявлений получены:', rows.length, 'записей');
     
     res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
@@ -351,9 +413,8 @@ app.get('/api/ads', async (req, res) => {
 app.post('/api/ads', async (req, res) => {
   try {
     console.log('Создание объявления с данными:', JSON.stringify(req.body, null, 2));
-    const seatable = await getSeaTable();
     
-    const result = await seatable.insertRow(ADS_TABLE, req.body.fields);
+    const result = await insertRow(ADS_TABLE, req.body.fields);
     console.log('Объявление создано:', result);
     
     res.json({ id: result._id, fields: result });
@@ -366,9 +427,8 @@ app.post('/api/ads', async (req, res) => {
 app.put('/api/ads/:id', async (req, res) => {
   try {
     console.log('Обновление объявления с данными:', JSON.stringify(req.body, null, 2));
-    const seatable = await getSeaTable();
     
-    const result = await seatable.updateRow(ADS_TABLE, req.params.id, req.body.fields);
+    const result = await updateRow(ADS_TABLE, req.params.id, req.body.fields);
     console.log('Объявление обновлено:', result);
     
     res.json({ id: result._id, fields: result });
@@ -381,9 +441,8 @@ app.put('/api/ads/:id', async (req, res) => {
 app.delete('/api/ads/:id', async (req, res) => {
   try {
     console.log(`Удаление объявления ${req.params.id}`);
-    const seatable = await getSeaTable();
     
-    await seatable.deleteRow(ADS_TABLE, req.params.id);
+    await deleteRow(ADS_TABLE, req.params.id);
     
     res.json({ success: true });
   } catch (error) {
@@ -397,10 +456,9 @@ app.delete('/api/ads/:id', async (req, res) => {
 app.get('/api/votings', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/votings, таблица: ${VOTINGS_TABLE}`);
-    const seatable = await getSeaTable();
     
-    const rows = await seatable.listRows(VOTINGS_TABLE);
-    console.log('Данные голосований получены:', rows);
+    const rows = await listRows(VOTINGS_TABLE);
+    console.log('Данные голосований получены:', rows.length, 'записей');
     
     res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
@@ -412,9 +470,8 @@ app.get('/api/votings', async (req, res) => {
 app.post('/api/votings', async (req, res) => {
   try {
     console.log('Создание голосования с данными:', JSON.stringify(req.body, null, 2));
-    const seatable = await getSeaTable();
     
-    const result = await seatable.insertRow(VOTINGS_TABLE, req.body.fields);
+    const result = await insertRow(VOTINGS_TABLE, req.body.fields);
     console.log('Голосование создано:', result);
     
     res.json({ id: result._id, fields: result });
@@ -427,9 +484,8 @@ app.post('/api/votings', async (req, res) => {
 app.put('/api/votings/:id', async (req, res) => {
   try {
     console.log('Обновление голосования с данными:', JSON.stringify(req.body, null, 2));
-    const seatable = await getSeaTable();
     
-    const result = await seatable.updateRow(VOTINGS_TABLE, req.params.id, req.body.fields);
+    const result = await updateRow(VOTINGS_TABLE, req.params.id, req.body.fields);
     console.log('Голосование обновлено:', result);
     
     res.json({ id: result._id, fields: result });
@@ -442,9 +498,8 @@ app.put('/api/votings/:id', async (req, res) => {
 app.delete('/api/votings/:id', async (req, res) => {
   try {
     console.log(`Удаление голосования ${req.params.id}`);
-    const seatable = await getSeaTable();
     
-    await seatable.deleteRow(VOTINGS_TABLE, req.params.id);
+    await deleteRow(VOTINGS_TABLE, req.params.id);
     
     res.json({ success: true });
   } catch (error) {
@@ -458,15 +513,14 @@ app.get('/api/events/:eventId/votings', async (req, res) => {
   try {
     const { eventId } = req.params;
     console.log(`Получен запрос к /api/events/${eventId}/votings, таблица: ${VOTINGS_TABLE}`);
-    const seatable = await getSeaTable();
     
-    const rows = await seatable.listRows(VOTINGS_TABLE);
+    const rows = await listRows(VOTINGS_TABLE);
     
     const filteredVotings = rows.filter(row => 
       row.EventID && row.EventID.toString() === eventId.toString()
     );
     
-    console.log('Отфильтрованные голосования для события:', filteredVotings);
+    console.log('Отфильтрованные голосования для события:', filteredVotings.length);
     res.json({ records: filteredVotings.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
     console.error('Ошибка GET /api/events/:eventId/votings:', error.message);
@@ -487,8 +541,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
       return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
     }
 
-    const seatable = await getSeaTable();
-    const voting = await seatable.getRow(VOTINGS_TABLE, id);
+    const voting = await getRow(VOTINGS_TABLE, id);
 
     if (!voting) {
       console.error('Голосование не найдено');
@@ -535,9 +588,9 @@ app.post('/api/votings/:id/vote', async (req, res) => {
 
     console.log('Обновление записи голосования:', JSON.stringify(updateData, null, 2));
 
-    const updateResponse = await seatable.updateRow(VOTINGS_TABLE, id, updateData);
+    const updateResponse = await updateRow(VOTINGS_TABLE, id, updateData);
 
-    console.log('Голосование успешно обновлено:', updateResponse);
+    console.log('Голосование успешно обновлено');
     res.json({ success: true, voting: { id: updateResponse._id, fields: updateResponse } });
   } catch (error) {
     console.error('Ошибка голосования:', error.message);
@@ -551,8 +604,7 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
     const { id, userId } = req.params;
 
     console.log(`Проверка статуса голосования для пользователя ${userId}, ID голосования: ${id}`);
-    const seatable = await getSeaTable();
-    const voting = await seatable.getRow(VOTINGS_TABLE, id);
+    const voting = await getRow(VOTINGS_TABLE, id);
 
     if (!voting) {
       return res.status(404).json({ error: 'Голосование не найдено' });
@@ -581,8 +633,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
     const { id } = req.params;
 
     console.log(`Завершение голосования ${id}`);
-    const seatable = await getSeaTable();
-    const voting = await seatable.getRow(VOTINGS_TABLE, id);
+    const voting = await getRow(VOTINGS_TABLE, id);
 
     if (!voting) {
       return res.status(404).json({ error: 'Голосование не найдено' });
@@ -625,7 +676,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
       Results: JSON.stringify(results)
     };
 
-    const updateResponse = await seatable.updateRow(VOTINGS_TABLE, id, updateData);
+    const updateResponse = await updateRow(VOTINGS_TABLE, id, updateData);
 
     res.json({ success: true, results: results, voting: { id: updateResponse._id, fields: updateResponse } });
   } catch (error) {
@@ -633,8 +684,6 @@ app.post('/api/votings/:id/complete', async (req, res) => {
     res.status(500).json({ error: 'Ошибка завершения голосования' });
   }
 });
-
-// Остальные функции (generate-results, attend и т.д.) остаются аналогичными...
 
 // ==================== API ДЛЯ "Я ПОЙДУ!" ====================
 
@@ -649,8 +698,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
       return res.status(400).json({ error: 'Требуется ID пользователя' });
     }
 
-    const seatable = await getSeaTable();
-    const event = await seatable.getRow(EVENTS_TABLE, eventId);
+    const event = await getRow(EVENTS_TABLE, eventId);
 
     if (!event) {
       return res.status(404).json({ error: 'Событие не найдено' });
@@ -687,9 +735,9 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
 
     console.log('Данные для обновления:', JSON.stringify(updateData, null, 2));
 
-    const updateResponse = await seatable.updateRow(EVENTS_TABLE, eventId, updateData);
+    const updateResponse = await updateRow(EVENTS_TABLE, eventId, updateData);
 
-    console.log('Обновление успешно:', updateResponse);
+    console.log('Обновление успешно');
     res.json({ success: true, count: newCount, attending: true });
 
   } catch (error) {
@@ -709,8 +757,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       return res.status(400).json({ error: 'Требуется ID пользователя' });
     }
 
-    const seatable = await getSeaTable();
-    const event = await seatable.getRow(EVENTS_TABLE, eventId);
+    const event = await getRow(EVENTS_TABLE, eventId);
 
     if (!event) {
       return res.status(404).json({ error: 'Событие не найдено' });
@@ -740,7 +787,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
       AttendeesCount: newCount
     };
 
-    const updateResponse = await seatable.updateRow(EVENTS_TABLE, eventId, updateData);
+    const updateResponse = await updateRow(EVENTS_TABLE, eventId, updateData);
 
     console.log('Отказ от участия успешен');
     res.json({ success: true, count: newCount, attending: false });
@@ -758,8 +805,7 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
 
     console.log(`Проверка статуса участия для пользователя ${userId} в событии ${eventId}`);
 
-    const seatable = await getSeaTable();
-    const event = await seatable.getRow(EVENTS_TABLE, eventId);
+    const event = await getRow(EVENTS_TABLE, eventId);
 
     if (!event) {
       return res.status(404).json({ error: 'Событие не найдено' });
