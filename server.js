@@ -1,307 +1,205 @@
 const express = require('express');
 const axios = require('axios');
-const multer = require('multer');
-const fs = require('fs');
-const FormData = require('form-data');
-const path = require('path');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware для CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json());
 
-const upload = multer({ 
-  dest: 'uploads/',
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  }
-});
+// ==================== ПЕРЕМЕННЫЕ ====================
 
-// ==================== НАСТРОЙКИ SEA TABLE ====================
+// ПОПРОБУЙТЕ ЭТИ ВАРИАНТЫ UUID:
+const POSSIBLE_UUIDS = [
+  '1e24960e-ac5a-43b6-8269-e6376b16577a', // старый UUID
+  '89387', // ID из URL workspace
+  'Gf71',  // tid из URL
+  '0000',  // vid из URL
+  'Smolville' // имя базы
+];
 
-// ВАЖНО: Получите новый API токен для базы Smolville!
-const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN || 'ВАШ_НОВЫЙ_API_ТОКЕН_ЗДЕСЬ';
-const SEATABLE_SERVER_URL = process.env.SEATABLE_SERVER_URL || 'https://cloud.seatable.io';
-
-// Base UUID - из URL вашей базы
-// Из URL: https://cloud.seatable.io/workspace/89387/dtable/Smolville/?tid=Gf71&vid=0000
-// Base UUID обычно выглядит как длинная строка символов, а не имя базы
-const SEATABLE_BASE_UUID = process.env.SEATABLE_BASE_UUID || 'UUID_ВАШЕЙ_БАЗЫ_ЗДЕСЬ';
-
-// Названия таблиц
-const EVENTS_TABLE = process.env.SEATABLE_EVENTS_TABLE_NAME || 'Events';
-const ADS_TABLE = process.env.SEATABLE_ADS_TABLE_NAME || 'Ads';
-const VOTINGS_TABLE = process.env.SEATABLE_VOTINGS_TABLE_NAME || 'Votings';
-
-// Radikal API конфигурация
-const RADIKAL_API_URL = 'https://radikal.cloud/api/1';
+const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN || '622c69aab356a1e53f3994f234c1e4a98f77f656';
 const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
 
-// Хардкод админа
-const ADMIN_ID = 366825437;
-
-if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
-  console.error('❌ Отсутствуют обязательные переменные окружения');
-  console.error('SEATABLE_API_TOKEN:', SEATABLE_API_TOKEN ? 'есть' : 'НЕТ');
-  console.error('SEATABLE_BASE_UUID:', SEATABLE_BASE_UUID ? 'есть' : 'НЕТ');
-  console.error('RADIKAL_API_KEY:', RADIKAL_API_KEY ? 'есть' : 'НЕТ');
-  process.exit(1);
-}
-
-// ==================== SeaTable API ====================
-
-class SeaTableAPI {
-  constructor(serverUrl, apiToken, baseUUID) {
-    this.baseURL = `${serverUrl}/api/v2.1/dtable/app-api/${baseUUID}`;
-    this.apiToken = apiToken;
-    this.baseUUID = baseUUID;
-  }
-
-  getHeaders() {
-    return {
-      'Authorization': `Token ${this.apiToken}`,
-      'Content-Type': 'application/json'
-    };
-  }
-
-  async makeRequest(method, endpoint, data = null) {
-    try {
-      const url = `${this.baseURL}${endpoint}`;
-      console.log(`🌊 SeaTable API: ${method} ${url}`);
-      
-      const config = {
-        method,
-        url,
-        headers: this.getHeaders(),
-        timeout: 10000
-      };
-
-      if (data) {
-        config.data = data;
-      }
-
-      const response = await axios(config);
-      console.log(`✅ SeaTable API успешно: ${method} ${endpoint}`);
-      return response.data;
-      
-    } catch (error) {
-      console.error(`❌ SeaTable API ошибка:`, error.message);
-      
-      if (error.response) {
-        console.error('Статус:', error.response.status);
-        
-        if (error.response.data) {
-          const responseStr = JSON.stringify(error.response.data).substring(0, 200);
-          console.error('Данные:', responseStr + '...');
-        }
-        
-        if (error.response.status === 403) {
-          throw new Error('Доступ запрещен. Проверьте API токен.');
-        }
-        if (error.response.status === 404) {
-          throw new Error('Ресурс не найден. Проверьте Base UUID и название таблицы.');
-        }
-      }
-      
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Таймаут запроса. SeaTable не отвечает.');
-      }
-      
-      throw error;
-    }
-  }
-
-  async listRows(tableName) {
-    return this.makeRequest('GET', `/rows/?table_name=${encodeURIComponent(tableName)}`);
-  }
-
-  async insertRow(tableName, rowData) {
-    return this.makeRequest('POST', '/rows/', {
-      table_name: tableName,
-      row: rowData
-    });
-  }
-
-  async updateRow(tableName, rowId, rowData) {
-    return this.makeRequest('PUT', '/rows/', {
-      table_name: tableName,
-      row_id: rowId,
-      row: rowData
-    });
-  }
-
-  async deleteRow(tableName, rowId) {
-    return this.makeRequest('DELETE', '/rows/', {
-      table_name: tableName,
-      row_id: rowId
-    });
-  }
-}
-
-// Инициализация API клиента
-const seatableAPI = new SeaTableAPI(SEATABLE_SERVER_URL, SEATABLE_API_TOKEN, SEATABLE_BASE_UUID);
-
-// ==================== ДИАГНОСТИЧЕСКИЕ API ====================
+// ==================== ДИАГНОСТИКА ====================
 
 app.get('/', (req, res) => {
   res.send(`
     <html>
-      <head><title>Smolville Backend</title></head>
+      <head><title>SeaTable Diagnostic</title></head>
       <body>
-        <h1>🚀 Smolville Backend запущен!</h1>
-        <p>Для диагностики используйте:</p>
+        <h1>🔧 SeaTable Diagnostic Tool</h1>
+        <p>Используйте:</p>
         <ul>
-          <li><a href="/api/debug/connection">/api/debug/connection</a> - Проверка подключения</li>
-          <li><a href="/api/debug/env">/api/debug/env</a> - Переменные окружения</li>
-          <li><a href="/api/debug/find-uuid">/api/debug/find-uuid</a> - Поиск UUID базы</li>
+          <li><a href="/api/test-all">/api/test-all</a> - Тест всех возможных UUID</li>
+          <li><a href="/api/create-token-guide">/api/create-token-guide</a> - Инструкция по созданию токена</li>
         </ul>
       </body>
     </html>
   `);
 });
 
-// Поиск UUID базы с помощью Account Token
-app.get('/api/debug/find-uuid', async (req, res) => {
+// Тест всех возможных UUID
+app.get('/api/test-all', async (req, res) => {
+  const results = [];
+  
+  for (const uuid of POSSIBLE_UUIDS) {
+    try {
+      console.log(`🧪 Тестируем UUID: ${uuid}`);
+      
+      const response = await axios.get(
+        `https://cloud.seatable.io/api/v2.1/dtable/app-api/${uuid}/rows/?table_name=Events`,
+        {
+          headers: {
+            'Authorization': `Token ${SEATABLE_API_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 5000
+        }
+      );
+
+      results.push({
+        uuid: uuid,
+        status: 'SUCCESS',
+        statusCode: response.status,
+        dataLength: response.data.rows ? response.data.rows.length : 0,
+        message: '✅ РАБОТАЕТ!'
+      });
+      
+    } catch (error) {
+      let errorInfo = {
+        uuid: uuid,
+        status: 'ERROR',
+        error: error.message
+      };
+
+      if (error.response) {
+        errorInfo.statusCode = error.response.status;
+        if (error.response.data && typeof error.response.data === 'string' && error.response.data.includes('<!DOCTYPE html>')) {
+          errorInfo.message = 'HTML response - неверный UUID';
+        } else {
+          errorInfo.message = `HTTP ${error.response.status}`;
+        }
+      } else if (error.code === 'ECONNABORTED') {
+        errorInfo.message = 'Timeout - возможно неверный API Token';
+      }
+
+      results.push(errorInfo);
+    }
+  }
+
+  // Анализ результатов
+  const workingUUIDs = results.filter(r => r.status === 'SUCCESS');
+  
+  res.json({
+    summary: {
+      tested: results.length,
+      working: workingUUIDs.length,
+      apiToken: SEATABLE_API_TOKEN ? `установлен (${SEATABLE_API_TOKEN.substring(0, 8)}...)` : 'НЕТ'
+    },
+    results: results,
+    recommendations: workingUUIDs.length > 0 ? [
+      `✅ Используйте UUID: ${workingUUIDs[0].uuid}`,
+      'Обновите переменную SEATABLE_BASE_UUID в Render'
+    ] : [
+      '❌ Ни один UUID не сработал',
+      '1. Создайте новый API Token для базы Smolville',
+      '2. Найдите правильный UUID через интерфейс SeaTable',
+      '3. Проверьте инструкцию: /api/create-token-guide'
+    ]
+  });
+});
+
+// Инструкция по созданию API Token
+app.get('/api/create-token-guide', (req, res) => {
+  res.json({
+    steps: [
+      {
+        step: 1,
+        action: 'Откройте базу Smolville в SeaTable',
+        details: 'https://cloud.seatable.io/workspace/89387/dtable/Smolville/'
+      },
+      {
+        step: 2, 
+        action: 'Нажмите на шестеренку (Настройки) в правом верхнем углу',
+        details: 'Это иконка настроек базы'
+      },
+      {
+        step: 3,
+        action: 'Выберите "Внешние приложения"',
+        details: 'В меню настроек'
+      },
+      {
+        step: 4,
+        action: 'Нажмите "API токен"',
+        details: 'Создайте новый токен если старый не работает'
+      },
+      {
+        step: 5,
+        action: 'Скопируйте новый токен',
+        details: 'И обновите переменную SEATABLE_API_TOKEN в Render'
+      },
+      {
+        step: 6,
+        action: 'Найдите UUID базы',
+        details: 'В настройках базы или через F12 → Network'
+      }
+    ],
+    current_token: SEATABLE_API_TOKEN ? `установлен (${SEATABLE_API_TOKEN.substring(0, 8)}...)` : 'НЕТ',
+    troubleshooting: [
+      'Если токен не работает - создайте новый',
+      'Убедитесь что вы создаете токен для правильной базы (Smolville)',
+      'Токен должен иметь права на чтение и запись'
+    ]
+  });
+});
+
+// Простой тест с конкретным UUID
+app.get('/api/test-uuid/:uuid', async (req, res) => {
+  const uuid = req.params.uuid;
+  
   try {
-    const ACCOUNT_TOKEN = 'd146dc5b1b1fd51aafdbf5dbae1c00babf2f927d';
-    
-    console.log('🔍 Ищем UUID базы Smolville через Account API...');
-    
-    // Получаем список рабочих пространств
-    const workspacesResponse = await axios.get(
-      'https://cloud.seatable.io/api/v2.1/workspace/',
+    const response = await axios.get(
+      `https://cloud.seatable.io/api/v2.1/dtable/app-api/${uuid}/rows/?table_name=Events`,
       {
         headers: {
-          'Authorization': `Token ${ACCOUNT_TOKEN}`,
+          'Authorization': `Token ${SEATABLE_API_TOKEN}`,
           'Content-Type': 'application/json'
         },
-        timeout: 10000
+        timeout: 5000
       }
     );
 
-    let baseUUID = null;
-    
-    // Ищем в каждом workspace базу Smolville
-    for (const workspace of workspacesResponse.data.workspace_list) {
-      try {
-        const tablesResponse = await axios.get(
-          `https://cloud.seatable.io/api/v2.1/workspace/${workspace.id}/dtable/`,
-          {
-            headers: {
-              'Authorization': `Token ${ACCOUNT_TOKEN}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 10000
-          }
-        );
-
-        const smolvilleBase = tablesResponse.data.find(table => table.name === 'Smolville');
-        if (smolvilleBase) {
-          baseUUID = smolvilleBase.uuid;
-          console.log(`✅ Найдена база Smolville: ${baseUUID}`);
-          break;
-        }
-      } catch (error) {
-        console.log(`ℹ️ Workspace ${workspace.id}: нет доступа или нет базы`);
-      }
-    }
-
-    if (baseUUID) {
-      res.json({
-        success: true,
-        baseUUID: baseUUID,
-        currentConfig: {
-          apiToken: SEATABLE_API_TOKEN ? `установлен (${SEATABLE_API_TOKEN.substring(0, 8)}...)` : 'НЕТ',
-          currentBaseUUID: SEATABLE_BASE_UUID,
-          foundBaseUUID: baseUUID
-        },
-        instructions: [
-          '1. Скопируйте найденный UUID базы',
-          '2. Обновите переменную SEATABLE_BASE_UUID в Render',
-          '3. Убедитесь, что используете API Token (не Account Token)',
-          '4. Проверьте подключение через /api/debug/connection'
-        ]
-      });
-    } else {
-      res.status(404).json({
-        success: false,
-        error: 'База Smolville не найдена в аккаунте',
-        instructions: [
-          '1. Убедитесь, что база Smolville существует',
-          '2. Проверьте правильность Account Token',
-          '3. Создайте новый API Token для базы Smolville'
-        ]
-      });
-    }
-    
-  } catch (error) {
-    console.error('Ошибка поиска UUID:', error.message);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      instructions: [
-        '1. Проверьте Account Token',
-        '2. Убедитесь, что база Smolville существует',
-        '3. Создайте новый API Token для базы'
-      ]
-    });
-  }
-});
-
-// Проверка подключения
-app.get('/api/debug/connection', async (req, res) => {
-  try {
-    console.log('🔍 Проверка подключения к SeaTable...');
-    
-    const testData = await seatableAPI.listRows(EVENTS_TABLE);
-    
     res.json({
       success: true,
-      message: '✅ Подключение к SeaTable успешно!',
-      details: {
-        baseUUID: SEATABLE_BASE_UUID,
-        baseURL: `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/${SEATABLE_BASE_UUID}`,
-        tables: {
-          events: testData.rows ? testData.rows.length : 0
-        }
-      }
+      uuid: uuid,
+      statusCode: response.status,
+      data: response.data,
+      message: '✅ Отлично! Этот UUID работает.'
     });
     
   } catch (error) {
     res.status(500).json({
       success: false,
+      uuid: uuid,
       error: error.message,
-      details: {
-        baseUUID: SEATABLE_BASE_UUID,
-        baseURL: `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/${SEATABLE_BASE_UUID}`,
-        apiToken: SEATABLE_API_TOKEN ? 'установлен' : 'отсутствует'
-      },
-      troubleshooting: [
-        '1. Используйте /api/debug/find-uuid чтобы найти правильный UUID базы',
-        '2. Создайте новый API Token для базы Smolville',
-        '3. Убедитесь, что таблица "Events" существует в базе'
-      ]
+      details: error.response ? {
+        status: error.response.status,
+        data: error.response.data
+      } : null,
+      message: '❌ Этот UUID не работает.'
     });
   }
 });
 
-// Остальной код (Events, Ads, Votings API) остается таким же...
-// [Здесь должен быть остальной ваш код...]
-
 app.listen(port, () => {
-  console.log(`🚀 Сервер запущен на порту ${port}`);
-  console.log(`🔗 Для диагностики откройте: http://localhost:${port}/api/debug/find-uuid`);
+  console.log(`🚀 Диагностический сервер запущен на порту ${port}`);
+  console.log(`🔗 Откройте http://localhost:${port}/api/test-all`);
 });
