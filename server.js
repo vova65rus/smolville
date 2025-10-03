@@ -5,6 +5,7 @@ const fs = require('fs');
 const FormData = require('form-data');
 const path = require('path');
 const sharp = require('sharp');
+const { SeaTable } = require('seatable-api');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -50,55 +51,32 @@ if (!SEATABLE_API_TOKEN || !SEATABLE_BASE_UUID || !RADIKAL_API_KEY) {
   process.exit(1);
 }
 
-// SeaTable API endpoints - используем официальные endpoint'ы
-const getBaseTokenUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-access-token/`;
-const getRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
-const getRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
-const appendRecordsUrl = (tableName) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/?table_name=${tableName}`;
-const updateRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
-const deleteRecordUrl = (tableName, rowId) => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/${SEATABLE_BASE_UUID}/rows/${rowId}/?table_name=${tableName}`;
-const getUploadLinkUrl = () => `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-upload-link/`;
+// Инициализация SeaTable SDK
+let seatable = null;
 
-// Переменная для хранения токена
-let currentAccessToken = null;
-
-// Функция для получения Base-Token
-async function getBaseToken() {
+async function initializeSeaTable() {
   try {
-    console.log('Попытка получить Base-Token...');
-    const response = await axios.get(getBaseTokenUrl(), {
-      headers: {
-        Authorization: `Bearer ${SEATABLE_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
+    seatable = new SeaTable({
+      server: SEATABLE_SERVER_URL,
+      api_token: SEATABLE_API_TOKEN,
+      dtable_uuid: SEATABLE_BASE_UUID
     });
     
-    currentAccessToken = response.data.access_token;
-    
-    console.log('Base-Token успешно получен:', currentAccessToken);
-    
-    return currentAccessToken;
+    await seatable.auth();
+    console.log('SeaTable SDK успешно инициализирован');
+    return seatable;
   } catch (error) {
-    console.error('Ошибка при получении Base-Token:', error.message);
-    console.error('Детали ошибки:', error.response ? error.response.data : error.message);
-    throw new Error('Не удалось получить Base-Token');
+    console.error('Ошибка инициализации SeaTable SDK:', error.message);
+    throw error;
   }
 }
 
-// Функция для получения валидного токена
-async function getValidatedToken() {
-  if (!currentAccessToken) {
-    return await getBaseToken();
+// Вспомогательная функция для получения экземпляра SeaTable
+async function getSeaTable() {
+  if (!seatable) {
+    return await initializeSeaTable();
   }
-  return currentAccessToken;
-}
-
-// Получить заголовки для SeaTable API
-function getSeatableHeaders(token) {
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  };
+  return seatable;
 }
 
 // Вспомогательная функция для безопасного парсинга JSON
@@ -127,7 +105,7 @@ app.get('/health', (req, res) => {
     version: '1.0.0',
     seatable: {
       baseUUID: SEATABLE_BASE_UUID,
-      hasToken: !!currentAccessToken
+      initialized: !!seatable
     }
   });
 });
@@ -259,76 +237,6 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// API для загрузки изображений номинантов
-app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Изображение не загружено' });
-    }
-    
-    console.log('Получен запрос на загрузку изображения номинанта');
-    
-    const filePath = req.file.path;
-    const fileBuffer = fs.readFileSync(filePath);
-    const filename = req.file.originalname || `option_image_${Date.now()}.jpg`;
-
-    // Получаем Base-Token
-    const baseToken = await getValidatedToken();
-
-    // Шаг 1: Получаем upload link
-    const uploadLinkResponse = await axios.get(getUploadLinkUrl(), {
-      headers: {
-        Authorization: `Bearer ${SEATABLE_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const { upload_link, parent_path, img_relative_path } = uploadLinkResponse.data;
-
-    // Шаг 2: Загружаем файл в SeaTable
-    const formData = new FormData();
-    formData.append('file', fileBuffer, {
-      filename: filename,
-      contentType: req.file.mimetype
-    });
-    formData.append('parent_dir', parent_path);
-    formData.append('relative_path', img_relative_path);
-
-    const uploadResponse = await axios.post(upload_link, formData, {
-      headers: {
-        ...formData.getHeaders()
-      }
-    });
-
-    const fileUrl = uploadResponse.data[0].url;
-
-    try {
-      fs.unlinkSync(filePath);
-    } catch (unlinkError) {
-      console.error('Ошибка удаления временного файла:', unlinkError.message);
-    }
-
-    console.log('Загрузка изображения номинанта успешна, URL:', fileUrl);
-
-    res.json({
-      url: fileUrl,
-      filename: filename,
-      fileId: fileUrl.split('/').pop()
-    });
-
-  } catch (error) {
-    console.error('Ошибка загрузки изображения номинанта:', error.message);
-    if (req.file) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkError) {
-        console.error('Ошибка удаления временного файла:', unlinkError.message);
-      }
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Эндпоинт для удаления изображений
 app.delete('/api/upload/:fileId', async (req, res) => {
   try {
@@ -349,25 +257,14 @@ app.delete('/api/upload/:fileId', async (req, res) => {
 app.get('/api/events', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/events, таблица: ${EVENTS_TABLE}`);
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.get(getRecordsUrl(EVENTS_TABLE), {
-      headers: headers
-    });
+    const rows = await seatable.listRows(EVENTS_TABLE);
+    console.log('Данные событий получены:', rows);
     
-    console.log('Данные событий получены:', response.data);
-    res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
+    res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Ошибка GET /api/events:', error.message, error.response?.data || {});
-    
-    // Детальная информация об ошибке
-    if (error.response) {
-      console.error('Статус ошибки:', error.response.status);
-      console.error('URL запроса:', error.config.url);
-      console.error('Заголовки запроса:', error.config.headers);
-    }
-    
+    console.error('Ошибка GET /api/events:', error.message);
     res.status(500).json({ error: 'Ошибка загрузки событий' });
   }
 });
@@ -375,18 +272,14 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     console.log('Создание события с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.post(appendRecordsUrl(EVENTS_TABLE), {
-      rows: [req.body.fields]
-    }, {
-      headers: headers
-    });
+    const result = await seatable.insertRow(EVENTS_TABLE, req.body.fields);
+    console.log('Событие создано:', result);
     
-    res.json({ id: response.data.rows[0]._id, fields: response.data.rows[0] });
+    res.json({ id: result._id, fields: result });
   } catch (error) {
-    console.error('Ошибка POST /api/events:', error.message, error.response?.data || {});
+    console.error('Ошибка POST /api/events:', error.message);
     res.status(500).json({ error: 'Ошибка создания события' });
   }
 });
@@ -394,16 +287,17 @@ app.post('/api/events', async (req, res) => {
 app.get('/api/events/:id', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/events/${req.params.id}`);
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.get(getRecordUrl(EVENTS_TABLE, req.params.id), {
-      headers: headers
-    });
+    const row = await seatable.getRow(EVENTS_TABLE, req.params.id);
     
-    res.json({ id: response.data._id, fields: response.data });
+    if (!row) {
+      return res.status(404).json({ error: 'Событие не найдено' });
+    }
+    
+    res.json({ id: row._id, fields: row });
   } catch (error) {
-    console.error('Ошибка GET /api/events/:id:', error.message, error.response?.data || {});
+    console.error('Ошибка GET /api/events/:id:', error.message);
     res.status(500).json({ error: 'Ошибка получения события' });
   }
 });
@@ -411,18 +305,14 @@ app.get('/api/events/:id', async (req, res) => {
 app.put('/api/events/:id', async (req, res) => {
   try {
     console.log('Обновление события с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.put(updateRecordUrl(EVENTS_TABLE, req.params.id), {
-      row: req.body.fields
-    }, {
-      headers: headers
-    });
+    const result = await seatable.updateRow(EVENTS_TABLE, req.params.id, req.body.fields);
+    console.log('Событие обновлено:', result);
     
-    res.json({ id: response.data._id, fields: response.data });
+    res.json({ id: result._id, fields: result });
   } catch (error) {
-    console.error('Ошибка PUT /api/events/:id:', error.message, error.response?.data || {});
+    console.error('Ошибка PUT /api/events/:id:', error.message);
     res.status(500).json({ error: 'Ошибка обновления события' });
   }
 });
@@ -430,16 +320,13 @@ app.put('/api/events/:id', async (req, res) => {
 app.delete('/api/events/:id', async (req, res) => {
   try {
     console.log(`Удаление события ${req.params.id}`);
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    await axios.delete(deleteRecordUrl(EVENTS_TABLE, req.params.id), {
-      headers: headers
-    });
+    await seatable.deleteRow(EVENTS_TABLE, req.params.id);
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Ошибка DELETE /api/events/:id:', error.message, error.response?.data || {});
+    console.error('Ошибка DELETE /api/events/:id:', error.message);
     res.status(500).json({ error: 'Ошибка удаления события' });
   }
 });
@@ -449,17 +336,14 @@ app.delete('/api/events/:id', async (req, res) => {
 app.get('/api/ads', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/ads, таблица: ${ADS_TABLE}`);
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.get(getRecordsUrl(ADS_TABLE), {
-      headers: headers
-    });
+    const rows = await seatable.listRows(ADS_TABLE);
+    console.log('Данные объявлений получены:', rows);
     
-    console.log('Данные объявлений получены:', response.data);
-    res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
+    res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Ошибка GET /api/ads:', error.message, error.response?.data || {});
+    console.error('Ошибка GET /api/ads:', error.message);
     res.status(500).json({ error: 'Ошибка загрузки объявлений' });
   }
 });
@@ -467,18 +351,14 @@ app.get('/api/ads', async (req, res) => {
 app.post('/api/ads', async (req, res) => {
   try {
     console.log('Создание объявления с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.post(appendRecordsUrl(ADS_TABLE), {
-      rows: [req.body.fields]
-    }, {
-      headers: headers
-    });
+    const result = await seatable.insertRow(ADS_TABLE, req.body.fields);
+    console.log('Объявление создано:', result);
     
-    res.json({ id: response.data.rows[0]._id, fields: response.data.rows[0] });
+    res.json({ id: result._id, fields: result });
   } catch (error) {
-    console.error('Ошибка POST /api/ads:', error.message, error.response?.data || {});
+    console.error('Ошибка POST /api/ads:', error.message);
     res.status(500).json({ error: 'Ошибка создания объявления' });
   }
 });
@@ -486,18 +366,14 @@ app.post('/api/ads', async (req, res) => {
 app.put('/api/ads/:id', async (req, res) => {
   try {
     console.log('Обновление объявления с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.put(updateRecordUrl(ADS_TABLE, req.params.id), {
-      row: req.body.fields
-    }, {
-      headers: headers
-    });
+    const result = await seatable.updateRow(ADS_TABLE, req.params.id, req.body.fields);
+    console.log('Объявление обновлено:', result);
     
-    res.json({ id: response.data._id, fields: response.data });
+    res.json({ id: result._id, fields: result });
   } catch (error) {
-    console.error('Ошибка PUT /api/ads/:id:', error.message, error.response?.data || {});
+    console.error('Ошибка PUT /api/ads/:id:', error.message);
     res.status(500).json({ error: 'Ошибка обновления объявления' });
   }
 });
@@ -505,16 +381,13 @@ app.put('/api/ads/:id', async (req, res) => {
 app.delete('/api/ads/:id', async (req, res) => {
   try {
     console.log(`Удаление объявления ${req.params.id}`);
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    await axios.delete(deleteRecordUrl(ADS_TABLE, req.params.id), {
-      headers: headers
-    });
+    await seatable.deleteRow(ADS_TABLE, req.params.id);
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Ошибка DELETE /api/ads/:id:', error.message, error.response?.data || {});
+    console.error('Ошибка DELETE /api/ads/:id:', error.message);
     res.status(500).json({ error: 'Ошибка удаления объявления' });
   }
 });
@@ -524,25 +397,14 @@ app.delete('/api/ads/:id', async (req, res) => {
 app.get('/api/votings', async (req, res) => {
   try {
     console.log(`Получен запрос к /api/votings, таблица: ${VOTINGS_TABLE}`);
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.get(getRecordsUrl(VOTINGS_TABLE), {
-      headers: headers
-    });
+    const rows = await seatable.listRows(VOTINGS_TABLE);
+    console.log('Данные голосований получены:', rows);
     
-    console.log('Данные голосований получены:', response.data);
-    res.json({ records: response.data.rows.map(row => ({ id: row._id, fields: row })) });
+    res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
-    console.error('Ошибка GET /api/votings:', error.message, error.response?.data || {});
-    
-    // Детальная информация об ошибке
-    if (error.response) {
-      console.error('Статус ошибки:', error.response.status);
-      console.error('URL запроса:', error.config.url);
-      console.error('Заголовки запроса:', error.config.headers);
-    }
-    
+    console.error('Ошибка GET /api/votings:', error.message);
     res.status(500).json({ error: 'Ошибка загрузки голосований' });
   }
 });
@@ -550,18 +412,14 @@ app.get('/api/votings', async (req, res) => {
 app.post('/api/votings', async (req, res) => {
   try {
     console.log('Создание голосования с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.post(appendRecordsUrl(VOTINGS_TABLE), {
-      rows: [req.body.fields]
-    }, {
-      headers: headers
-    });
+    const result = await seatable.insertRow(VOTINGS_TABLE, req.body.fields);
+    console.log('Голосование создано:', result);
     
-    res.json({ id: response.data.rows[0]._id, fields: response.data.rows[0] });
+    res.json({ id: result._id, fields: result });
   } catch (error) {
-    console.error('Ошибка POST /api/votings:', error.message, error.response?.data || {});
+    console.error('Ошибка POST /api/votings:', error.message);
     res.status(500).json({ error: 'Ошибка создания голосования' });
   }
 });
@@ -569,18 +427,14 @@ app.post('/api/votings', async (req, res) => {
 app.put('/api/votings/:id', async (req, res) => {
   try {
     console.log('Обновление голосования с данными:', JSON.stringify(req.body, null, 2));
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    const response = await axios.put(updateRecordUrl(VOTINGS_TABLE, req.params.id), {
-      row: req.body.fields
-    }, {
-      headers: headers
-    });
+    const result = await seatable.updateRow(VOTINGS_TABLE, req.params.id, req.body.fields);
+    console.log('Голосование обновлено:', result);
     
-    res.json({ id: response.data._id, fields: response.data });
+    res.json({ id: result._id, fields: result });
   } catch (error) {
-    console.error('Ошибка PUT /api/votings/:id:', error.message, error.response?.data || {});
+    console.error('Ошибка PUT /api/votings/:id:', error.message);
     res.status(500).json({ error: 'Ошибка обновления голосования' });
   }
 });
@@ -588,21 +442,363 @@ app.put('/api/votings/:id', async (req, res) => {
 app.delete('/api/votings/:id', async (req, res) => {
   try {
     console.log(`Удаление голосования ${req.params.id}`);
-    const baseToken = await getValidatedToken();
-    const headers = getSeatableHeaders(baseToken);
+    const seatable = await getSeaTable();
     
-    await axios.delete(deleteRecordUrl(VOTINGS_TABLE, req.params.id), {
-      headers: headers
-    });
+    await seatable.deleteRow(VOTINGS_TABLE, req.params.id);
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Ошибка DELETE /api/votings/:id:', error.message, error.response?.data || {});
+    console.error('Ошибка DELETE /api/votings/:id:', error.message);
     res.status(500).json({ error: 'Ошибка удаления голосования' });
   }
 });
 
-// Остальные функции (vote, complete, generate-results, attend и т.д.) остаются аналогичными...
+// Получить голосования по ID мероприятия
+app.get('/api/events/:eventId/votings', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    console.log(`Получен запрос к /api/events/${eventId}/votings, таблица: ${VOTINGS_TABLE}`);
+    const seatable = await getSeaTable();
+    
+    const rows = await seatable.listRows(VOTINGS_TABLE);
+    
+    const filteredVotings = rows.filter(row => 
+      row.EventID && row.EventID.toString() === eventId.toString()
+    );
+    
+    console.log('Отфильтрованные голосования для события:', filteredVotings);
+    res.json({ records: filteredVotings.map(row => ({ id: row._id, fields: row })) });
+  } catch (error) {
+    console.error('Ошибка GET /api/events/:eventId/votings:', error.message);
+    res.status(500).json({ error: 'Ошибка загрузки голосований для события' });
+  }
+});
+
+// Проголосовать
+app.post('/api/votings/:id/vote', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, optionIndex, userLat, userLon } = req.body;
+
+    console.log('Получен запрос на голосование:', { id, userId, optionIndex, userLat, userLon });
+
+    if (!userId || optionIndex === undefined || userLat === undefined || userLon === undefined) {
+      console.error('Отсутствуют обязательные поля');
+      return res.status(400).json({ error: 'Отсутствуют обязательные поля' });
+    }
+
+    const seatable = await getSeaTable();
+    const voting = await seatable.getRow(VOTINGS_TABLE, id);
+
+    if (!voting) {
+      console.error('Голосование не найдено');
+      return res.status(404).json({ error: 'Голосование не найдено' });
+    }
+
+    if (voting.Status === 'Completed') {
+      console.error('Голосование завершено');
+      return res.status(400).json({ error: 'Голосование завершено' });
+    }
+
+    const votedUserIds = voting.VotedUserIDs || '';
+    const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
+
+    if (votedUsersArray.includes(userId.toString())) {
+      console.error('Пользователь уже проголосовал');
+      return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
+    }
+
+    const votingLat = voting.Latitude;
+    const votingLon = voting.Longitude;
+
+    if (votingLat && votingLon && userLat && userLon) {
+      const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
+      console.log('Рассчитанное расстояние:', distance);
+      if (distance > 1000) {
+        console.error('Пользователь находится слишком далеко');
+        return res.status(400).json({ error: 'Вы находитесь слишком далеко от места голосования' });
+      }
+    }
+
+    let currentVotes = safeJsonParse(voting.Votes, {});
+    console.log('Текущие голоса:', currentVotes);
+
+    currentVotes[userId] = optionIndex;
+    console.log('Обновлённые голоса:', currentVotes);
+
+    const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
+
+    const updateData = {
+      Votes: JSON.stringify(currentVotes),
+      VotedUserIDs: newVotedUserIDs
+    };
+
+    console.log('Обновление записи голосования:', JSON.stringify(updateData, null, 2));
+
+    const updateResponse = await seatable.updateRow(VOTINGS_TABLE, id, updateData);
+
+    console.log('Голосование успешно обновлено:', updateResponse);
+    res.json({ success: true, voting: { id: updateResponse._id, fields: updateResponse } });
+  } catch (error) {
+    console.error('Ошибка голосования:', error.message);
+    res.status(500).json({ error: 'Ошибка при голосовании' });
+  }
+});
+
+// Проверить статус голосования пользователя
+app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+
+    console.log(`Проверка статуса голосования для пользователя ${userId}, ID голосования: ${id}`);
+    const seatable = await getSeaTable();
+    const voting = await seatable.getRow(VOTINGS_TABLE, id);
+
+    if (!voting) {
+      return res.status(404).json({ error: 'Голосование не найдено' });
+    }
+
+    const votedUserIds = voting.VotedUserIDs || '';
+    const votedUsersArray = votedUserIds.split(',').filter(id => id && id.trim());
+
+    const hasVoted = votedUsersArray.includes(userId.toString());
+    let userVote = null;
+    if (voting.Votes) {
+      const votes = safeJsonParse(voting.Votes, {});
+      userVote = votes[userId] !== undefined ? votes[userId] : null;
+    }
+
+    res.json({ hasVoted, userVote });
+  } catch (error) {
+    console.error('Ошибка проверки статуса голосования:', error.message);
+    res.status(500).json({ error: 'Ошибка проверки статуса голосования' });
+  }
+});
+
+// Завершить голосование и посчитать результаты
+app.post('/api/votings/:id/complete', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log(`Завершение голосования ${id}`);
+    const seatable = await getSeaTable();
+    const voting = await seatable.getRow(VOTINGS_TABLE, id);
+
+    if (!voting) {
+      return res.status(404).json({ error: 'Голосование не найдено' });
+    }
+
+    const votes = safeJsonParse(voting.Votes, {});
+
+    const results = [];
+
+    if (voting.Options) {
+      const options = voting.Options.split(',');
+
+      const voteCounts = {};
+      options.forEach((option, index) => {
+        voteCounts[index] = 0;
+      });
+
+      Object.values(votes).forEach(voteIndex => {
+        if (voteCounts[voteIndex] !== undefined) {
+          voteCounts[voteIndex]++;
+        }
+      });
+
+      const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
+
+      options.forEach((option, index) => {
+        const count = voteCounts[index] || 0;
+        const percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+
+        results.push({
+          option: option,
+          count: count,
+          percentage: percentage
+        });
+      });
+    }
+
+    const updateData = {
+      Status: 'Completed',
+      Results: JSON.stringify(results)
+    };
+
+    const updateResponse = await seatable.updateRow(VOTINGS_TABLE, id, updateData);
+
+    res.json({ success: true, results: results, voting: { id: updateResponse._id, fields: updateResponse } });
+  } catch (error) {
+    console.error('Ошибка завершения голосования:', error.message);
+    res.status(500).json({ error: 'Ошибка завершения голосования' });
+  }
+});
+
+// Остальные функции (generate-results, attend и т.д.) остаются аналогичными...
+
+// ==================== API ДЛЯ "Я ПОЙДУ!" ====================
+
+app.post('/api/events/:eventId/attend', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+
+    console.log(`Пользователь ${userId} участвует в событии ${eventId}`);
+
+    if (!userId) {
+      return res.status(400).json({ error: 'Требуется ID пользователя' });
+    }
+
+    const seatable = await getSeaTable();
+    const event = await seatable.getRow(EVENTS_TABLE, eventId);
+
+    if (!event) {
+      return res.status(404).json({ error: 'Событие не найдено' });
+    }
+
+    const currentAttendees = event.AttendeesIDs || '';
+    const currentCount = event.AttendeesCount || 0;
+
+    console.log('Текущие участники:', currentAttendees);
+    console.log('Текущее количество:', currentCount);
+
+    let attendeesArray = [];
+    if (typeof currentAttendees === 'string') {
+      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
+    }
+
+    const userIdStr = userId.toString();
+    if (attendeesArray.includes(userIdStr)) {
+      console.log('Пользователь уже участвует');
+      return res.status(400).json({ error: 'Пользователь уже участвует' });
+    }
+
+    attendeesArray.push(userIdStr);
+    const newAttendees = attendeesArray.join(',');
+    const newCount = currentCount + 1;
+
+    console.log('Новые участники:', newAttendees);
+    console.log('Новое количество:', newCount);
+
+    const updateData = {
+      AttendeesIDs: newAttendees,
+      AttendeesCount: newCount
+    };
+
+    console.log('Данные для обновления:', JSON.stringify(updateData, null, 2));
+
+    const updateResponse = await seatable.updateRow(EVENTS_TABLE, eventId, updateData);
+
+    console.log('Обновление успешно:', updateResponse);
+    res.json({ success: true, count: newCount, attending: true });
+
+  } catch (error) {
+    console.error('Ошибка участия:', error.message);
+    res.status(500).json({ error: 'Ошибка при регистрации на событие' });
+  }
+});
+
+app.post('/api/events/:eventId/unattend', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+
+    console.log(`Пользователь ${userId} отказывается от участия в событии ${eventId}`);
+
+    if (!userId) {
+      return res.status(400).json({ error: 'Требуется ID пользователя' });
+    }
+
+    const seatable = await getSeaTable();
+    const event = await seatable.getRow(EVENTS_TABLE, eventId);
+
+    if (!event) {
+      return res.status(404).json({ error: 'Событие не найдено' });
+    }
+
+    const currentAttendees = event.AttendeesIDs || '';
+    const currentCount = event.AttendeesCount || 0;
+
+    console.log('Текущие участники:', currentAttendees);
+    console.log('Текущее количество:', currentCount);
+
+    let attendeesArray = [];
+    if (typeof currentAttendees === 'string') {
+      attendeesArray = currentAttendees.split(',').filter(id => id && id.trim());
+    }
+
+    const userIdStr = userId.toString();
+    const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
+    const newAttendees = newAttendeesArray.join(',');
+    const newCount = Math.max(0, newAttendeesArray.length);
+
+    console.log('Новые участники:', newAttendees);
+    console.log('Новое количество:', newCount);
+
+    const updateData = {
+      AttendeesIDs: newAttendees,
+      AttendeesCount: newCount
+    };
+
+    const updateResponse = await seatable.updateRow(EVENTS_TABLE, eventId, updateData);
+
+    console.log('Отказ от участия успешен');
+    res.json({ success: true, count: newCount, attending: false });
+
+  } catch (error) {
+    console.error('Ошибка отказа от участия:', error.message);
+    res.status(500).json({ error: 'Ошибка при отмене участия' });
+  }
+});
+
+// Проверяем статус участия пользователя
+app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
+  try {
+    const { eventId, userId } = req.params;
+
+    console.log(`Проверка статуса участия для пользователя ${userId} в событии ${eventId}`);
+
+    const seatable = await getSeaTable();
+    const event = await seatable.getRow(EVENTS_TABLE, eventId);
+
+    if (!event) {
+      return res.status(404).json({ error: 'Событие не найдено' });
+    }
+
+    const attendees = event.AttendeesIDs || '';
+    let attendeesArray = [];
+    if (typeof attendees === 'string') {
+      attendeesArray = attendees.split(',').filter(id => id && id.trim());
+    }
+
+    const isAttending = attendeesArray.includes(userId.toString());
+
+    console.log('Участвует:', isAttending);
+    res.json({ isAttending });
+
+  } catch (error) {
+    console.error('Ошибка проверки статуса участия:', error.message);
+    res.status(500).json({ error: 'Ошибка проверки статуса участия' });
+  }
+});
+
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
 
 // Создание папки uploads
 const uploadsDir = path.join(__dirname, 'uploads');
