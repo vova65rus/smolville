@@ -1021,4 +1021,9 @@ app.listen(port, () => {
   console.log(`SeaTable Base UUID: ${SEATABLE_BASE_UUID}`);
   console.log(`SeaTable Server URL: ${SEATABLE_SERVER_URL}`);
   console.log(`Используемый API токен: ${SEATABLE_API_TOKEN.substring(0, 8)}...`);
-  console.log(`
+  console.log(`URL Radikal API: ${RADIKAL_API_URL}`);
+  console.log('Проверка переменных окружения...');
+  console.log('SEATABLE_API_TOKEN:', SEATABLE_API_TOKEN ? 'Установлен' : 'ОТСУТСТВУЕТ!');
+  console.log('SEATABLE_BASE_UUID:', SEATABLE_BASE_UUID);
+  console.log('RADIKAL_API_KEY:', RADIKAL_API_KEY ? 'Установлен' : 'ОТСУТСТВУЕТ!');
+});
