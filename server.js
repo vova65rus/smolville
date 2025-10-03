@@ -62,19 +62,55 @@ function getSeaTableHeaders() {
 
 // Базовый URL для API
 function getSeaTableBaseURL() {
-  return `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}`;
+  return `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/dtables/${SEATABLE_BASE_UUID}`;
 }
 
 // Получить все строки таблицы
 async function listRows(tableName) {
   try {
+    console.log(`Запрос строк таблицы ${tableName} из SeaTable...`);
+    
     const response = await axios.get(
       `${getSeaTableBaseURL()}/rows/?table_name=${encodeURIComponent(tableName)}`,
-      { headers: getSeaTableHeaders() }
+      { 
+        headers: getSeaTableHeaders(),
+        timeout: 10000
+      }
     );
+    
+    console.log(`Получено ${response.data.rows ? response.data.rows.length : 0} строк из таблицы ${tableName}`);
     return response.data.rows || [];
   } catch (error) {
     console.error(`Ошибка получения строк таблицы ${tableName}:`, error.message);
+    if (error.response) {
+      console.error('Статус:', error.response.status);
+      console.error('Данные ответа:', error.response.data);
+      
+      // Попробуем альтернативный API endpoint
+      if (error.response.status === 404) {
+        console.log('Пробуем альтернативный endpoint...');
+        return await listRowsAlternative(tableName);
+      }
+    }
+    throw new Error(`Не удалось получить данные из таблицы ${tableName}: ${error.message}`);
+  }
+}
+
+// Альтернативный метод для получения строк (старая версия API)
+async function listRowsAlternative(tableName) {
+  try {
+    const response = await axios.get(
+      `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}/rows/?table_name=${encodeURIComponent(tableName)}`,
+      { 
+        headers: getSeaTableHeaders(),
+        timeout: 10000
+      }
+    );
+    
+    console.log(`Альтернативный метод: получено ${response.data.rows ? response.data.rows.length : 0} строк`);
+    return response.data.rows || [];
+  } catch (error) {
+    console.error(`Ошибка альтернативного метода для таблицы ${tableName}:`, error.message);
     throw error;
   }
 }
@@ -83,7 +119,13 @@ async function listRows(tableName) {
 async function getRow(tableName, rowId) {
   try {
     const rows = await listRows(tableName);
-    return rows.find(row => row._id === rowId) || null;
+    const row = rows.find(row => row._id === rowId || row.id === rowId) || null;
+    
+    if (!row) {
+      console.log(`Строка ${rowId} не найдена в таблице ${tableName}`);
+    }
+    
+    return row;
   } catch (error) {
     console.error(`Ошибка получения строки ${rowId} из таблицы ${tableName}:`, error.message);
     throw error;
@@ -93,17 +135,28 @@ async function getRow(tableName, rowId) {
 // Добавить строку
 async function insertRow(tableName, rowData) {
   try {
+    console.log(`Добавление строки в таблицу ${tableName}:`, JSON.stringify(rowData, null, 2));
+    
     const response = await axios.post(
       `${getSeaTableBaseURL()}/rows/`,
       {
         table_name: tableName,
         row: rowData
       },
-      { headers: getSeaTableHeaders() }
+      { 
+        headers: getSeaTableHeaders(),
+        timeout: 10000
+      }
     );
+    
+    console.log('Строка успешно добавлена:', response.data);
     return response.data;
   } catch (error) {
     console.error(`Ошибка добавления строки в таблицу ${tableName}:`, error.message);
+    if (error.response) {
+      console.error('Статус:', error.response.status);
+      console.error('Данные ответа:', error.response.data);
+    }
     throw error;
   }
 }
@@ -111,6 +164,8 @@ async function insertRow(tableName, rowData) {
 // Обновить строку
 async function updateRow(tableName, rowId, rowData) {
   try {
+    console.log(`Обновление строки ${rowId} в таблице ${tableName}:`, JSON.stringify(rowData, null, 2));
+    
     const response = await axios.put(
       `${getSeaTableBaseURL()}/rows/`,
       {
@@ -118,11 +173,20 @@ async function updateRow(tableName, rowId, rowData) {
         row_id: rowId,
         row: rowData
       },
-      { headers: getSeaTableHeaders() }
+      { 
+        headers: getSeaTableHeaders(),
+        timeout: 10000
+      }
     );
+    
+    console.log('Строка успешно обновлена:', response.data);
     return response.data;
   } catch (error) {
     console.error(`Ошибка обновления строки ${rowId} в таблице ${tableName}:`, error.message);
+    if (error.response) {
+      console.error('Статус:', error.response.status);
+      console.error('Данные ответа:', error.response.data);
+    }
     throw error;
   }
 }
@@ -130,6 +194,8 @@ async function updateRow(tableName, rowId, rowData) {
 // Удалить строку
 async function deleteRow(tableName, rowId) {
   try {
+    console.log(`Удаление строки ${rowId} из таблицы ${tableName}`);
+    
     await axios.delete(
       `${getSeaTableBaseURL()}/rows/`,
       {
@@ -137,12 +203,19 @@ async function deleteRow(tableName, rowId) {
         data: {
           table_name: tableName,
           row_id: rowId
-        }
+        },
+        timeout: 10000
       }
     );
+    
+    console.log(`Строка ${rowId} успешно удалена`);
     return { success: true };
   } catch (error) {
     console.error(`Ошибка удаления строки ${rowId} из таблицы ${tableName}:`, error.message);
+    if (error.response) {
+      console.error('Статус:', error.response.status);
+      console.error('Данные ответа:', error.response.data);
+    }
     throw error;
   }
 }
@@ -165,17 +238,39 @@ app.get('/', (req, res) => {
   res.send('Бэкенд Smolville запущен! Конечные точки API: /api/events, /api/ads, /api/votings, /api/upload');
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    seatable: {
-      baseUUID: SEATABLE_BASE_UUID,
-      server: SEATABLE_SERVER_URL
-    }
-  });
+// Health check с проверкой SeaTable
+app.get('/health', async (req, res) => {
+  try {
+    // Проверяем подключение к SeaTable
+    const testData = await listRows(EVENTS_TABLE).catch(() => []);
+    
+    res.status(200).json({ 
+      status: 'OK', 
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      seatable: {
+        baseUUID: SEATABLE_BASE_UUID,
+        server: SEATABLE_SERVER_URL,
+        connected: true,
+        tables: {
+          events: testData.length
+        }
+      }
+    });
+  } catch (error) {
+    res.status(200).json({ 
+      status: 'DEGRADED', 
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      seatable: {
+        baseUUID: SEATABLE_BASE_UUID,
+        server: SEATABLE_SERVER_URL,
+        connected: false,
+        error: error.message
+      },
+      warning: 'SeaTable недоступен, но сервер работает'
+    });
+  }
 });
 
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ RADIKAL API ====================
@@ -200,7 +295,6 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
 
     console.log('Ответ от Radikal API:', response.data);
 
-    // Более гибкая проверка ответа
     const imageData = response.data.image || response.data;
     
     if (response.data.status_code === 200 || response.data.status === 200 || imageData) {
@@ -332,7 +426,7 @@ app.get('/api/events', async (req, res) => {
     res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
     console.error('Ошибка GET /api/events:', error.message);
-    res.status(500).json({ error: 'Ошибка загрузки событий' });
+    res.status(500).json({ error: 'Ошибка загрузки событий: ' + error.message });
   }
 });
 
@@ -346,7 +440,7 @@ app.post('/api/events', async (req, res) => {
     res.json({ id: result._id, fields: result });
   } catch (error) {
     console.error('Ошибка POST /api/events:', error.message);
-    res.status(500).json({ error: 'Ошибка создания события' });
+    res.status(500).json({ error: 'Ошибка создания события: ' + error.message });
   }
 });
 
@@ -363,7 +457,7 @@ app.get('/api/events/:id', async (req, res) => {
     res.json({ id: row._id, fields: row });
   } catch (error) {
     console.error('Ошибка GET /api/events/:id:', error.message);
-    res.status(500).json({ error: 'Ошибка получения события' });
+    res.status(500).json({ error: 'Ошибка получения события: ' + error.message });
   }
 });
 
@@ -377,7 +471,7 @@ app.put('/api/events/:id', async (req, res) => {
     res.json({ id: result._id, fields: result });
   } catch (error) {
     console.error('Ошибка PUT /api/events/:id:', error.message);
-    res.status(500).json({ error: 'Ошибка обновления события' });
+    res.status(500).json({ error: 'Ошибка обновления события: ' + error.message });
   }
 });
 
@@ -390,7 +484,7 @@ app.delete('/api/events/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Ошибка DELETE /api/events/:id:', error.message);
-    res.status(500).json({ error: 'Ошибка удаления события' });
+    res.status(500).json({ error: 'Ошибка удаления события: ' + error.message });
   }
 });
 
@@ -406,7 +500,7 @@ app.get('/api/ads', async (req, res) => {
     res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
     console.error('Ошибка GET /api/ads:', error.message);
-    res.status(500).json({ error: 'Ошибка загрузки объявлений' });
+    res.status(500).json({ error: 'Ошибка загрузки объявлений: ' + error.message });
   }
 });
 
@@ -420,7 +514,7 @@ app.post('/api/ads', async (req, res) => {
     res.json({ id: result._id, fields: result });
   } catch (error) {
     console.error('Ошибка POST /api/ads:', error.message);
-    res.status(500).json({ error: 'Ошибка создания объявления' });
+    res.status(500).json({ error: 'Ошибка создания объявления: ' + error.message });
   }
 });
 
@@ -434,7 +528,7 @@ app.put('/api/ads/:id', async (req, res) => {
     res.json({ id: result._id, fields: result });
   } catch (error) {
     console.error('Ошибка PUT /api/ads/:id:', error.message);
-    res.status(500).json({ error: 'Ошибка обновления объявления' });
+    res.status(500).json({ error: 'Ошибка обновления объявления: ' + error.message });
   }
 });
 
@@ -447,7 +541,7 @@ app.delete('/api/ads/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Ошибка DELETE /api/ads/:id:', error.message);
-    res.status(500).json({ error: 'Ошибка удаления объявления' });
+    res.status(500).json({ error: 'Ошибка удаления объявления: ' + error.message });
   }
 });
 
@@ -463,7 +557,7 @@ app.get('/api/votings', async (req, res) => {
     res.json({ records: rows.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
     console.error('Ошибка GET /api/votings:', error.message);
-    res.status(500).json({ error: 'Ошибка загрузки голосований' });
+    res.status(500).json({ error: 'Ошибка загрузки голосований: ' + error.message });
   }
 });
 
@@ -477,7 +571,7 @@ app.post('/api/votings', async (req, res) => {
     res.json({ id: result._id, fields: result });
   } catch (error) {
     console.error('Ошибка POST /api/votings:', error.message);
-    res.status(500).json({ error: 'Ошибка создания голосования' });
+    res.status(500).json({ error: 'Ошибка создания голосования: ' + error.message });
   }
 });
 
@@ -491,7 +585,7 @@ app.put('/api/votings/:id', async (req, res) => {
     res.json({ id: result._id, fields: result });
   } catch (error) {
     console.error('Ошибка PUT /api/votings/:id:', error.message);
-    res.status(500).json({ error: 'Ошибка обновления голосования' });
+    res.status(500).json({ error: 'Ошибка обновления голосования: ' + error.message });
   }
 });
 
@@ -504,7 +598,7 @@ app.delete('/api/votings/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Ошибка DELETE /api/votings/:id:', error.message);
-    res.status(500).json({ error: 'Ошибка удаления голосования' });
+    res.status(500).json({ error: 'Ошибка удаления голосования: ' + error.message });
   }
 });
 
@@ -524,7 +618,7 @@ app.get('/api/events/:eventId/votings', async (req, res) => {
     res.json({ records: filteredVotings.map(row => ({ id: row._id, fields: row })) });
   } catch (error) {
     console.error('Ошибка GET /api/events/:eventId/votings:', error.message);
-    res.status(500).json({ error: 'Ошибка загрузки голосований для события' });
+    res.status(500).json({ error: 'Ошибка загрузки голосований для события: ' + error.message });
   }
 });
 
@@ -594,7 +688,7 @@ app.post('/api/votings/:id/vote', async (req, res) => {
     res.json({ success: true, voting: { id: updateResponse._id, fields: updateResponse } });
   } catch (error) {
     console.error('Ошибка голосования:', error.message);
-    res.status(500).json({ error: 'Ошибка при голосовании' });
+    res.status(500).json({ error: 'Ошибка при голосовании: ' + error.message });
   }
 });
 
@@ -623,7 +717,7 @@ app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
     res.json({ hasVoted, userVote });
   } catch (error) {
     console.error('Ошибка проверки статуса голосования:', error.message);
-    res.status(500).json({ error: 'Ошибка проверки статуса голосования' });
+    res.status(500).json({ error: 'Ошибка проверки статуса голосования: ' + error.message });
   }
 });
 
@@ -681,7 +775,7 @@ app.post('/api/votings/:id/complete', async (req, res) => {
     res.json({ success: true, results: results, voting: { id: updateResponse._id, fields: updateResponse } });
   } catch (error) {
     console.error('Ошибка завершения голосования:', error.message);
-    res.status(500).json({ error: 'Ошибка завершения голосования' });
+    res.status(500).json({ error: 'Ошибка завершения голосования: ' + error.message });
   }
 });
 
@@ -742,7 +836,7 @@ app.post('/api/events/:eventId/attend', async (req, res) => {
 
   } catch (error) {
     console.error('Ошибка участия:', error.message);
-    res.status(500).json({ error: 'Ошибка при регистрации на событие' });
+    res.status(500).json({ error: 'Ошибка при регистрации на событие: ' + error.message });
   }
 });
 
@@ -794,7 +888,7 @@ app.post('/api/events/:eventId/unattend', async (req, res) => {
 
   } catch (error) {
     console.error('Ошибка отказа от участия:', error.message);
-    res.status(500).json({ error: 'Ошибка при отмене участия' });
+    res.status(500).json({ error: 'Ошибка при отмене участия: ' + error.message });
   }
 });
 
@@ -824,7 +918,7 @@ app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
 
   } catch (error) {
     console.error('Ошибка проверки статуса участия:', error.message);
-    res.status(500).json({ error: 'Ошибка проверки статуса участия' });
+    res.status(500).json({ error: 'Ошибка проверки статуса участия: ' + error.message });
   }
 });
 
@@ -867,6 +961,10 @@ app.use((error, req, res, next) => {
 app.listen(port, () => {
   console.log(`Сервер запущен на порту ${port}`);
   console.log(`SeaTable Base UUID: ${SEATABLE_BASE_UUID}`);
+  console.log(`SeaTable Server URL: ${SEATABLE_SERVER_URL}`);
   console.log(`URL Radikal API: ${RADIKAL_API_URL}`);
-  console.log('Убедитесь, что переменные SEATABLE_API_TOKEN, SEATABLE_BASE_UUID и RADIKAL_API_KEY установлены в переменных окружения');
+  console.log('Проверка переменных окружения...');
+  console.log('SEATABLE_API_TOKEN:', SEATABLE_API_TOKEN ? 'Установлен' : 'ОТСУТСТВУЕТ!');
+  console.log('SEATABLE_BASE_UUID:', SEATABLE_BASE_UUID);
+  console.log('RADIKAL_API_KEY:', RADIKAL_API_KEY ? 'Установлен' : 'ОТСУТСТВУЕТ!');
 });
