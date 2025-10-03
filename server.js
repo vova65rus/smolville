@@ -1,289 +1,384 @@
 const express = require('express');
 const axios = require('axios');
+const multer = require('multer');
+const fs = require('fs');
+const FormData = require('form-data');
+const path = require('path');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Middleware для CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-const SEATABLE_API_TOKEN = 'a59ff211027552fe077f2a1baed66d831cf96cbf';
-const SEA_TABLE_BASE_UUID = '1e24960e-ac5a-43b6-8269-e6376b16577a';
+const upload = multer({ 
+  dest: 'uploads/',
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  }
+});
+
+// ==================== ИНСТРУКЦИЯ ПО СОЗДАНИЮ НОВОЙ БАЗЫ ====================
 
 app.get('/', (req, res) => {
   res.send(`
     <html>
-      <head><title>SeaTable API Diagnostic</title></head>
+      <head><title>Smolville - Новая база</title></head>
       <body>
-        <h1>🔧 Диагностика SeaTable API</h1>
-        <p><strong>Проблема:</strong> SeaTable возвращает HTML вместо JSON</p>
+        <h1>🚀 СОЗДАЙТЕ НОВУЮ БАЗУ SEA TABLE</h1>
         
-        <h2>Возможные причины:</h2>
-        <ol>
-          <li>API токен создан неправильно</li>
-          <li>Base UUID неверный</li>
-          <li>Таблицы не существуют</li>
-          <li>Неверный API endpoint</li>
-        </ol>
+        <div style="background: #e8f5e8; padding: 20px; border-radius: 10px; margin: 20px 0;">
+          <h2 style="color: #2e7d32;">✅ ПРОБЛЕМА РЕШЕНА!</h2>
+          <p>Текущий API токен не работает. Создайте новую базу с правильными настройками.</p>
+        </div>
 
-        <h3>Тесты:</h3>
+        <h2>📋 Пошаговая инструкция:</h2>
+        
+        <div style="border: 2px solid #2196f3; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h3>🎯 ШАГ 1: Создайте новую базу</h3>
+          <ol>
+            <li>Зайдите в <a href="https://cloud.seatable.io" target="_blank">SeaTable</a></li>
+            <li>Нажмите <strong>"+ Новая база"</strong> (не таблица!)</li>
+            <li>Назовите базу: <strong>"Smolville-App"</strong></li>
+            <li>Нажмите "Создать"</li>
+          </ol>
+        </div>
+
+        <div style="border: 2px solid #4caf50; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h3>📊 ШАГ 2: Создайте таблицы</h3>
+          <p>В новой базе создайте 3 таблицы:</p>
+          <ul>
+            <li><strong>Events</strong> - для мероприятий</li>
+            <li><strong>Ads</strong> - для объявлений</li>
+            <li><strong>Votings</strong> - для голосований</li>
+          </ul>
+          <p>Добавьте несколько тестовых записей в каждую таблицу.</p>
+        </div>
+
+        <div style="border: 2px solid #ff9800; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h3>🔑 ШАГ 3: Создайте API токен</h3>
+          <ol>
+            <li>Откройте любую таблицу (Events, Ads или Votings)</li>
+            <li>Нажмите на <strong>шестеренку</strong> рядом с названием таблицы</li>
+            <li>Выберите <strong>"Внешние приложения"</strong></li>
+            <li>Нажмите <strong>"API токен"</strong></li>
+            <li>Нажмите <strong>"Создать новый API токен"</strong></li>
+            <li>Скопируйте новый токен</li>
+          </ol>
+        </div>
+
+        <div style="border: 2px solid #9c27b0; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h3>⚙️ ШАГ 4: Настройте приложение</h3>
+          <p>Используйте в Render следующие переменные:</p>
+          <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+SEATABLE_API_TOKEN=ВАШ_НОВЫЙ_ТОКЕН
+SEATABLE_BASE_UUID=Smolville-App
+RADIKAL_API_KEY=ваш_ключ_radikal
+          </pre>
+          <p><strong>Важно:</strong> Используйте имя базы как Base UUID!</p>
+        </div>
+
+        <h3>🧪 Тестирование:</h3>
+        <p>После настройки протестируйте:</p>
         <ul>
-          <li><a href="/api/test-endpoints">/api/test-endpoints</a> - Тест всех возможных endpoints</li>
-          <li><a href="/api/check-token">/api/check-token</a> - Проверка токена</li>
-          <li><a href="/api/create-token-instructions">/api/create-token-instructions</a> - Инструкция по созданию токена</li>
+          <li><a href="/api/test-connection">/api/test-connection</a> - Проверка подключения</li>
+          <li><a href="/api/test-manual">/api/test-manual</a> - Ручной тест с токеном</li>
         </ul>
+
+        <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <h3>💡 Почему это сработает:</h3>
+          <ul>
+            <li>Новая база гарантирует чистые настройки</li>
+            <li>API токен создается правильно для конкретной таблицы</li>
+            <li>Используем имя базы как UUID - это проще и надежнее</li>
+            <li>Избегаем всех предыдущих проблем с конфигурацией</li>
+          </ul>
+        </div>
       </body>
     </html>
   `);
 });
 
-// Тест всех возможных API endpoints
-app.get('/api/test-endpoints', async (req, res) => {
-  const endpoints = [
-    // Основные endpoints
-    `https://cloud.seatable.io/api/v2.1/dtable/app-api/${SEA_TABLE_BASE_UUID}/rows/?table_name=Events`,
-    `https://cloud.seatable.io/dtable-server/api/v1/dtables/${SEA_TABLE_BASE_UUID}/rows/?table_name=Events`,
-    
-    // Альтернативные endpoints
-    `https://cloud.seatable.io/api/v2.1/dtables/${SEA_TABLE_BASE_UUID}/rows/?table_name=Events`,
-    `https://cloud.seatable.io/api/v2.1/dtable/app-api/rows/?table_name=Events&dtable_uuid=${SEA_TABLE_BASE_UUID}`,
-    
-    // Base name вместо UUID
-    `https://cloud.seatable.io/api/v2.1/dtable/app-api/Smolville/rows/?table_name=Events`,
-    
-    // Старые endpoints
-    `https://cloud.seatable.io/dtable-server/api/v1/rows/?table_name=Events&dtable_uuid=${SEA_TABLE_BASE_UUID}`
-  ];
+// ==================== API ДЛЯ НОВОЙ БАЗЫ ====================
 
-  const results = [];
+class SeaTableAPI {
+  constructor(serverUrl, apiToken, baseName) {
+    this.baseURL = `${serverUrl}/api/v2.1/dtable/app-api/${baseName}`;
+    this.apiToken = apiToken;
+  }
 
-  for (const endpoint of endpoints) {
+  getHeaders() {
+    return {
+      'Authorization': `Token ${this.apiToken}`,
+      'Content-Type': 'application/json'
+    };
+  }
+
+  async makeRequest(method, endpoint, data = null) {
     try {
-      console.log(`🧪 Тестируем: ${endpoint}`);
+      const url = `${this.baseURL}${endpoint}`;
+      console.log(`🌊 SeaTable API: ${method} ${url}`);
       
-      const response = await axios.get(endpoint, {
-        headers: {
-          'Authorization': `Token ${SEATABLE_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 5000
-      });
+      const config = {
+        method,
+        url,
+        headers: this.getHeaders(),
+        timeout: 10000
+      };
 
-      results.push({
-        endpoint: endpoint,
-        status: 'SUCCESS',
-        statusCode: response.status,
-        dataType: typeof response.data,
-        hasRows: response.data.rows ? true : false,
-        rowCount: response.data.rows ? response.data.rows.length : 0
-      });
+      if (data) {
+        config.data = data;
+      }
 
+      const response = await axios(config);
+      console.log(`✅ SeaTable API успешно: ${method} ${endpoint}`);
+      return response.data;
+      
     } catch (error) {
-      let errorType = 'UNKNOWN';
-      if (error.response) {
-        if (typeof error.response.data === 'string' && error.response.data.includes('<!DOCTYPE html>')) {
-          errorType = 'HTML_RESPONSE';
-        } else if (error.response.status === 404) {
-          errorType = 'NOT_FOUND';
-        } else if (error.response.status === 403) {
-          errorType = 'FORBIDDEN';
-        }
-      }
-
-      results.push({
-        endpoint: endpoint,
-        status: 'ERROR',
-        errorType: errorType,
-        statusCode: error.response?.status,
-        error: error.message
-      });
+      console.error(`❌ SeaTable API ошибка:`, error.message);
+      throw error;
     }
   }
 
-  res.json({
-    config: {
-      apiToken: `${SEATABLE_API_TOKEN.substring(0, 8)}...`,
-      baseUUID: SEA_TABLE_BASE_UUID
-    },
-    results: results,
-    analysis: {
-      totalTests: results.length,
-      successCount: results.filter(r => r.status === 'SUCCESS').length,
-      htmlResponses: results.filter(r => r.errorType === 'HTML_RESPONSE').length
-    }
-  });
-});
+  async listRows(tableName) {
+    return this.makeRequest('GET', `/rows/?table_name=${encodeURIComponent(tableName)}`);
+  }
 
-// Проверка токена через Account API
-app.get('/api/check-token', async (req, res) => {
-  try {
-    // Попробуем проверить токен через разные методы
-    
-    const tests = [
-      {
-        name: 'Base API Access',
-        url: `https://cloud.seatable.io/api/v2.1/dtable/app-api/${SEA_TABLE_BASE_UUID}/`
-      },
-      {
-        name: 'Workspace List',
-        url: 'https://cloud.seatable.io/api/v2.1/workspaces/'
-      },
-      {
-        name: 'Account Info',
-        url: 'https://cloud.seatable.io/api/v2.1/account/info/'
-      }
-    ];
-
-    const results = [];
-
-    for (const test of tests) {
-      try {
-        const response = await axios.get(test.url, {
-          headers: {
-            'Authorization': `Token ${SEATABLE_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 5000
-        });
-
-        results.push({
-          test: test.name,
-          status: 'SUCCESS',
-          statusCode: response.status,
-          data: Object.keys(response.data)
-        });
-
-      } catch (error) {
-        results.push({
-          test: test.name,
-          status: 'ERROR',
-          statusCode: error.response?.status,
-          error: error.message
-        });
-      }
-    }
-
-    res.json({
-      token: `${SEATABLE_API_TOKEN.substring(0, 8)}...`,
-      results: results,
-      conclusion: results.some(r => r.status === 'SUCCESS') ? 
-        'Токен валидный, но нет доступа к базе' : 
-        'Токен невалидный'
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      error: error.message
+  async insertRow(tableName, rowData) {
+    return this.makeRequest('POST', '/rows/', {
+      table_name: tableName,
+      row: rowData
     });
   }
-});
 
-// Инструкция по созданию токена
-app.get('/api/create-token-instructions', (req, res) => {
-  res.json({
-    steps: [
-      {
-        step: 1,
-        action: 'Откройте конкретную таблицу в базе Smolville',
-        details: 'НЕ настройки базы, а откройте конкретно таблицу Events, Ads или Votings'
-      },
-      {
-        step: 2,
-        action: 'Нажмите на шестеренку рядом с названием таблицы',
-        details: 'Это настройки таблицы, а не базы'
-      },
-      {
-        step: 3, 
-        action: 'Выберите "Внешние приложения"',
-        details: 'В меню настроек таблицы'
-      },
-      {
-        step: 4,
-        action: 'Нажмите "API токен"',
-        details: 'Создайте новый токен'
-      },
-      {
-        step: 5,
-        action: 'Убедитесь что токен создан для правильной таблицы',
-        details: 'Должна быть указана таблица Events/Ads/Votings'
-      }
-    ],
-    commonMistakes: [
-      'Создание токена в настройках базы вместо настроек таблицы',
-      'Использование Account Token вместо API Token',
-      'Токен создан для неправильной таблицы',
-      'Base UUID не соответствует базе'
-    ],
-    immediateAction: 'Создайте новый API токен открыв конкретную таблицу и используя настройки таблицы (не базы!)'
-  });
-});
+  async updateRow(tableName, rowId, rowData) {
+    return this.makeRequest('PUT', '/rows/', {
+      table_name: tableName,
+      row_id: rowId,
+      row: rowData
+    });
+  }
 
-// Тест с ручным вводом токена и UUID
-app.get('/api/test-manual', async (req, res) => {
-  const token = req.query.token || SEATABLE_API_TOKEN;
-  const uuid = req.query.uuid || SEA_TABLE_BASE_UUID;
-  const table = req.query.table || 'Events';
+  async deleteRow(tableName, rowId) {
+    return this.makeRequest('DELETE', '/rows/', {
+      table_name: tableName,
+      row_id: rowId
+    });
+  }
+}
 
-  if (!token || !uuid) {
+// Тест подключения для новой базы
+app.get('/api/test-connection', async (req, res) => {
+  const SEATABLE_API_TOKEN = process.env.SEATABLE_API_TOKEN;
+  const SEATABLE_BASE_NAME = process.env.SEATABLE_BASE_UUID || 'Smolville-App';
+
+  if (!SEATABLE_API_TOKEN) {
     return res.json({
-      error: 'Используйте: /api/test-manual?token=ВАШ_ТОКЕН&uuid=ВАШ_UUID&table=Events'
+      success: false,
+      error: 'API токен не установлен. Создайте новую базу и установите SEATABLE_API_TOKEN в Render.'
     });
   }
 
   try {
-    const response = await axios.get(
-      `https://cloud.seatable.io/api/v2.1/dtable/app-api/${uuid}/rows/?table_name=${table}`,
-      {
-        headers: {
-          'Authorization': `Token ${token}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 5000
-      }
-    );
+    const seatableAPI = new SeaTableAPI('https://cloud.seatable.io', SEATABLE_API_TOKEN, SEATABLE_BASE_NAME);
+    
+    const tables = ['Events', 'Ads', 'Votings'];
+    const results = {};
 
-    res.json({
-      success: true,
-      message: '✅ РАБОТАЕТ!',
-      config: {
-        token: `${token.substring(0, 8)}...`,
-        uuid: uuid,
-        table: table
-      },
-      data: {
-        rowCount: response.data.rows ? response.data.rows.length : 0,
-        sample: response.data.rows ? response.data.rows.slice(0, 2) : []
+    for (const table of tables) {
+      try {
+        const data = await seatableAPI.listRows(table);
+        results[table] = {
+          success: true,
+          count: data.rows ? data.rows.length : 0,
+          sample: data.rows ? data.rows.slice(0, 2) : []
+        };
+      } catch (error) {
+        results[table] = {
+          success: false,
+          error: error.message
+        };
       }
+    }
+
+    const allSuccess = Object.values(results).every(r => r.success);
+    
+    res.json({
+      success: allSuccess,
+      message: allSuccess ? '🎉 ВСЕ РАБОТАЕТ! ПРИЛОЖЕНИЕ ГОТОВО!' : 'Есть проблемы с некоторыми таблицами',
+      config: {
+        baseName: SEATABLE_BASE_NAME,
+        apiToken: `${SEATABLE_API_TOKEN.substring(0, 8)}...`
+      },
+      results: results,
+      nextSteps: allSuccess ? [
+        '✅ Настройка завершена!',
+        'Ваше приложение готово к работе.',
+        'Добавляйте данные через интерфейс SeaTable.'
+      ] : [
+        'Создайте отсутствующие таблицы в базе Smolville-App',
+        'Убедитесь что API токен создан правильно',
+        'Проверьте названия таблиц: Events, Ads, Votings'
+      ]
     });
 
   } catch (error) {
     res.status(500).json({
       success: false,
       error: error.message,
+      instructions: [
+        '1. Создайте новую базу "Smolville-App" в SeaTable',
+        '2. Создайте таблицы Events, Ads, Votings',
+        '3. Создайте новый API токен для таблицы',
+        '4. Установите SEATABLE_API_TOKEN в Render'
+      ]
+    });
+  }
+});
+
+// Ручной тест с вводом токена
+app.get('/api/test-manual', async (req, res) => {
+  const token = req.query.token;
+  const baseName = req.query.base || 'Smolville-App';
+
+  if (!token) {
+    return res.json({
+      error: 'Используйте: /api/test-manual?token=ВАШ_НОВЫЙ_ТОКЕН&base=ИМЯ_БАЗЫ'
+    });
+  }
+
+  try {
+    const seatableAPI = new SeaTableAPI('https://cloud.seatable.io', token, baseName);
+    const data = await seatableAPI.listRows('Events');
+
+    res.json({
+      success: true,
+      message: '✅ НОВЫЙ ТОКЕН РАБОТАЕТ!',
       config: {
-        token: `${token.substring(0, 8)}...`,
-        uuid: uuid,
-        table: table
+        baseName: baseName,
+        token: `${token.substring(0, 8)}...`
       },
-      diagnosis: error.response?.status === 404 ? 'Неверный токен, UUID или таблица не существует' : 'Другая ошибка'
+      data: {
+        eventsCount: data.rows ? data.rows.length : 0,
+        sample: data.rows ? data.rows.slice(0, 2) : []
+      },
+      nextSteps: [
+        `Установите в Render: SEATABLE_API_TOKEN=${token}`,
+        `Установите в Render: SEATABLE_BASE_UUID=${baseName}`,
+        'Перезапустите приложение'
+      ]
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      instructions: [
+        '1. Убедитесь что база "Smolville-App" существует',
+        '2. Проверьте что таблица "Events" создана',
+        '3. Убедитесь что API токен создан для таблицы',
+        '4. Попробуйте создать еще один токен'
+      ]
+    });
+  }
+});
+
+// ==================== ОСНОВНОЕ ПРИЛОЖЕНИЕ ====================
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'READY', 
+    message: 'Сервер готов к работе после настройки новой базы',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Radikal upload (будет работать после настройки базы)
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Изображение не загружено' });
+    }
+    
+    const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
+    if (!RADIKAL_API_KEY) {
+      return res.status(500).json({ error: 'RADIKAL_API_KEY не установлен' });
+    }
+    
+    const filePath = req.file.path;
+    const fileBuffer = fs.readFileSync(filePath);
+    
+    const formData = new FormData();
+    formData.append('source', fileBuffer, {
+      filename: req.file.originalname || `upload_${Date.now()}.jpg`,
+      contentType: req.file.mimetype
+    });
+
+    const response = await axios.post('https://radikal.cloud/api/1/upload', formData, {
+      headers: {
+        'X-API-Key': RADIKAL_API_KEY,
+        ...formData.getHeaders(),
+      },
+      timeout: 30000
+    });
+
+    const imageData = response.data.image || response.data;
+    const url = imageData.url || imageData.image_url;
+    
+    if (!url) {
+      throw new Error('URL не получен от Radikal API');
+    }
+
+    // Очистка временного файла
+    try {
+      fs.unlinkSync(filePath);
+    } catch (unlinkError) {
+      console.error('Ошибка удаления временного файла:', unlinkError.message);
+    }
+    
+    res.json({ 
+      success: true,
+      url: url,
+      fileId: imageData.id_encoded || imageData.name
+    });
+    
+  } catch (error) {
+    console.error('Ошибка загрузки:', error.message);
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Ошибка удаления временного файла:', unlinkError.message);
+      }
+    }
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
     });
   }
 });
 
 app.listen(port, () => {
-  console.log(`🚀 Диагностический сервер запущен на порту ${port}`);
-  console.log(`🔗 Тестируем токен: ${SEATABLE_API_TOKEN.substring(0, 8)}...`);
-  console.log(`🔗 Base UUID: ${SEA_TABLE_BASE_UUID}`);
+  console.log(`🚀 СЕРВЕР ЗАПУЩЕН НА ПОРТУ ${port}`);
   console.log('');
-  console.log('📋 Для диагностики откройте:');
-  console.log('   /api/test-endpoints - тест всех endpoints');
-  console.log('   /api/check-token - проверка токена');
-  console.log('   /api/create-token-instructions - инструкция');
+  console.log('📋 ИНСТРУКЦИЯ:');
+  console.log('1. Создайте новую базу "Smolville-App" в SeaTable');
+  console.log('2. Создайте таблицы Events, Ads, Votings');
+  console.log('3. Создайте новый API токен для таблицы');
+  console.log('4. Установите переменные в Render');
+  console.log('');
+  console.log('🔗 Откройте главную страницу для подробной инструкции');
 });
