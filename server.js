@@ -60,14 +60,53 @@ function getSeaTableHeaders() {
   };
 }
 
-// Базовый URL для API
-function getSeaTableBaseURL() {
-  return `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/dtables/${SEATABLE_BASE_UUID}`;
-}
+// Различные варианты API endpoints
+const API_ENDPOINTS = [
+  // Основной endpoint (новый)
+  `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/dtables/${SEATABLE_BASE_UUID}`,
+  // Альтернативный endpoint (старый)
+  `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}`,
+  // Еще один возможный endpoint
+  `${SEATABLE_SERVER_URL}/api/v2.1/dtables/${SEATABLE_BASE_UUID}`,
+  // Endpoint для облачной версии
+  `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/${SEATABLE_BASE_UUID}`
+];
 
-// Альтернативный базовый URL (старая версия API)
-function getSeaTableAltBaseURL() {
-  return `${SEATABLE_SERVER_URL}/dtable-server/api/v1/dtables/${SEATABLE_BASE_UUID}`;
+// Функция для тестирования endpoint'ов
+async function testEndpoints(tableName) {
+  const results = [];
+  
+  for (const baseUrl of API_ENDPOINTS) {
+    try {
+      console.log(`Тестируем endpoint: ${baseUrl}`);
+      const response = await axios.get(
+        `${baseUrl}/rows/?table_name=${encodeURIComponent(tableName)}`,
+        { 
+          headers: getSeaTableHeaders(),
+          timeout: 5000
+        }
+      );
+      
+      results.push({
+        url: baseUrl,
+        status: 'success',
+        data: response.data
+      });
+      console.log(`✅ Endpoint рабочий: ${baseUrl}`);
+      
+    } catch (error) {
+      results.push({
+        url: baseUrl,
+        status: 'error',
+        error: error.message,
+        statusCode: error.response?.status,
+        responseData: error.response?.data
+      });
+      console.log(`❌ Endpoint не работает: ${baseUrl} - ${error.message}`);
+    }
+  }
+  
+  return results;
 }
 
 // Получить все строки таблицы
@@ -75,33 +114,47 @@ async function listRows(tableName) {
   try {
     console.log(`Запрос строк таблицы ${tableName} из SeaTable...`);
     
-    // Сначала пробуем основной endpoint
-    try {
-      const response = await axios.get(
-        `${getSeaTableBaseURL()}/rows/?table_name=${encodeURIComponent(tableName)}`,
-        { 
-          headers: getSeaTableHeaders(),
-          timeout: 10000
+    // Пробуем все endpoint'ы по очереди
+    for (const baseUrl of API_ENDPOINTS) {
+      try {
+        console.log(`Пробуем endpoint: ${baseUrl}`);
+        const response = await axios.get(
+          `${baseUrl}/rows/?table_name=${encodeURIComponent(tableName)}`,
+          { 
+            headers: getSeaTableHeaders(),
+            timeout: 10000
+          }
+        );
+        
+        console.log(`✅ Успешно получено ${response.data.rows ? response.data.rows.length : 0} строк из таблицы ${tableName}`);
+        return response.data.rows || [];
+        
+      } catch (endpointError) {
+        console.log(`❌ Endpoint не сработал: ${baseUrl}`);
+        if (endpointError.response) {
+          console.log(`   Статус: ${endpointError.response.status}`);
+          console.log(`   Данные:`, endpointError.response.data);
         }
-      );
-      
-      console.log(`Получено ${response.data.rows ? response.data.rows.length : 0} строк из таблицы ${tableName}`);
-      return response.data.rows || [];
-    } catch (primaryError) {
-      console.log('Основной endpoint не сработал, пробуем альтернативный...');
-      
-      // Пробуем альтернативный endpoint
-      const response = await axios.get(
-        `${getSeaTableAltBaseURL()}/rows/?table_name=${encodeURIComponent(tableName)}`,
-        { 
-          headers: getSeaTableHeaders(),
-          timeout: 10000
-        }
-      );
-      
-      console.log(`Альтернативный метод: получено ${response.data.rows ? response.data.rows.length : 0} строк`);
-      return response.data.rows || [];
+        // Продолжаем пробовать следующий endpoint
+        continue;
+      }
     }
+    
+    // Если все endpoint'ы не сработали, пробуем базовый API
+    console.log('Все endpoint\'ы не сработали, пробуем базовый API...');
+    const baseResponse = await axios.get(
+      `${SEATABLE_SERVER_URL}/api/v2.1/dtable/app-api/`,
+      {
+        headers: getSeaTableHeaders(),
+        timeout: 10000
+      }
+    );
+    
+    console.log('Базовый API доступен, но структура может отличаться');
+    console.log('Доступные endpoints:', baseResponse.data);
+    
+    throw new Error('Не удалось найти рабочий endpoint для таблиц');
+    
   } catch (error) {
     console.error(`Ошибка получения строк таблицы ${tableName}:`, error.message);
     if (error.response) {
@@ -134,41 +187,32 @@ async function insertRow(tableName, rowData) {
   try {
     console.log(`Добавление строки в таблицу ${tableName}:`, JSON.stringify(rowData, null, 2));
     
-    // Сначала пробуем основной endpoint
-    try {
-      const response = await axios.post(
-        `${getSeaTableBaseURL()}/rows/`,
-        {
-          table_name: tableName,
-          row: rowData
-        },
-        { 
-          headers: getSeaTableHeaders(),
-          timeout: 10000
-        }
-      );
-      
-      console.log('Строка успешно добавлена:', response.data);
-      return response.data;
-    } catch (primaryError) {
-      console.log('Основной endpoint не сработал, пробуем альтернативный...');
-      
-      // Пробуем альтернативный endpoint
-      const response = await axios.post(
-        `${getSeaTableAltBaseURL()}/rows/`,
-        {
-          table_name: tableName,
-          row: rowData
-        },
-        { 
-          headers: getSeaTableHeaders(),
-          timeout: 10000
-        }
-      );
-      
-      console.log('Строка успешно добавлена через альтернативный endpoint:', response.data);
-      return response.data;
+    // Пробуем все endpoint'ы по очереди
+    for (const baseUrl of API_ENDPOINTS) {
+      try {
+        const response = await axios.post(
+          `${baseUrl}/rows/`,
+          {
+            table_name: tableName,
+            row: rowData
+          },
+          { 
+            headers: getSeaTableHeaders(),
+            timeout: 10000
+          }
+        );
+        
+        console.log('Строка успешно добавлена:', response.data);
+        return response.data;
+        
+      } catch (endpointError) {
+        console.log(`Endpoint не сработал для записи: ${baseUrl}`);
+        continue;
+      }
     }
+    
+    throw new Error('Не удалось найти рабочий endpoint для записи');
+    
   } catch (error) {
     console.error(`Ошибка добавления строки в таблицу ${tableName}:`, error.message);
     if (error.response) {
@@ -184,43 +228,33 @@ async function updateRow(tableName, rowId, rowData) {
   try {
     console.log(`Обновление строки ${rowId} в таблице ${tableName}:`, JSON.stringify(rowData, null, 2));
     
-    // Сначала пробуем основной endpoint
-    try {
-      const response = await axios.put(
-        `${getSeaTableBaseURL()}/rows/`,
-        {
-          table_name: tableName,
-          row_id: rowId,
-          row: rowData
-        },
-        { 
-          headers: getSeaTableHeaders(),
-          timeout: 10000
-        }
-      );
-      
-      console.log('Строка успешно обновлена:', response.data);
-      return response.data;
-    } catch (primaryError) {
-      console.log('Основной endpoint не сработал, пробуем альтернативный...');
-      
-      // Пробуем альтернативный endpoint
-      const response = await axios.put(
-        `${getSeaTableAltBaseURL()}/rows/`,
-        {
-          table_name: tableName,
-          row_id: rowId,
-          row: rowData
-        },
-        { 
-          headers: getSeaTableHeaders(),
-          timeout: 10000
-        }
-      );
-      
-      console.log('Строка успешно обновлена через альтернативный endpoint:', response.data);
-      return response.data;
+    // Пробуем все endpoint'ы по очереди
+    for (const baseUrl of API_ENDPOINTS) {
+      try {
+        const response = await axios.put(
+          `${baseUrl}/rows/`,
+          {
+            table_name: tableName,
+            row_id: rowId,
+            row: rowData
+          },
+          { 
+            headers: getSeaTableHeaders(),
+            timeout: 10000
+          }
+        );
+        
+        console.log('Строка успешно обновлена:', response.data);
+        return response.data;
+        
+      } catch (endpointError) {
+        console.log(`Endpoint не сработал для обновления: ${baseUrl}`);
+        continue;
+      }
     }
+    
+    throw new Error('Не удалось найти рабочий endpoint для обновления');
+    
   } catch (error) {
     console.error(`Ошибка обновления строки ${rowId} в таблице ${tableName}:`, error.message);
     if (error.response) {
@@ -236,38 +270,32 @@ async function deleteRow(tableName, rowId) {
   try {
     console.log(`Удаление строки ${rowId} из таблицы ${tableName}`);
     
-    // Сначала пробуем основной endpoint
-    try {
-      await axios.delete(
-        `${getSeaTableBaseURL()}/rows/`,
-        {
-          headers: getSeaTableHeaders(),
-          data: {
-            table_name: tableName,
-            row_id: rowId
-          },
-          timeout: 10000
-        }
-      );
-    } catch (primaryError) {
-      console.log('Основной endpoint не сработал, пробуем альтернативный...');
-      
-      // Пробуем альтернативный endpoint
-      await axios.delete(
-        `${getSeaTableAltBaseURL()}/rows/`,
-        {
-          headers: getSeaTableHeaders(),
-          data: {
-            table_name: tableName,
-            row_id: rowId
-          },
-          timeout: 10000
-        }
-      );
+    // Пробуем все endpoint'ы по очереди
+    for (const baseUrl of API_ENDPOINTS) {
+      try {
+        await axios.delete(
+          `${baseUrl}/rows/`,
+          {
+            headers: getSeaTableHeaders(),
+            data: {
+              table_name: tableName,
+              row_id: rowId
+            },
+            timeout: 10000
+          }
+        );
+        
+        console.log(`Строка ${rowId} успешно удалена`);
+        return { success: true };
+        
+      } catch (endpointError) {
+        console.log(`Endpoint не сработал для удаления: ${baseUrl}`);
+        continue;
+      }
     }
     
-    console.log(`Строка ${rowId} успешно удалена`);
-    return { success: true };
+    throw new Error('Не удалось найти рабочий endpoint для удаления');
+    
   } catch (error) {
     console.error(`Ошибка удаления строки ${rowId} из таблицы ${tableName}:`, error.message);
     if (error.response) {
@@ -327,6 +355,28 @@ app.get('/health', async (req, res) => {
         error: error.message
       },
       warning: 'SeaTable недоступен, но сервер работает'
+    });
+  }
+});
+
+// Диагностический endpoint для тестирования подключения
+app.get('/api/debug/connection', async (req, res) => {
+  try {
+    console.log('Запуск диагностики подключения к SeaTable...');
+    
+    const results = await testEndpoints(EVENTS_TABLE);
+    
+    res.json({
+      status: 'completed',
+      endpointsTested: results.length,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('Ошибка диагностики:', error.message);
+    res.status(500).json({ 
+      error: 'Ошибка диагностики', 
+      message: error.message 
     });
   }
 });
@@ -1026,4 +1076,5 @@ app.listen(port, () => {
   console.log('SEATABLE_API_TOKEN:', SEATABLE_API_TOKEN ? 'Установлен' : 'ОТСУТСТВУЕТ!');
   console.log('SEATABLE_BASE_UUID:', SEATABLE_BASE_UUID);
   console.log('RADIKAL_API_KEY:', RADIKAL_API_KEY ? 'Установлен' : 'ОТСУТСТВУЕТ!');
+  console.log('\nДля диагностики подключения к SeaTable посетите: /api/debug/connection');
 });
