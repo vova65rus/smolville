@@ -1,1976 +1,709 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>Smolville</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root {
-      --bg-color: #ffffff;
-      --text-color: #000000;
-      --hint-color: #707579;
-      --link-color: #3390ec;
-      --button-color: #3390ec;
-      --button-text-color: #ffffff;
-      --secondary-bg-color: #f4f4f5;
-      --ad-bg-color: #fff3cd;
-      --ad-text-color: #856404;
-      --ad-border-color: #ffeaa7;
-      --voting-bg-color: #fff0f0;
-      --voting-text-color: #8b0000;
-      --voting-border-color: #ffcccc;
-      --voting-completed-bg: #f0fff0;
-      --voting-completed-text: #006400;
-      --voting-completed-border: #ccffcc;
+// server.js — Airtable + Radikal backend с автоматическим проксированием attachment ссылок
+
+const express = require('express');
+const axios = require('axios');
+const multer = require('multer');
+const fs = require('fs');
+const FormData = require('form-data');
+const path = require('path');
+const sharp = require('sharp');
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Middleware для CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+const upload = multer({ dest: 'uploads/' });
+
+// Env vars (оставлены как в твоём оригинальном коде)
+const AIRTABLE_API_KEY = process.env.AIRTABLE_EVENTS_API_KEY || process.env.AIRTABLE_ADS_API_KEY || process.env.AIRTABLE_VOTINGS_API_KEY;
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
+const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
+const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
+
+// Radikal API конфигурация
+const RADIKAL_API_URL = 'https://radikal.cloud/api/1';
+const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
+
+// Админ
+const ADMIN_ID = 366825437;
+
+// Проверки env (оставим как было)
+if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID || !RADIKAL_API_KEY) {
+  console.error('Missing env vars: Set AIRTABLE_API_KEY (events/ads/votings), AIRTABLE_BASE_ID, RADIKAL_API_KEY in Render');
+  process.exit(1);
+}
+
+const EVENTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(EVENTS_TABLE)}`;
+const ADS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(ADS_TABLE)}`;
+const VOTINGS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(VOTINGS_TABLE)}`;
+
+// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+
+// Построение базового адреса прокси — если SERVER_DOMAIN задан в env, используем его, иначе строим от запроса
+function buildProxyBase(req) {
+  if (process.env.SERVER_DOMAIN && process.env.SERVER_DOMAIN.trim()) {
+    return process.env.SERVER_DOMAIN.replace(/\/$/, '');
+  }
+  // fallback к динамическому домену (должно работать в Render)
+  const proto = req.protocol;
+  const host = req.get('host');
+  return `${proto}://${host}`;
+}
+
+// Рекурсивно обходим объект/массив и заменяем airtableusercontent ссылки на проксированные
+function replaceImageUrls(obj, req) {
+  if (Array.isArray(obj)) {
+    return obj.map(item => replaceImageUrls(item, req));
+  } else if (obj && typeof obj === 'object') {
+    // если это объект attachment вида {id, url, filename, size, type}
+    if (obj.url && typeof obj.url === 'string' && obj.url.includes('v5.airtableusercontent.com')) {
+      const base = buildProxyBase(req);
+      return {
+        ...obj,
+        // заменяем url на прокси (оставляем оригинал в originalUrl)
+        originalUrl: obj.url,
+        url: `${base}/api/proxy-image?url=${encodeURIComponent(obj.url)}`
+      };
+    }
+    const newObj = {};
+    for (const key of Object.keys(obj)) {
+      newObj[key] = replaceImageUrls(obj[key], req);
+    }
+    return newObj;
+  } else if (typeof obj === 'string' && obj.includes('v5.airtableusercontent.com')) {
+    const base = buildProxyBase(req);
+    return `${base}/api/proxy-image?url=${encodeURIComponent(obj)}`;
+  }
+  return obj;
+}
+
+// Универсальная обёртка для обработки ответов Airtable (массив/объект)
+function processAirtableResponseData(data, req) {
+  // Airtable responses часто имеют { records: [ { id, fields, ... } ], offset }
+  if (!data) return data;
+  const cloned = JSON.parse(JSON.stringify(data)); // простая клонировка
+  return replaceImageUrls(cloned, req);
+}
+
+// ========== RADIKAL API ФУНКЦИИ ==========
+async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
+  try {
+    const formData = new FormData();
+    formData.append('source', fileBuffer, {
+      filename,
+      contentType
+    });
+
+    const response = await axios.post(`${RADIKAL_API_URL}/upload`, formData, {
+      headers: {
+        'X-API-Key': RADIKAL_API_KEY,
+        ...formData.getHeaders()
+      },
+      timeout: 30000
+    });
+
+    if (response.data && (response.data.status_code === 200 || response.data.status_code === '200') && response.data.image) {
+      const imageData = response.data.image;
+      return {
+        fileId: imageData.id_encoded || imageData.name,
+        url: imageData.url,
+        filename,
+        imageData: response.data.image
+      };
+    } else {
+      throw new Error(response.data && response.data.error ? response.data.error.message || JSON.stringify(response.data) : 'Radikal upload failed');
+    }
+  } catch (err) {
+    console.error('Radikal upload error:', err.message);
+    if (err.response) {
+      console.error('Radikal response:', err.response.status, err.response.data);
+    }
+    throw err;
+  }
+}
+
+async function deleteFromRadikal(fileId) {
+  try {
+    await axios.delete(`${RADIKAL_API_URL}/files/${fileId}`, {
+      headers: { 'X-API-Key': RADIKAL_API_KEY }
+    });
+  } catch (err) {
+    console.error('Radikal delete error:', err.message);
+    if (err.response && err.response.status === 404) {
+      return;
+    }
+    throw err;
+  }
+}
+
+async function getRadikalFileInfo(fileId) {
+  try {
+    const response = await axios.get(`${RADIKAL_API_URL}/files/${fileId}`, {
+      headers: { 'X-API-Key': RADIKAL_API_KEY }
+    });
+    return response.data;
+  } catch (err) {
+    console.error('Radikal file info error:', err.message);
+    if (err.response && err.response.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+// ========== ПРОКСИ ДЛЯ AIRTABLE ATTACHMENTS ==========
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'Missing url' });
+    }
+    // Простая валидация — только v5.airtableusercontent.com разрешаем
+    if (!url.includes('v5.airtableusercontent.com')) {
+      return res.status(400).json({ error: 'Only v5.airtableusercontent.com URLs are allowed' });
     }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg-color: #1a1a1a;
-        --text-color: #ffffff;
-        --hint-color: #a0a0a0;
-        --link-color: #4da6ff;
-        --button-color: #4da6ff;
-        --button-text-color: #ffffff;
-        --secondary-bg-color: #2d2d2d;
-        --ad-bg-color: #333300;
-        --ad-text-color: #ffffcc;
-        --ad-border-color: #666600;
-        --voting-bg-color: #330000;
-        --voting-text-color: #ffcccc;
-        --voting-border-color: #660000;
-        --voting-completed-bg: #003300;
-        --voting-completed-text: #ccffcc;
-        --voting-completed-border: #006600;
+    // Используем stream, чтобы не держать весь файл в памяти (axios stream)
+    const response = await axios.get(url, {
+      responseType: 'stream',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; SmolvilleApp/1.0)',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+      },
+      timeout: 20000
+    });
+
+    // Прокинем content-type и cache-control
+    if (response.headers['content-type']) res.setHeader('Content-Type', response.headers['content-type']);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // кэш на сутки
+    // Можно добавить ETag/Last-Modified тут при необходимости
+
+    response.data.pipe(res);
+    response.data.on('error', (err) => {
+      console.error('Stream error while proxying image:', err.message);
+      try { res.end(); } catch (e) {}
+    });
+  } catch (err) {
+    console.error('Proxy image error:', err.message);
+    // Если Airtable временно блокирует, вернём 502 для клиента
+    res.status(502).json({ error: 'Failed to fetch image from Airtable' });
+  }
+});
+
+// ========== API ДЛЯ АДМИНА ==========
+app.get('/api/is-admin', (req, res) => {
+  const userId = parseInt(req.query.userId, 10);
+  const isAdmin = userId === ADMIN_ID;
+  res.json({ isAdmin });
+});
+
+// ========== API ЗАГРУЗКИ ИЗОБРАЖЕНИЙ (Radikal) ==========
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file uploaded' });
+
+    const filePath = req.file.path;
+    const fileBuffer = fs.readFileSync(filePath);
+
+    const uploadResult = await uploadToRadikal(fileBuffer, req.file.originalname || `upload_${Date.now()}.jpg`, req.file.mimetype);
+
+    // удаляем temp
+    try { fs.unlinkSync(filePath); } catch (e) { console.error('unlink error', e.message); }
+
+    res.json({ url: uploadResult.url, fileId: uploadResult.fileId, filename: uploadResult.filename });
+  } catch (err) {
+    console.error('Upload error:', err.message);
+    if (req.file) {
+      try { fs.unlinkSync(req.file.path); } catch (e) { console.error('unlink error', e.message); }
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/votings/upload-option-image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file uploaded' });
+
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const uploadResult = await uploadToRadikal(fileBuffer, req.file.originalname || `option_image_${Date.now()}.jpg`, req.file.mimetype);
+
+    try { fs.unlinkSync(req.file.path); } catch (e) { console.error('unlink error', e.message); }
+
+    res.json({ url: uploadResult.url, filename: uploadResult.filename, fileId: uploadResult.fileId });
+  } catch (err) {
+    console.error('Option upload error:', err.message);
+    try { if (req.file) fs.unlinkSync(req.file.path); } catch (e) {}
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/upload/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    await deleteFromRadikal(fileId);
+    res.json({ success: true, message: `File ${fileId} deleted successfully` });
+  } catch (err) {
+    console.error('Delete file error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========== HELPERS ДЛЯ AIRTABLE ВЫЗОВОВ ==========
+function airtableHeaders() {
+  return { Authorization: `Bearer ${AIRTABLE_API_KEY}` };
+}
+
+// Универсальная обёртка GET по Airtable (list)
+async function airtableGet(url, req, res, params = {}) {
+  try {
+    const response = await axios.get(url, { headers: airtableHeaders(), params });
+    const processed = processAirtableResponseData(response.data, req);
+    return res.json(processed);
+  } catch (err) {
+    console.error('Airtable GET error:', err.message);
+    if (err.response) {
+      console.error('Airtable response', err.response.status, err.response.data);
+      return res.status(err.response.status).json({ error: err.response.data });
+    }
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// Универсальная обёртка POST/PATCH (которые возвращают данные от Airtable)
+async function airtableSend(method, url, body, req, res) {
+  try {
+    const response = await axios({
+      method,
+      url,
+      headers: { ...airtableHeaders(), 'Content-Type': 'application/json' },
+      data: body
+    });
+    const processed = processAirtableResponseData(response.data, req);
+    res.json(processed);
+  } catch (err) {
+    console.error(`Airtable ${method} error:`, err.message);
+    if (err.response) {
+      console.error('Airtable response', err.response.status, err.response.data);
+      return res.status(err.response.status).json({ error: err.response.data });
+    }
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ========== EVENTS API ==========
+app.get('/api/events', (req, res) => airtableGet(EVENTS_URL, req, res, req.query));
+app.post('/api/events', (req, res) => airtableSend('post', EVENTS_URL, req.body, req, res));
+app.get('/api/events/:id', (req, res) => airtableGet(`${EVENTS_URL}/${req.params.id}`, req, res));
+app.patch('/api/events/:id', (req, res) => airtableSend('patch', `${EVENTS_URL}/${req.params.id}`, req.body, req, res));
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const response = await axios.delete(`${EVENTS_URL}/${req.params.id}`, { headers: airtableHeaders() });
+    // Airtable delete returns { deleted: true, id: 'rec...' }
+    res.json(response.data);
+  } catch (err) {
+    console.error('Event DELETE error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========== ADS API ==========
+app.get('/api/ads', (req, res) => airtableGet(ADS_URL, req, res, req.query));
+app.post('/api/ads', (req, res) => airtableSend('post', ADS_URL, req.body, req, res));
+app.get('/api/ads/:id', (req, res) => airtableGet(`${ADS_URL}/${req.params.id}`, req, res));
+app.patch('/api/ads/:id', (req, res) => airtableSend('patch', `${ADS_URL}/${req.params.id}`, req.body, req, res));
+app.delete('/api/ads/:id', async (req, res) => {
+  try {
+    const response = await axios.delete(`${ADS_URL}/${req.params.id}`, { headers: airtableHeaders() });
+    res.json(response.data);
+  } catch (err) {
+    console.error('Ad DELETE error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========== VOTINGS API ==========
+app.get('/api/votings', (req, res) => airtableGet(VOTINGS_URL, req, res, req.query));
+app.post('/api/votings', (req, res) => airtableSend('post', VOTINGS_URL, req.body, req, res));
+app.get('/api/votings/:id', (req, res) => airtableGet(`${VOTINGS_URL}/${req.params.id}`, req, res));
+app.patch('/api/votings/:id', (req, res) => airtableSend('patch', `${VOTINGS_URL}/${req.params.id}`, req.body, req, res));
+app.delete('/api/votings/:id', async (req, res) => {
+  try {
+    const response = await axios.delete(`${VOTINGS_URL}/${req.params.id}`, { headers: airtableHeaders() });
+    res.json(response.data);
+  } catch (err) {
+    console.error('Votings DELETE error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Получить голосования по ID мероприятия
+app.get('/api/events/:eventId/votings', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const response = await axios.get(VOTINGS_URL, {
+      headers: airtableHeaders(),
+      params: { filterByFormula: `{EventID} = '${eventId}'` }
+    });
+    const processed = processAirtableResponseData(response.data, req);
+    res.json(processed);
+  } catch (err) {
+    console.error('Event votings GET error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========== VOTING ACTIONS (vote, status, complete, generate-results) ==========
+app.post('/api/votings/:id/vote', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, optionIndex, userLat, userLon } = req.body;
+
+    if (!userId || optionIndex === undefined || userLat === undefined || userLon === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, { headers: airtableHeaders() });
+    const voting = votingResponse.data;
+    if (!voting.fields) return res.status(404).json({ error: 'Голосование не найдено' });
+    if (voting.fields.Status === 'Completed') return res.status(400).json({ error: 'Voting is completed' });
+
+    const votedUserIds = voting.fields.VotedUserIDs || '';
+    const votedUsersArray = (typeof votedUserIds === 'string' ? votedUserIds.split(',') : votedUserIds).filter(Boolean);
+
+    if (votedUsersArray.includes(userId.toString())) return res.status(400).json({ error: 'Вы уже проголосовали в этом голосовании' });
+
+    const votingLat = voting.fields.Latitude;
+    const votingLon = voting.fields.Longitude;
+    if (votingLat && votingLon && userLat && userLon) {
+      const distance = calculateDistance(userLat, userLon, votingLat, votingLon);
+      if (distance > 1000) return res.status(400).json({ error: 'Вы находитесь слишком далеко от места голосования' });
+    }
+
+    let currentVotes = voting.fields.Votes ? JSON.parse(voting.fields.Votes) : {};
+    currentVotes[userId] = optionIndex;
+    const newVotedUserIDs = votedUserIds ? `${votedUserIds},${userId}` : userId.toString();
+
+    const updateData = {
+      fields: {
+        Votes: JSON.stringify(currentVotes),
+        VotedUserIDs: newVotedUserIDs
       }
+    };
+
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, updateData, {
+      headers: { ...airtableHeaders(), 'Content-Type': 'application/json' }
+    });
+
+    const processed = processAirtableResponseData(updateResponse.data, req);
+    res.json({ success: true, voting: processed });
+  } catch (err) {
+    console.error('Vote error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/votings/:id/vote-status/:userId', async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, { headers: airtableHeaders() });
+    const voting = votingResponse.data;
+    if (!voting.fields) return res.status(404).json({ error: 'Голосование не найдено' });
+
+    const votedUserIds = voting.fields.VotedUserIDs || '';
+    const votedUsersArray = (typeof votedUserIds === 'string' ? votedUserIds.split(',') : votedUserIds).filter(Boolean);
+    const hasVoted = votedUsersArray.includes(userId.toString());
+    let userVote = null;
+    if (voting.fields.Votes) {
+      const votes = JSON.parse(voting.fields.Votes);
+      userVote = votes[userId] !== undefined ? votes[userId] : null;
     }
 
-    body {
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      transition: background-color 0.3s ease, color 0.3s ease;
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
+    res.json({ hasVoted, userVote });
+  } catch (err) {
+    console.error('Vote status error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/votings/:id/complete', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, { headers: airtableHeaders() });
+    const voting = votingResponse.data;
+    if (!voting.fields) return res.status(404).json({ error: 'Голосование не найдено' });
+
+    const votes = voting.fields.Votes ? (typeof voting.fields.Votes === 'string' ? JSON.parse(voting.fields.Votes) : voting.fields.Votes) : {};
+    const results = [];
+
+    if (voting.fields.Options) {
+      const options = typeof voting.fields.Options === 'string' ? voting.fields.Options.split(',') : voting.fields.Options;
+      const voteCounts = {};
+      options.forEach((opt, idx) => voteCounts[idx] = 0);
+      Object.values(votes).forEach(voteIndex => {
+        if (voteCounts[voteIndex] !== undefined) voteCounts[voteIndex]++;
+      });
+      const totalVotes = Object.values(voteCounts).reduce((s, c) => s + c, 0);
+      options.forEach((option, index) => {
+        const count = voteCounts[index] || 0;
+        const percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        results.push({ option, count, percentage });
+      });
     }
 
-    .event-card {
-      background: var(--secondary-bg-color);
-      border-radius: 8px;
-      backdrop-filter: blur(5px);
-      margin-bottom: 10px;
-      transition: background 0.3s ease;
-      border: 1px solid var(--hint-color);
-      color: var(--text-color);
+    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
+      fields: { Status: 'Completed', Results: JSON.stringify(results) }
+    }, { headers: { ...airtableHeaders(), 'Content-Type': 'application/json' } });
+
+    const processed = processAirtableResponseData(updateResponse.data, req);
+    res.json({ success: true, results, voting: processed });
+  } catch (err) {
+    console.error('Complete voting error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Генерация изображения с результатами голосования (с учётом проксированных ссылок)
+app.post('/api/votings/:id/generate-results', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, { headers: airtableHeaders() });
+    const voting = votingResponse.data;
+    if (!voting.fields) return res.status(404).json({ error: 'Голосование не найдено' });
+    if (!voting.fields.Results) return res.status(400).json({ error: 'Результаты голосования недоступны' });
+
+    let results;
+    try {
+      results = typeof voting.fields.Results === 'string' ? JSON.parse(voting.fields.Results) : voting.fields.Results;
+    } catch (e) {
+      console.error('Error parsing results:', e.message);
+      return res.status(400).json({ error: 'Неверный формат результатов голосования' });
     }
 
-    .event-card:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
+    let resultsArray = Array.isArray(results) ? results : Object.values(results || {});
+    const title = voting.fields.Title || 'Результаты голосования';
+    const description = voting.fields.Description || '';
 
-    .ad-card {
-      background: var(--ad-bg-color);
-      border-radius: 8px;
-      margin-bottom: 10px;
-      border: 2px solid var(--ad-border-color);
-      color: var(--ad-text-color);
-    }
-
-    .ad-card:hover {
-      background: #ffeaa7;
-      transform: scale(1.02);
-      transition: all 0.2s ease;
-    }
-
-    .voting-card {
-      background: var(--voting-bg-color);
-      border-radius: 8px;
-      margin-bottom: 10px;
-      border: 2px solid var(--voting-border-color);
-      color: var(--voting-text-color);
-    }
-
-    .voting-card:hover {
-      background: #ffcccc;
-      transform: scale(1.02);
-      transition: all 0.2s ease;
-    }
-
-    .voting-card.completed {
-      background: var(--voting-completed-bg);
-      border-color: var(--voting-completed-border);
-      color: var(--voting-completed-text);
-    }
-
-    .ad-badge {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      background: var(--ad-border-color);
-      color: var(--ad-text-color);
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 10px;
-      font-weight: bold;
-    }
-
-    .voting-badge {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      background: var(--voting-border-color);
-      color: var(--voting-text-color);
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 10px;
-      font-weight: bold;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .modal {
-      background: rgba(0, 0, 0, 0.85);
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-    }
-
-    .modal-content {
-      background: var(--secondary-bg-color);
-      color: var(--text-color);
-      padding: 20px;
-      border-radius: 8px;
-      max-width: 90%;
-      max-height: 80%;
-      overflow-y: auto;
-      transition: background 0.3s ease, color 0.3s ease;
-    }
-
-    .fade-in {
-      animation: fadeIn 0.5s ease-in;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    input, textarea, select {
-      background: var(--bg-color);
-      color: var(--text-color);
-      border: 1px solid var(--hint-color);
-      transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-    }
-
-    input::placeholder, textarea::placeholder {
-      color: var(--hint-color);
-    }
-
-    .tab {
-      background: var(--secondary-bg-color);
-      color: var(--text-color);
-      padding: 8px 16px;
-      border-radius: 4px 4px 0 0;
-      cursor: pointer;
-      transition: background 0.3s ease;
-    }
-
-    .tab:hover {
-      background: var(--hint-color);
-    }
-
-    .tab.active {
-      background: var(--bg-color);
-      font-weight: bold;
-      color: var(--text-color);
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    .voting-option {
-      color: var(--text-color) !important;
-    }
-
-    .vote-button {
-      pointer-events: none;
-      opacity: 0.5;
-      color: white !important;
-    }
-
-    .vote-button.enabled {
-      pointer-events: auto;
-      opacity: 1;
-    }
-
-    .results-image {
-      max-width: 100%;
-      border: 2px solid #ddd;
-      border-radius: 8px;
-      margin: 10px 0;
-    }
-
-    .download-btn {
-      background: #4CAF50;
-      color: white;
-      padding: 8px 16px;
-      border-radius: 4px;
-      text-decoration: none;
-      display: inline-block;
-      margin-top: 10px;
-    }
-
-    .option-preview {
-      max-width: 100px;
-      max-height: 100px;
-      object-fit: cover;
-      border-radius: 4px;
-      margin-top: 5px;
-    }
-
-    /* Улучшенные контрастные цвета */
-    .text-contrast {
-      color: var(--text-color);
-    }
-
-    .bg-contrast {
-      background-color: var(--bg-color);
-    }
-
-    .border-contrast {
-      border-color: var(--hint-color);
-    }
-
-    /* Улучшенные цвета для карточек */
-    .card-contrast {
-      background: var(--secondary-bg-color);
-      color: var(--text-color);
-      border: 1px solid var(--hint-color);
-    }
-  </style>
-</head>
-<body class="min-h-screen flex flex-col">
-  <div class="container mx-auto p-4 flex-grow">
-    <a href="https://t.me/smolville_drift" target="_blank">
-      <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
-    </a>
-    <h1 class="text-2xl font-bold text-center mb-4 text-contrast">Автособытия Сахалина</h1>
-    <div id="events" class="grid grid-cols-1 gap-4"></div>
-   <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition" onclick="showAdminModal()">Админ</button>
-  </div>
-
-  <!-- Модальное окно события -->
-  <div id="eventModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="modalTitle" class="text-lg font-bold text-contrast"></h2>
-      <p id="modalDate" class="text-contrast"></p>
-      <p id="modalLocation" class="text-contrast"></p>
-      <p id="modalDescription" class="text-contrast"></p>
-      <img id="modalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
-      <div id="modalMapButtonContainer" class="hidden mt-3">
-        <button id="modalMapButton" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">
-          На карте
-        </button>
-      </div>
-      <div class="mt-4 pt-3 border-t border-contrast">
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-contrast">
-            Идут: <span id="attendeesCount">0</span> человек
-          </span>
-          <button id="attendButton" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
-            Я пойду!
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Модальное окно рекламы -->
-  <div id="adModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="adModalTitle" class="text-lg font-bold text-contrast"></h2>
-      <p id="adModalDescription" class="text-contrast"></p>
-      <img id="adModalImage" class="w-full h-40 object-cover rounded-lg mt-2" loading="lazy">
-      <button id="adModalButton" class="bg-[var(--ad-border-color)] hover:opacity-90 text-[var(--ad-text-color)] px-4 py-2 rounded-lg transition w-full mt-3">
-        Перейти
-      </button>
-    </div>
-  </div>
-
-  <!-- Модальное окно голосования -->
-  <div id="votingModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 id="votingModalTitle" class="text-lg font-bold text-contrast"></h2>
-      <p id="votingModalDescription" class="text-contrast"></p>
-      
-      <!-- ПЕРЕМЕЩЕННАЯ КНОПКА ОПРЕДЕЛЕНИЯ МЕСТОПОЛОЖЕНИЯ - ТЕПЕРЬ ПОД ОПИСАНИЕМ -->
-      <div class="mt-4 pt-3 border-t border-contrast">
-        <p class="text-sm text-[var(--hint-color)]">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
-        <button id="getLocationBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition w-full mt-3">
-          Определить мое местоположение
-        </button>
-      </div>
-      
-      <div id="votingOptions" class="my-4"></div>
-      <div id="votingResultsImageContainer" class="hidden mt-4">
-        <h3 class="font-bold mb-2 text-contrast">Изображение с результатами:</h3>
-        <img id="votingResultsImage" class="results-image" loading="lazy">
-        <div class="flex space-x-2 mt-3">
-          <button id="downloadResultsBtn" class="download-btn flex-1">Скачать изображение</button>
-          <button id="generateResultsBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition flex-1">
-            Сгенерировать новое
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
- <!-- Админ-панель -->
-  <div id="adminModal" class="modal hidden">
-    <div class="modal-content">
-      <h2 class="text-lg font-bold mb-4 text-contrast">Админ-панель</h2>
-      <div class="flex mb-4 overflow-x-auto">
-        <div class="tab active" onclick="showTab('tab-list')">События</div>
-        <div class="tab" onclick="showTab('tab-form')">Добавить событие</div>
-        <div class="tab" onclick="showTab('tab-ads-list')">Реклама</div>
-        <div class="tab" onclick="showTab('tab-ad-form')">Добавить рекламу</div>
-        <div class="tab" onclick="showTab('tab-votings-list')">Голосования</div>
-        <div class="tab" onclick="showTab('tab-voting-form')">Добавить голосование</div>
-      </div>
-      
-      <!-- Вкладка списка событий -->
-      <div id="tab-list" class="tab-content active">
-        <h3 class="text-md font-bold mb-2 text-contrast">Список событий</h3>
-        <div id="eventList" class="mb-4"></div>
-      </div>
-      
-      <!-- Вкладка формы события -->
-      <div id="tab-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать событие</h3>
-        <form id="eventForm">
-          <input type="hidden" id="eventRecordId">
-          <input type="text" id="eventId" placeholder="ID (автоматически, если пусто)" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
-          <input type="text" id="eventTitle" placeholder="Название" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
-          <select id="eventType" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
-            <option value="">Выберите тип</option>
-            <option value="Спорт">Спорт</option>
-            <option value="Выставки">Выставки</option>
-          </select>
-          <input type="date" id="eventDate" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
-          <input type="text" id="eventLocation" placeholder="Место" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
-          <textarea id="eventDescription" placeholder="Описание" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast"></textarea>
-          <input type="text" id="eventMapLink" placeholder="Ссылка на карту (2GIS)" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
-          <input type="file" id="eventImage" accept="image/*" class="mb-2">
-          <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">Сохранить событие</button>
-        </form>
-      </div>
-      
-      <!-- Вкладка списка рекламы -->
-      <div id="tab-ads-list" class="tab-content">
-        <h3 class="text-md font-bold mb-2 text-contrast">Список рекламных блоков</h3>
-        <div id="adsList" class="mb-4"></div>
-        <button onclick="loadAds()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">Обновить список</button>
-      </div>
-      
-      <!-- Вкладка формы рекламы -->
-      <div id="tab-ad-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать рекламу</h3>
-        <form id="adForm">
-          <input type="hidden" id="adRecordId">
-          <input type="text" id="adTitle" placeholder="Заголовок рекламы" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
-          <textarea id="adDescription" placeholder="Описание рекламы" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast"></textarea>
-          <input type="url" id="adUrl" placeholder="Ссылка (URL)" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
-          <input type="file" id="adImage" accept="image/*" class="mb-2">
-          <div class="flex space-x-2">
-            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition flex-1">Сохранить рекламу</button>
-            <button type="button" onclick="clearAdForm()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">Очистить</button>
-          </div>
-        </form>
-      </div>
-      
-      <!-- Вкладка списка голосований -->
-      <div id="tab-votings-list" class="tab-content">
-        <h3 class="text-md font-bold mb-2 text-contrast">Список голосований</h3>
-        <div id="votingsList" class="mb-4"></div>
-        <button onclick="loadVotings()" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition w-full">Обновить список</button>
-      </div>
-      
-      <!-- Вкладка формы голосования -->
-      <div id="tab-voting-form" class="tab-content">
-        <h3 class="text-md font-bold mb-2 text-contrast">Добавить/Редактировать голосование</h3>
-        <form id="votingForm">
-          <input type="hidden" id="votingRecordId">
-          <input type="text" id="votingTitle" placeholder="Название голосования" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast" required>
-          <textarea id="votingDescription" placeholder="Описание голосования" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast"></textarea>
-          <select id="votingEventId" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
-            <option value="">Выберите мероприятие (опционально)</option>
-          </select>
-          <div id="votingOptionsContainer" class="mb-2">
-            <div class="option-item flex flex-col mb-3 p-2 border rounded border-contrast">
-              <div class="flex mb-2">
-                <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2 bg-contrast text-contrast border-contrast" required>
-                <button type="button" onclick="removeOption(this)" class="bg-red-500 text-white px-3 rounded">-</button>
-              </div>
-              <div class="flex items-center mb-2">
-                <input type="file" class="option-image hidden" accept="image/*">
-                <button type="button" onclick="triggerImageUpload(this)" class="bg-blue-500 text-white px-3 py-1 rounded text-xs mr-2">
-                  📷 Выбрать фото
-                </button>
-                <span class="image-status text-xs text-[var(--hint-color)]"></span>
-              </div>
-              <img class="option-preview mt-2 w-20 h-20 object-cover rounded hidden">
-            </div>
-          </div>
-          <button type="button" onclick="addOption()" class="bg-gray-500 text-white px-3 py-1 rounded mb-2">+ Добавить номинанта</button>
-          <input type="number" id="votingLatitude" placeholder="Широта места голосования" step="any" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
-          <input type="number" id="votingLongitude" placeholder="Долгота места голосования" step="any" class="border p-2 w-full mb-2 bg-contrast text-contrast border-contrast">
-          <div class="flex space-x-2">
-            <button type="submit" class="bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition flex-1">Сохранить голосование</button>
-            <button type="button" id="completeVotingBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition hidden">Завершить</button>
-            <button type="button" id="generateImageBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition hidden">Сгенерировать изображение</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const BACKEND_URL = 'https://smolville.onrender.com';
-    const tg = window.Telegram?.WebApp;
-    if (!tg) {
-      document.body.innerHTML = '<p class="text-center text-[var(--text-color)]">Ошибка: Запустите в Telegram WebApp</p>';
-      throw new Error('Telegram WebApp not found');
-    }
-    tg.ready();
-    tg.expand();
-
-    let currentEventRecord = null;
-    let currentAttendeesCount = 0;
-    let isUserAttending = false;
-    let currentVotingRecord = null;
-    let userLocation = null;
-    let optionImages = {};
-    let eventsData = null;
-    let currentResultsImageUrl = null;
-
-    const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
-    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-
-    // Применение темы Telegram с адаптацией под системные настройки
-    function applyTheme() {
-      // Проверяем системные предпочтения
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      
-      // Приоритет: тема Telegram -> системная тема -> светлая тема по умолчанию
-      const theme = tg.themeParams;
-      
-      if (theme.bg_color) {
-        // Используем тему Telegram
-        document.documentElement.style.setProperty('--bg-color', theme.bg_color || '#ffffff');
-        document.documentElement.style.setProperty('--text-color', theme.text_color || '#000000');
-        document.documentElement.style.setProperty('--hint-color', theme.hint_color || '#707579');
-        document.documentElement.style.setProperty('--link-color', theme.link_color || '#3390ec');
-        document.documentElement.style.setProperty('--button-color', theme.button_color || '#3390ec');
-        document.documentElement.style.setProperty('--button-text-color', theme.button_text_color || '#ffffff');
-        document.documentElement.style.setProperty('--secondary-bg-color', theme.secondary_bg_color || '#f4f4f5');
-      } else if (prefersDark) {
-        // Темная тема по системным настройкам
-        applyDarkTheme();
-      } else {
-        // Светлая тема по умолчанию
-        applyLightTheme();
+    // Получаем option images — могут прийти в виде attachment array [{url, filename, ...}, ...]
+    const optionImages = voting.fields.OptionImages || [];
+    // Проксируем локально для встраивания в svg — используем текущий req для buildProxyBase
+    const processedOptionImages = Array.isArray(optionImages) ? optionImages.map(img => {
+      if (img && img.url && typeof img.url === 'string' && img.url.includes('v5.airtableusercontent.com')) {
+        const base = buildProxyBase(req);
+        return { ...img, url: `${base}/api/proxy-image?url=${encodeURIComponent(img.url)}` };
       }
-      
-      // Слушаем изменения системной темы
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-        if (!tg.themeParams.bg_color) {
-          if (e.matches) {
-            applyDarkTheme();
-          } else {
-            applyLightTheme();
-          }
+      return img;
+    }) : optionImages;
+
+    let height = 600;
+    const hasImages = processedOptionImages && processedOptionImages.length > 0;
+    if (hasImages) height += Math.ceil(resultsArray.length / 3) * 110;
+
+    let svg = `
+      <svg width="800" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <style>
+          .title { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #000; }
+          .description { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+          .option { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #000; }
+          .stats { font-family: Arial, sans-serif; font-size: 16px; fill: #666; }
+        </style>
+        <rect width="800" height="${height}" fill="#ffffff"/>
+        <text x="400" y="50" class="title" text-anchor="middle">${escapeXml(title)}</text>
+        <text x="400" y="80" class="description" text-anchor="middle">${escapeXml(description)}</text>
+    `;
+
+    let y = 120;
+    resultsArray.forEach((result, index) => {
+      const barWidth = (result.percentage / 100) * 400;
+      const barColor = index % 2 === 0 ? '#4CAF50' : '#2196F3';
+      svg += `
+        <rect x="100" y="${y}" width="400" height="40" fill="#e0e0e0" rx="5"/>
+        <rect x="100" y="${y}" width="${barWidth}" height="40" fill="${barColor}" rx="5"/>
+        <text x="20" y="${y + 25}" class="option">${escapeXml(result.option)}</text>
+        <text x="520" y="${y + 25}" class="stats" text-anchor="end">${result.count} голосов (${result.percentage}%)</text>
+      `;
+      y += 50;
+    });
+
+    if (hasImages) {
+      y += 20;
+      svg += `<text x="400" y="${y}" class="description" text-anchor="middle">Изображения номинантов</text>`;
+      y += 30;
+      resultsArray.forEach((result, index) => {
+        const imgObj = processedOptionImages[index];
+        if (imgObj && imgObj.url) {
+          const col = index % 3;
+          const row = Math.floor(index / 3);
+          svg += `<image x="${100 + col * 200}" y="${y + row * 110}" width="150" height="100" href="${imgObj.url}" preserveAspectRatio="xMidYMid meet"/>`;
         }
       });
     }
 
-    function applyDarkTheme() {
-      document.documentElement.style.setProperty('--bg-color', '#1a1a1a');
-      document.documentElement.style.setProperty('--text-color', '#ffffff');
-      document.documentElement.style.setProperty('--hint-color', '#a0a0a0');
-      document.documentElement.style.setProperty('--link-color', '#4da6ff');
-      document.documentElement.style.setProperty('--button-color', '#4da6ff');
-      document.documentElement.style.setProperty('--button-text-color', '#ffffff');
-      document.documentElement.style.setProperty('--secondary-bg-color', '#2d2d2d');
-      document.documentElement.style.setProperty('--ad-bg-color', '#333300');
-      document.documentElement.style.setProperty('--ad-text-color', '#ffffcc');
-      document.documentElement.style.setProperty('--ad-border-color', '#666600');
-      document.documentElement.style.setProperty('--voting-bg-color', '#330000');
-      document.documentElement.style.setProperty('--voting-text-color', '#ffcccc');
-      document.documentElement.style.setProperty('--voting-border-color', '#660000');
-      document.documentElement.style.setProperty('--voting-completed-bg', '#003300');
-      document.documentElement.style.setProperty('--voting-completed-text', '#ccffcc');
-      document.documentElement.style.setProperty('--voting-completed-border', '#006600');
-    }
+    svg += `</svg>`;
 
-    function applyLightTheme() {
-      document.documentElement.style.setProperty('--bg-color', '#ffffff');
-      document.documentElement.style.setProperty('--text-color', '#000000');
-      document.documentElement.style.setProperty('--hint-color', '#707579');
-      document.documentElement.style.setProperty('--link-color', '#3390ec');
-      document.documentElement.style.setProperty('--button-color', '#3390ec');
-      document.documentElement.style.setProperty('--button-text-color', '#ffffff');
-      document.documentElement.style.setProperty('--secondary-bg-color', '#f4f4f5');
-      document.documentElement.style.setProperty('--ad-bg-color', '#fff3cd');
-      document.documentElement.style.setProperty('--ad-text-color', '#856404');
-      document.documentElement.style.setProperty('--ad-border-color', '#ffeaa7');
-      document.documentElement.style.setProperty('--voting-bg-color', '#fff0f0');
-      document.documentElement.style.setProperty('--voting-text-color', '#8b0000');
-      document.documentElement.style.setProperty('--voting-border-color', '#ffcccc');
-      document.documentElement.style.setProperty('--voting-completed-bg', '#f0fff0');
-      document.documentElement.style.setProperty('--voting-completed-text', '#006400');
-      document.documentElement.style.setProperty('--voting-completed-border', '#ccffcc');
-    }
+    const svgBuffer = Buffer.from(svg);
+    const imageBuffer = await sharp(svgBuffer)
+      .resize(800, height, { fit: 'fill', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+      .jpeg({ quality: 90, chromaSubsampling: '4:4:4' })
+      .toBuffer();
 
-    function formatDate(dateStr) {
-      if (!dateStr) return 'Без даты';
-      const [year, month, day] = dateStr.split('-');
-      return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
-    }
+    const uploadResult = await uploadToRadikal(imageBuffer, `voting_results_${id}_${Date.now()}.jpg`, 'image/jpeg');
 
-    async function renderEvents() {
-      const eventsContainer = document.getElementById('events');
-      eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-
-      try {
-        const [eventsResponse, adsResponse, votingsResponse] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' }),
-          fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' }),
-          fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' })
-        ]);
-
-        if (!eventsResponse.ok) {
-          const errorData = await eventsResponse.json();
-          throw new Error(errorData.error || 'Ошибка загрузки событий');
-        }
-
-        eventsData = await eventsResponse.json();
-        let adsData = { records: [] };
-        let votingsData = { records: [] };
-
-        if (adsResponse.ok) adsData = await adsResponse.json();
-        if (votingsResponse.ok) votingsData = await votingsResponse.json();
-
-        eventsContainer.innerHTML = '';
-
-        let activeVotings = [];
-        let events = [];
-        let ads = [];
-
-        // Собираем активные голосования (всегда первые)
-        if (votingsData.records) {
-          activeVotings = votingsData.records
-            .filter(record => record.fields.Status !== 'Completed')
-            .map(record => ({
-              type: 'voting',
-              data: record,
-              date: new Date(record.createdTime || Date.now())
-            }));
-        }
-
-        // Собираем события и сортируем по дате (от ближайших к будущим)
-        if (eventsData.records) {
-          events = eventsData.records
-            .map(record => ({
-              type: 'event',
-              data: record,
-              date: new Date(record.fields.Date || record.createdTime || Date.now())
-            }))
-            .sort((a, b) => a.date - b.date);
-        }
-
-        // Собираем рекламу
-        if (adsData.records) {
-          ads = adsData.records.map(record => ({
-            type: 'ad',
-            data: record,
-            date: new Date(record.createdTime || Date.now())
-          }));
-        }
-
-        // Формируем итоговый список: голосования первые, затем события, реклама каждые 2 события
-        let allItems = [...activeVotings];
-
-        let adIndex = 0;
-        events.forEach((event, index) => {
-          allItems.push(event);
-          if ((index + 1) % 2 === 0 && adIndex < ads.length) {
-            allItems.push(ads[adIndex]);
-            adIndex++;
-          }
-        });
-
-        while (adIndex < ads.length) {
-          allItems.push(ads[adIndex]);
-          adIndex++;
-        }
-
-        allItems.forEach(item => {
-          if (item.type === 'voting') renderVotingItem(item.data);
-          else if (item.type === 'ad') renderAdItem(item.data);
-          else if (item.type === 'event') renderEventItem(item.data);
-        });
-
-        if (allItems.length === 0) {
-          eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
-        }
-      } catch (err) {
-        console.error('Render events error:', err);
-        eventsContainer.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
-      }
-    }
-
-    function showVotingOptions(voting) {
-      const optionsContainer = document.getElementById('votingOptions');
-      optionsContainer.innerHTML = '<h4 class="font-bold mb-2 text-contrast">Выберите номинанта:</h4>';
-
-      document.getElementById('getLocationBtn').style.display = 'block';
-      document.getElementById('votingResultsImageContainer').classList.add('hidden');
-
-      if (voting.Options && voting.Options.split(',').length > 0) {
-        const optionsArray = voting.Options.split(',');
-        const optionImages = voting.OptionImages || [];
-
-        optionsArray.forEach((option, index) => {
-          const optionDiv = document.createElement('div');
-          optionDiv.className = 'mb-3 p-3 border rounded-lg bg-contrast transition voting-option border-contrast';
-
-          let imageHtml = '';
-          if (optionImages[index] && optionImages[index].url) {
-            imageHtml = `
-              <div class="flex-shrink-0 mr-3">
-                <img src="${optionImages[index].url}" alt="${option}" 
-                     class="w-24 h-24 object-cover rounded-lg border border-contrast">
-              </div>
-            `;
-          }
-
-          optionDiv.innerHTML = `
-            <div class="flex items-center justify-between">
-              ${imageHtml}
-              <div class="flex-grow">
-                <span class="font-medium text-contrast">${option}</span>
-              </div>
-              <button class="vote-button bg-blue-600 text-white px-3 py-1 rounded text-sm transition" 
-                      onclick="castVote(${index})" disabled>
-                Голосовать
-              </button>
-            </div>
-          `;
-
-          optionsContainer.appendChild(optionDiv);
-        });
-
-        updateVoteButtons();
-      }
-    }
-
-    function updateVoteButtons() {
-      const voteButtons = document.querySelectorAll('.vote-button');
-      voteButtons.forEach(button => {
-        if (userLocation) {
-          button.classList.add('enabled');
-          button.classList.remove('bg-blue-600');
-          button.classList.add('bg-green-600', 'hover:bg-green-700');
-          button.disabled = false;
-        } else {
-          button.classList.remove('enabled');
-          button.classList.add('bg-blue-600');
-          button.classList.remove('bg-green-600', 'hover:bg-green-700');
-          button.disabled = true;
-        }
+    // Сохраним ResultsImage в Airtable
+    try {
+      await axios.patch(`${VOTINGS_URL}/${id}`, {
+        fields: { ResultsImage: uploadResult.url }
+      }, {
+        headers: { ...airtableHeaders(), 'Content-Type': 'application/json' }
       });
+    } catch (updateError) {
+      console.error('Error saving ResultsImage to Airtable:', updateError.message);
     }
 
-    async function castVote(optionIndex) {
-      if (!currentVotingRecord) {
-        alert('Ошибка: голосование не выбрано');
-        console.error('castVote: No currentVotingRecord');
-        return;
-      }
+    res.json({ success: true, imageUrl: uploadResult.url, fileId: uploadResult.fileId });
+  } catch (err) {
+    console.error('Generate results image error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      if (!userLocation) {
-        alert('Сначала необходимо определить ваше местоположение');
-        console.error('castVote: No userLocation');
-        return;
-      }
+// ========== API ДЛЯ "Я ПОЙДУ!" ==========
+app.post('/api/events/:eventId/attend', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'User ID is required' });
 
-      try {
-        console.log('Attempting to cast vote:', {
-          votingId: currentVotingRecord.id,
-          userId: user.id,
-          optionIndex,
-          userLat: userLocation.latitude,
-          userLon: userLocation.longitude
-        });
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, { headers: airtableHeaders() });
+    const event = eventResponse.data;
+    if (!event.fields) return res.status(404).json({ error: 'Event not found' });
 
-        const response = await fetch(`${BACKEND_URL}/api/votings/${currentVotingRecord.id}/vote`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id,
-            optionIndex: optionIndex,
-            userLat: userLocation.latitude,
-            userLon: userLocation.longitude
-          })
-        });
+    let currentAttendees = event.fields.AttendeesIDs || '';
+    let currentCount = event.fields.AttendeesCount || 0;
 
-        if (response.ok) {
-          console.log('Vote cast successfully');
-          alert('Ваш голос учтен!');
-          showVotingModal(currentVotingRecord);
-        } else {
-          const error = await response.json();
-          console.error('Vote error:', error);
-          alert(error.error || 'Ошибка при голосовании');
-        }
-      } catch (err) {
-        console.error('Vote error:', err);
-        alert('Ошибка при голосовании: ' + err.message);
-      }
-    }
+    let attendeesArray = Array.isArray(currentAttendees) ? currentAttendees.filter(Boolean) : (typeof currentAttendees === 'string' ? currentAttendees.split(',').filter(Boolean) : []);
+    const userIdStr = userId.toString();
+    if (attendeesArray.includes(userIdStr)) return res.status(400).json({ error: 'User already attending' });
 
-    document.getElementById('getLocationBtn').addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        alert('Геолокация не поддерживается вашим браузером');
-        console.error('Geolocation not supported');
-        return;
-      }
+    attendeesArray.push(userIdStr);
+    const newAttendees = attendeesArray.join(',');
+    const newCount = (Number(currentCount) || 0) + 1;
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          userLocation = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          };
-          console.log('Geolocation obtained:', userLocation);
-          alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
-          document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
-          document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
-          document.getElementById('getLocationBtn').classList.add('bg-green-600', 'hover:bg-green-700');
-          document.getElementById('getLocationBtn').disabled = true;
-          updateVoteButtons();
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
-          alert('Не удалось определить ваше местоположение. Проверьте настройки геолокации.');
-        }
-      );
-    });
+    const updateData = { fields: { AttendeesIDs: newAttendees, AttendeesCount: newCount } };
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, { headers: { ...airtableHeaders(), 'Content-Type': 'application/json' } });
 
-    function showVotingModal(record) {
-      const modal = document.getElementById('votingModal');
-      const voting = record.fields || {};
-      currentVotingRecord = record;
+    const processed = processAirtableResponseData(updateResponse.data, req);
+    res.json({ success: true, count: newCount, attending: true, event: processed });
+  } catch (err) {
+    console.error('Attend error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
-      document.getElementById('votingModalDescription').textContent = voting.Description || '';
+app.post('/api/events/:eventId/unattend', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'User ID is required' });
 
-      try {
-        fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
-          .then(response => {
-            if (response.ok) {
-              return response.json();
-            }
-            throw new Error('Ошибка проверки статуса голосования');
-          })
-          .then(status => {
-            if (status.hasVoted || voting.Status === 'Completed') {
-              showVotingResults(voting, status.userVote, record.id);
-            } else {
-              showVotingOptions(voting);
-            }
-          })
-          .catch(err => {
-            console.error('Error checking vote status:', err);
-            showVotingOptions(voting);
-          });
-      } catch (err) {
-        console.error('Error in showVotingModal:', err);
-        showVotingOptions(voting);
-      }
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, { headers: airtableHeaders() });
+    const event = eventResponse.data;
+    if (!event.fields) return res.status(404).json({ error: 'Event not found' });
 
-      modal.classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeVotingModal);
-    }
+    let currentAttendees = event.fields.AttendeesIDs || '';
+    let attendeesArray = Array.isArray(currentAttendees) ? currentAttendees.filter(Boolean) : (typeof currentAttendees === 'string' ? currentAttendees.split(',').filter(Boolean) : []);
+    const userIdStr = userId.toString();
+    const newAttendeesArray = attendeesArray.filter(id => id !== userIdStr);
+    const newAttendees = newAttendeesArray.join(',');
+    const newCount = Math.max(0, newAttendeesArray.length);
 
-    async function showVotingResults(voting, userVote, votingId) {
-      const optionsContainer = document.getElementById('votingOptions');
-      const isCompleted = voting.Status === 'Completed';
-      
-      optionsContainer.innerHTML = isCompleted ? 
-        '<h4 class="font-bold mb-2 text-contrast">Финальные результаты:</h4>' : 
-        '<h4 class="font-bold mb-2 text-contrast">Текущие результаты:</h4>';
-      
-      document.getElementById('getLocationBtn').style.display = 'none';
-      
-      // Отображение изображения результатов
-      if (voting.ResultsImage) {
-        const imageContainer = document.getElementById('votingResultsImageContainer');
-        const resultsImage = document.getElementById('votingResultsImage');
-        const downloadBtn = document.getElementById('downloadResultsBtn');
-        const generateBtn = document.getElementById('generateResultsBtn');
-        
-        resultsImage.src = voting.ResultsImage;
-        imageContainer.classList.remove('hidden');
-        
-        downloadBtn.onclick = () => {
-          const link = document.createElement('a');
-          link.href = voting.ResultsImage;
-          link.download = `results_${votingId}_${Date.now()}.jpg`;
-          link.click();
-        };
-        
-        generateBtn.onclick = () => generateResultsImage(votingId);
-      } else {
-        document.getElementById('votingResultsImageContainer').classList.add('hidden');
-      }
-      
-      if (voting.Options && voting.Options.split(',').length > 0) {
-        const optionsArray = voting.Options.split(',');
-        const optionImages = voting.OptionImages || [];
-        
-        const results = {};
-        optionsArray.forEach((option, index) => {
-          results[index] = {
-            option: option,
-            count: 0,
-            percentage: 0,
-            image: optionImages[index] ? optionImages[index].url : null
-          };
-        });
-        
-        if (voting.Votes) {
-          const votes = typeof voting.Votes === 'string' ? JSON.parse(voting.Votes) : voting.Votes;
-          Object.values(votes).forEach(voteIndex => {
-            if (results[voteIndex]) {
-              results[voteIndex].count++;
-            }
-          });
-        }
-        
-        const totalVotes = Object.values(results).reduce((sum, result) => sum + result.count, 0);
-        Object.values(results).forEach(result => {
-          result.percentage = totalVotes > 0 ? Math.round((result.count / totalVotes) * 100) : 0;
-        });
-        
-        Object.values(results).forEach((result, index) => {
-          const isUserChoice = userVote === index;
-          
-          const resultDiv = document.createElement('div');
-          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-contrast voting-option border-contrast';
-          
-          let imageHtml = '';
-          if (result.image) {
-            imageHtml = `
-              <div class="flex-shrink-0 mr-3">
-                <img src="${result.image}" alt="${result.option}" 
-                     class="w-24 h-24 object-cover rounded-lg border border-contrast">
-              </div>
-            `;
-          }
-          
-          resultDiv.innerHTML = `
-            <div class="flex items-start">
-              ${imageHtml}
-              <div class="flex-grow">
-                <div class="flex justify-between items-start mb-2">
-                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-contrast'}">
-                    ${result.option}
-                  </span>
-                  <span class="text-sm text-[var(--hint-color)] whitespace-nowrap">
-                    ${result.count} голосов (${result.percentage}%)
-                  </span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <div class="bg-blue-600 h-2 rounded-full" style="width: ${result.percentage}%"></div>
-                </div>
-                ${isUserChoice ? '<div class="text-xs text-blue-600">✓ Ваш выбор</div>' : ''}
-              </div>
-            </div>
-          `;
-          
-          optionsContainer.appendChild(resultDiv);
-        });
-        
-        if (isCompleted) {
-          optionsContainer.innerHTML += '<div class="text-green-600 text-sm mt-3 text-center">✓ Голосование завершено</div>';
-        }
+    const updateData = { fields: { AttendeesIDs: newAttendees, AttendeesCount: newCount } };
+    const updateResponse = await axios.patch(`${EVENTS_URL}/${eventId}`, updateData, { headers: { ...airtableHeaders(), 'Content-Type': 'application/json' } });
 
-        if (isCompleted && voting.Results) {
-          const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
-          let resultsHtml = '<h4 class="font-bold mb-2 mt-4 text-contrast">Итоги:</h4>';
-          Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
-            resultsHtml += `
-              <p class="text-contrast">${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
-            `;
-          });
-          optionsContainer.innerHTML += resultsHtml;
-        }
-      }
-    }
+    const processed = processAirtableResponseData(updateResponse.data, req);
+    res.json({ success: true, count: newCount, attending: false, event: processed });
+  } catch (err) {
+    console.error('Unattend error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    async function generateResultsImage(votingId) {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${votingId}/generate-results`, {
-          method: 'POST'
-        });
+app.get('/api/events/:eventId/attend-status/:userId', async (req, res) => {
+  try {
+    const { eventId, userId } = req.params;
+    const eventResponse = await axios.get(`${EVENTS_URL}/${eventId}`, { headers: airtableHeaders() });
+    const event = eventResponse.data;
+    if (!event.fields) return res.status(404).json({ error: 'Event not found' });
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            currentResultsImageUrl = data.imageUrl;
-            
-            // Сохраняем URL изображения в базе данных
-            await fetch(`${BACKEND_URL}/api/votings/${votingId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                fields: {
-                  ResultsImage: data.imageUrl
-                }
-              })
-            });
-            
-            // Обновляем отображение
-            showVotingModal(currentVotingRecord);
-            alert('Изображение с результатами успешно сгенерировано!');
-          } else {
-            alert('Ошибка при генерации изображения: ' + data.error);
-          }
-        } else {
-          const error = await response.json();
-          alert('Ошибка при генерации изображения: ' + error.error);
-        }
-      } catch (err) {
-        console.error('Generate results image error:', err);
-        alert('Ошибка при генерации изображения: ' + err.message);
-      }
-    }
+    const attendees = event.fields.AttendeesIDs || '';
+    const attendeesArray = Array.isArray(attendees) ? attendees.filter(Boolean) : (typeof attendees === 'string' ? attendees.split(',').filter(Boolean) : []);
+    const isAttending = attendeesArray.includes(userId.toString());
+    res.json({ isAttending });
+  } catch (err) {
+    console.error('Attend status error:', err.message);
+    if (err.response) return res.status(err.response.status).json({ error: err.response.data });
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    function closeVotingModal() {
-      document.getElementById('votingModal').classList.add('hidden');
-      document.getElementById('votingResultsImageContainer').classList.add('hidden');
-      tg.BackButton.hide();
-      currentVotingRecord = null;
-      currentResultsImageUrl = null;
-    }
+// ========== УТИЛИТЫ ==========
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+function deg2rad(deg) { return deg * (Math.PI/180); }
 
-    function renderEventItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const event = record.fields || {};
-      const attendeesCount = event.AttendeesCount || 0;
-      
-      const div = document.createElement('div');
-      div.className = 'event-card p-2 fade-in card-contrast';
-      div.innerHTML = `
-        <h3 class="text-sm font-bold text-contrast">${event.Title || 'Без названия'}</h3>
-        <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
-        <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
-        <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
-        <img src="${event.Image?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Event" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
-      `;
-      div.addEventListener('click', () => showEventModal(record));
-      eventsContainer.appendChild(div);
-    }
+// Простая XML-эскейп функция для svg-текста
+function escapeXml(unsafe) {
+  if (unsafe === null || unsafe === undefined) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
-    async function showEventModal(record) {
-      const modal = document.getElementById('eventModal');
-      const event = record.fields || {};
-      currentEventRecord = record;
-      currentAttendeesCount = event.AttendeesCount || 0;
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${record.id}/attend-status/${user.id}`);
-        if (response.ok) {
-          const status = await response.json();
-          isUserAttending = status.isAttending;
-        } else {
-          isUserAttending = false;
-        }
-      } catch (err) {
-        console.error('Error checking attend status:', err);
-        isUserAttending = false;
-      }
-      
-      document.getElementById('modalTitle').textContent = event.Title || 'Без названия';
-      document.getElementById('modalDate').textContent = formatDate(event.Date) || 'Без даты';
-      document.getElementById('modalLocation').textContent = event.Location || 'Без места';
-      document.getElementById('modalDescription').textContent = event.Description || 'Без описания';
-      document.getElementById('modalImage').src = event.Image?.[0]?.url || 'https://via.placeholder.com/150';
-      document.getElementById('attendeesCount').textContent = currentAttendeesCount;
-      
-      const mapButtonContainer = document.getElementById('modalMapButtonContainer');
-      const mapButton = document.getElementById('modalMapButton');
-      
-      if (event.MapLink) {
-        mapButtonContainer.classList.remove('hidden');
-        mapButton.onclick = () => tg.openLink(event.MapLink);
-      } else {
-        mapButtonContainer.classList.add('hidden');
-      }
-      
-      const attendButton = document.getElementById('attendButton');
-      if (isUserAttending) {
-        attendButton.textContent = 'Не пойду';
-        attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-        attendButton.onclick = () => unattendEvent();
-      } else {
-        attendButton.textContent = 'Я пойду!';
-        attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
-        attendButton.onclick = () => attendEvent();
-      }
-      
-      modal.classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeEventModal);
-    }
+// Создание папки uploads
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
-    async function attendEvent() {
-      if (!currentEventRecord) return;
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/attend`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          currentAttendeesCount = result.count;
-          isUserAttending = true;
-          
-          document.getElementById('attendeesCount').textContent = result.count;
-          
-          const attendButton = document.getElementById('attendButton');
-          attendButton.textContent = 'Не пойду';
-          attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-          attendButton.onclick = () => unattendEvent();
-          
-          alert('Отлично! Вы идете на мероприятие!');
-        } else {
-          const error = await response.json();
-          if (error.error === 'User already attending') {
-            alert('Вы уже записаны на это мероприятие!');
-            isUserAttending = true;
-            const attendButton = document.getElementById('attendButton');
-            attendButton.textContent = 'Не пойду';
-            attendButton.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition';
-            attendButton.onclick = () => unattendEvent();
-          } else {
-            throw new Error(error.error || 'Ошибка при записи');
-          }
-        }
-      } catch (err) {
-        console.error('Attend error:', err);
-        alert('Ошибка при записи на мероприятие: ' + err.message);
-      }
-    }
+// Корневой маршрут
+app.get('/', (req, res) => {
+  res.send('Smolville Backend is running! API endpoints: /api/events, /api/ads, /api/votings, /api/upload, /api/proxy-image');
+});
 
-    async function unattendEvent() {
-      if (!currentEventRecord) return;
-      
-      if (!confirm('Вы действительно не пойдете на мероприятие?')) return;
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${currentEventRecord.id}/unattend`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: user.id
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          currentAttendeesCount = result.count;
-          isUserAttending = false;
-          
-          document.getElementById('attendeesCount').textContent = result.count;
-          
-          const attendButton = document.getElementById('attendButton');
-          attendButton.textContent = 'Я пойду!';
-          attendButton.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition';
-          attendButton.onclick = () => attendEvent();
-          
-          alert('Вы больше не идете на мероприятие');
-        } else {
-          throw new Error('Ошибка при отмене записи');
-        }
-      } catch (err) {
-        console.error('Unattend error:', err);
-        alert('Ошибка при отмене записи: ' + err.message);
-      }
-    }
-
-    function closeEventModal() {
-      document.getElementById('eventModal').classList.add('hidden');
-      tg.BackButton.hide();
-      currentEventRecord = null;
-    }
-
-    function renderAdItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const ad = record.fields || {};
-      
-      const div = document.createElement('div');
-      div.className = 'ad-card p-2 fade-in relative';
-      div.innerHTML = `
-        <div class="ad-badge">Реклама</div>
-        <h3 class="text-sm font-bold">${ad.Title || 'Реклама'}</h3>
-        <p class="text-xs">${ad.Description || 'Специальное предложение'}</p>
-        <img src="${ad.IMG?.[0]?.url || 'https://via.placeholder.com/150'}" alt="Ad" class="w-full h-20 object-cover rounded-lg mt-1" loading="lazy">
-      `;
-      div.addEventListener('click', () => showAdModal(record));
-      eventsContainer.appendChild(div);
-    }
-
-    function showAdModal(record) {
-      const modal = document.getElementById('adModal');
-      const ad = record.fields || {};
-      
-      document.getElementById('adModalTitle').textContent = ad.Title || 'Реклама';
-      document.getElementById('adModalDescription').textContent = ad.Description || 'Специальное предложение';
-      document.getElementById('adModalImage').src = ad.IMG?.[0]?.url || 'https://via.placeholder.com/150';
-      
-      const adButton = document.getElementById('adModalButton');
-      if (ad.URL) {
-        adButton.onclick = () => tg.openLink(ad.URL);
-        adButton.style.display = 'block';
-      } else {
-        adButton.style.display = 'none';
-      }
-      
-      modal.classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeAdModal);
-    }
-
-    function closeAdModal() {
-      document.getElementById('adModal').classList.add('hidden');
-      tg.BackButton.hide();
-    }
-
-    async function loadAds() {
-      const adsList = document.getElementById('adsList');
-      adsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка рекламы...</p>';
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/ads`, { mode: 'cors' });
-        if (!response.ok) throw new Error('Ошибка загрузки рекламы');
-        
-        const data = await response.json();
-        adsList.innerHTML = '';
-        
-        if (data.records && data.records.length > 0) {
-          data.records.forEach(record => {
-            const ad = record.fields || {};
-            const safeTitle = ad.Title ? ad.Title.replace(/'/g, "\\'") : '';
-            const safeDescription = ad.Description ? ad.Description.replace(/'/g, "\\'") : '';
-            const safeUrl = ad.URL ? ad.URL.replace(/'/g, "\\'") : '';
-            const safeImageUrl = ad.IMG?.[0]?.url ? ad.IMG[0].url.replace(/'/g, "\\'") : '';
-            
-            const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
-            div.innerHTML = `
-              <p class="text-sm font-bold text-contrast">${ad.Title || 'Без названия'}</p>
-              <p class="text-xs text-contrast">${ad.Description || 'Без описания'}</p>
-              <p class="text-xs text-[var(--hint-color)]">URL: ${ad.URL || 'Не указан'}</p>
-              <div class="flex space-x-2 mt-2">
-                <button onclick="editAd('${record.id}', '${safeTitle}', '${safeDescription}', '${safeUrl}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
-                <button onclick="deleteAd('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition">Удалить</button>
-              </div>
-            `;
-            adsList.appendChild(div);
-          });
-        } else {
-          adsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Рекламные материалы не найдены</p>';
-        }
-      } catch (err) {
-        adsList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
-      }
-    }
-
-    function editAd(recordId, title, description, url, imageUrl) {
-      document.getElementById('adRecordId').value = recordId;
-      document.getElementById('adTitle').value = title || '';
-      document.getElementById('adDescription').value = description || '';
-      document.getElementById('adUrl').value = url || '';
-      alert('Текущее изображение: ' + (imageUrl || 'отсутствует'));
-      showTab('tab-ad-form');
-    }
-
-    async function deleteAd(recordId) {
-      if (!confirm('Удалить рекламный блок?')) return;
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/ads/${recordId}`, {
-          method: 'DELETE'
-        });
-        if (!response.ok) throw new Error('Ошибка удаления');
-        alert('Рекламный блок удален');
-        loadAds();
-        renderEvents();
-      } catch (err) {
-        alert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    function clearAdForm() {
-      document.getElementById('adRecordId').value = '';
-      document.getElementById('adTitle').value = '';
-      document.getElementById('adDescription').value = '';
-      document.getElementById('adUrl').value = '';
-      document.getElementById('adImage').value = '';
-    }
-
-    document.getElementById('adForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const recordId = document.getElementById('adRecordId').value;
-      const title = document.getElementById('adTitle').value;
-      const description = document.getElementById('adDescription').value;
-      const url = document.getElementById('adUrl').value;
-
-      if (!title) {
-        alert('Заголовок рекламы обязателен для заполнения');
-        return;
-      }
-
-      const adData = {
-        fields: {
-          Title: title,
-          Description: description || '',
-          URL: url || ''
-        }
-      };
-
-      const imageFile = document.getElementById('adImage').files[0];
-      if (imageFile) {
-        try {
-          const uploadForm = new FormData();
-          uploadForm.append('image', imageFile);
-          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
-            method: 'POST',
-            body: uploadForm
-          });
-          const uploadData = await uploadResponse.json();
-          if (uploadData.url) {
-            adData.fields.IMG = [{ url: uploadData.url, filename: `ad_image_${Date.now()}.jpg` }];
-          } else {
-            throw new Error('Ошибка загрузки изображения');
-          }
-        } catch (err) {
-          alert(`Ошибка загрузки изображения: ${err.message}`);
-          return;
-        }
-      }
-
-      try {
-        const method = recordId ? 'PATCH' : 'POST';
-        const url = recordId ? `${BACKEND_URL}/api/ads/${recordId}` : `${BACKEND_URL}/api/ads`;
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(adData)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения рекламы');
-        }
-
-        alert('Рекламный блок сохранен');
-        clearAdForm();
-        loadAds();
-        renderEvents();
-      } catch (err) {
-        console.error('Ошибка сохранения рекламы:', err);
-        alert(`Ошибка сохранения рекламы: ${err.message}`);
-      }
-    });
-
-    async function loadVotings() {
-      const votingsList = document.getElementById('votingsList');
-      votingsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки голосований');
-        }
-        
-        const data = await response.json();
-        votingsList.innerHTML = '';
-        
-        if (data.records && data.records.length > 0) {
-          data.records.forEach(record => {
-            const voting = record.fields || {};
-            const safeTitle = voting.Title ? voting.Title.replace(/'/g, "\\'") : '';
-            const safeDescription = voting.Description ? voting.Description.replace(/'/g, "\\'") : '';
-            const options = voting.Options ? voting.Options.split(',') : [];
-            const status = voting.Status || 'Active';
-            
-            const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
-            div.innerHTML = `
-              <p class="text-sm font-bold text-contrast">${voting.Title || 'Без названия'} 
-                <span class="text-xs ${status === 'Completed' ? 'text-green-600' : 'text-red-600'}">
-                  (${status === 'Completed' ? 'Завершено' : 'Активно'})
-                </span>
-              </p>
-              ${voting.EventID ? `<p class="text-xs text-contrast">Мероприятие: ${voting.EventID}</p>` : ''}
-              <p class="text-xs text-contrast">Номинантов: ${options.length}</p>
-              <p class="text-xs text-[var(--hint-color)]">Проголосовало: ${voting.VotedUserIDs ? voting.VotedUserIDs.split(',').length : 0} человек</p>
-              <div class="flex space-x-2 mt-2 flex-wrap">
-                <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || ''}, ${voting.Longitude || ''}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}', '${JSON.stringify(voting.OptionImages || [])}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition mb-1">Редактировать</button>
-                ${status === 'Active' ? `<button onclick="completeVoting('${record.id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs transition mb-1">Завершить</button>` : ''}
-                <button onclick="generateResultsImageAdmin('${record.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition mb-1">Ген. изображение</button>
-                <button onclick="deleteVoting('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition mb-1">Удалить</button>
-              </div>
-            `;
-            votingsList.appendChild(div);
-          });
-        } else {
-          votingsList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Голосования не найдены</p>';
-        }
-      } catch (err) {
-        votingsList.innerHTML = `<p class="text-center text-[var(--hint-color)]">Ошибка: ${err.message}</p>`;
-      }
-    }
-
-    async function generateResultsImageAdmin(votingId) {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${votingId}/generate-results`, {
-          method: 'POST'
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            // Открываем изображение в новой вкладке
-            window.open(data.imageUrl, '_blank');
-            alert('Изображение с результатами успешно сгенерировано!');
-          } else {
-            alert('Ошибка при генерации изображения: ' + data.error);
-          }
-        } else {
-          const error = await response.json();
-          alert('Ошибка при генерации изображения: ' + error.error);
-        }
-      } catch (err) {
-        console.error('Generate results image error:', err);
-        alert('Ошибка при генерации изображения: ' + err.message);
-      }
-    }
-
-    async function loadEventsForVoting() {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (response.ok) {
-          eventsData = await response.json();
-          const select = document.getElementById('votingEventId');
-          
-          while (select.options.length > 1) {
-            select.remove(1);
-          }
-          
-          if (eventsData.records && eventsData.records.length > 0) {
-            eventsData.records.forEach(record => {
-              const event = record.fields || {};
-              if (event.Title && event.ID) {
-                const option = document.createElement('option');
-                option.value = event.ID;
-                option.textContent = event.Title;
-                select.appendChild(option);
-              }
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error loading events for voting:', err);
-      }
-    }
-
-    function addOption() {
-      const container = document.getElementById('votingOptionsContainer');
-      const newOption = document.createElement('div');
-      newOption.className = 'option-item flex flex-col mb-3 p-2 border rounded border-contrast';
-      newOption.innerHTML = `
-        <div class="flex mb-2">
-          <input type="text" placeholder="Название номинанта" class="option-name border p-2 flex-grow mr-2 bg-contrast text-contrast border-contrast" required>
-          <button type="button" onclick="removeOption(this)" class="bg-red-500 text-white px-3 rounded">-</button>
-        </div>
-        <div class="flex items-center mb-2">
-          <input type="file" class="option-image hidden" accept="image/*">
-          <button type="button" onclick="triggerImageUpload(this)" class="bg-blue-500 text-white px-3 py-1 rounded text-xs mr-2">
-            📷 Выбрать фото
-          </button>
-          <span class="image-status text-xs text-[var(--hint-color)]"></span>
-        </div>
-        <img class="option-preview mt-2 w-20 h-20 object-cover rounded hidden">
-      `;
-      container.appendChild(newOption);
-      
-      const fileInput = newOption.querySelector('.option-image');
-      fileInput.addEventListener('change', function(e) {
-        handleImageUpload(e, this);
-      });
-    }
-
-    function triggerImageUpload(button) {
-      const fileInput = button.parentElement.querySelector('.option-image');
-      fileInput.click();
-    }
-
-    async function handleImageUpload(event, fileInput) {
-      const file = event.target.files[0];
-      if (!file) return;
-      
-      const container = fileInput.closest('.option-item');
-      const imageStatus = container.querySelector('.image-status');
-      const preview = container.querySelector('.option-preview');
-      const uploadBtn = container.querySelector('button');
-      const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
-      
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        preview.src = e.target.result;
-        preview.classList.remove('hidden');
-      };
-      reader.readAsDataURL(file);
-      
-      uploadBtn.textContent = '⏳ Загружаем...';
-      uploadBtn.disabled = true;
-      imageStatus.textContent = 'Загрузка...';
-      
-      try {
-        const formData = new FormData();
-        formData.append('image', file);
-        
-        const response = await fetch(`${BACKEND_URL}/api/votings/upload-option-image`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          optionImages[optionIndex] = data.url;
-          
-          imageStatus.textContent = 'Фото загружено';
-          uploadBtn.textContent = '✅ Фото загружено';
-          uploadBtn.classList.remove('bg-blue-500');
-          uploadBtn.classList.add('bg-green-500');
-        } else {
-          throw new Error('Ошибка загрузки');
-        }
-      } catch (error) {
-        console.error('Image upload error:', error);
-        imageStatus.textContent = 'Ошибка загрузки';
-        uploadBtn.textContent = '📷 Попробовать снова';
-        delete optionImages[optionIndex];
-      } finally {
-        uploadBtn.disabled = false;
-      }
-    }
-
-    function removeOption(button) {
-      const container = button.closest('.option-item');
-      const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
-      
-      delete optionImages[optionIndex];
-      
-      if (document.querySelectorAll('.option-item').length > 1) {
-        container.remove();
-        
-        const newOptionImages = {};
-        document.querySelectorAll('.option-item').forEach((item, newIndex) => {
-          const oldIndex = Array.from(item.parentElement.children).indexOf(item);
-          if (optionImages[oldIndex]) {
-            newOptionImages[newIndex] = optionImages[oldIndex];
-          }
-        });
-        optionImages = newOptionImages;
-      }
-    }
-
-    function editVoting(recordId, title, description, lat, lon, options, eventId, status, optionImagesJson) {
-      document.getElementById('votingRecordId').value = recordId;
-      document.getElementById('votingTitle').value = title || '';
-      document.getElementById('votingDescription').value = description || '';
-      document.getElementById('votingLatitude').value = lat || '';
-      document.getElementById('votingLongitude').value = lon || '';
-      document.getElementById('votingEventId').value = eventId || '';
-      
-      optionImages = {};
-      
-      const completeBtn = document.getElementById('completeVotingBtn');
-      const generateImageBtn = document.getElementById('generateImageBtn');
-      
-      if (status === 'Active') {
-        completeBtn.classList.remove('hidden');
-        completeBtn.onclick = () => completeVoting(recordId);
-        generateImageBtn.classList.add('hidden');
-      } else {
-        completeBtn.classList.add('hidden');
-        generateImageBtn.classList.remove('hidden');
-        generateImageBtn.onclick = () => generateResultsImageAdmin(recordId);
-      }
-      
-      const optionsContainer = document.getElementById('votingOptionsContainer');
-      optionsContainer.innerHTML = '';
-      
-      try {
-        const optionsArray = typeof options === 'string' ? JSON.parse(options) : options;
-        const imagesArray = typeof optionImagesJson === 'string' ? JSON.parse(optionImagesJson) : [];
-        if (optionsArray && optionsArray.length > 0) {
-          optionsArray.forEach((option, index) => {
-            addOption();
-            const items = optionsContainer.querySelectorAll('.option-item');
-            const currentItem = items[items.length - 1];
-            currentItem.querySelector('.option-name').value = option;
-            if (imagesArray[index] && imagesArray[index].url) {
-              optionImages[index] = imagesArray[index].url;
-              currentItem.querySelector('.option-preview').src = imagesArray[index].url;
-              currentItem.querySelector('.option-preview').classList.remove('hidden');
-              currentItem.querySelector('.image-status').textContent = 'Фото загружено';
-              currentItem.querySelector('button').textContent = '✅ Фото загружено';
-              currentItem.querySelector('button').classList.remove('bg-blue-500');
-              currentItem.querySelector('button').classList.add('bg-green-500');
-            }
-          });
-        } else {
-          addOption();
-        }
-      } catch (e) {
-        console.error('Error editing voting:', e);
-        addOption();
-      }
-      
-      showTab('tab-voting-form');
-    }
-
-    async function completeVoting(recordId) {
-      if (!confirm('Завершить голосование? После этого нельзя будет голосовать.')) return;
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${recordId}/complete`, {
-          method: 'POST'
-        });
-        
-        if (response.ok) {
-          alert('Голосование завершено! Результаты подсчитаны.');
-          loadVotings();
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Ошибка при завершении голосования');
-        }
-      } catch (err) {
-        console.error('Complete voting error:', err);
-        alert('Ошибка при завершении голосования: ' + err.message);
-      }
-    }
-
-    async function deleteVoting(recordId) {
-      if (!confirm('Удалить голосование?')) return;
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/votings/${recordId}`, {
-          method: 'DELETE'
-        });
-        if (!response.ok) throw new Error('Ошибка удаления');
-        alert('Голосование удалено');
-        loadVotings();
-        renderEvents();
-      } catch (err) {
-        alert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    document.getElementById('votingForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const recordId = document.getElementById('votingRecordId').value;
-      const title = document.getElementById('votingTitle').value;
-      const description = document.getElementById('votingDescription').value;
-      const latitude = document.getElementById('votingLatitude').value.trim();
-      const longitude = document.getElementById('votingLongitude').value.trim();
-      const eventId = document.getElementById('votingEventId').value;
-      
-      if (latitude !== '') {
-        const latValue = parseFloat(latitude);
-        if (isNaN(latValue) || latValue < -90 || latValue > 90) {
-          alert('Широта должна быть числом от -90 до 90');
-          return;
-        }
-      }
-      if (longitude !== '') {
-        const lonValue = parseFloat(longitude);
-        if (isNaN(lonValue) || lonValue < -180 || lonValue > 180) {
-          alert('Долгота должна быть числом от -180 до 180');
-          return;
-        }
-      }
-      
-      const options = [];
-      const optionImageUrls = [];
-      
-      document.querySelectorAll('.option-item').forEach((item, index) => {
-        const nameInput = item.querySelector('.option-name');
-        
-        if (nameInput.value.trim()) {
-          options.push(nameInput.value.trim());
-          
-          if (optionImages[index]) {
-            optionImageUrls.push({ 
-              url: optionImages[index],
-              filename: `option_image_${index}_${Date.now()}.jpg`
-            });
-          } else {
-            optionImageUrls.push(null);
-          }
-        }
-      });
-      
-      if (options.length < 2) {
-        alert('Добавьте хотя бы два номинанта');
-        return;
-      }
-      
-      const votingData = {
-        fields: {
-          Title: title,
-          Description: description || '',
-          Options: options.join(','),
-          Votes: JSON.stringify({}),
-          VotedUserIDs: '',
-          Status: 'Active'
-        }
-      };
-      
-      if (optionImageUrls.some(img => img !== null)) {
-        votingData.fields.OptionImages = optionImageUrls.filter(img => img !== null);
-      }
-      
-      if (latitude !== '') votingData.fields.Latitude = parseFloat(latitude);
-      if (longitude !== '') votingData.fields.Longitude = parseFloat(longitude);
-      if (eventId) votingData.fields.EventID = eventId;
-      
-      try {
-        const method = recordId ? 'PATCH' : 'POST';
-        const url = recordId ? `${BACKEND_URL}/api/votings/${recordId}` : `${BACKEND_URL}/api/votings`;
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(votingData)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения голосования');
-        }
-        
-        alert('Голосование сохранено');
-        
-        document.getElementById('votingForm').reset();
-        document.getElementById('votingRecordId').value = '';
-        document.getElementById('votingOptionsContainer').innerHTML = '';
-        optionImages = {};
-        addOption();
-        
-        loadVotings();
-        renderEvents();
-        showTab('tab-votings-list');
-      } catch (err) {
-        console.error('Voting save error:', err);
-        alert(`Ошибка сохранения: ${err.message}`);
-      }
-    });
-
-    async function getEventTitleById(eventId) {
-      if (!eventsData) {
-        await loadEventsForVoting();
-      }
-      const eventRecord = eventsData.records.find(record => record.fields.ID === eventId);
-      return eventRecord ? eventRecord.fields.Title : eventId;
-    }
-
-    async function renderVotingItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const voting = record.fields || {};
-      const isCompleted = voting.Status === 'Completed';
-      const eventTitle = voting.EventID ? await getEventTitleById(voting.EventID) : '';
-      
-      const div = document.createElement('div');
-      div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
-      
-      if (isCompleted) {
-        div.style.background = 'var(--voting-completed-bg)';
-        div.style.borderColor = 'var(--voting-completed-border)';
-        div.style.color = 'var(--voting-completed-text)';
-      }
-      
-      div.innerHTML = `
-        <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
-        <h3 class="text-sm font-bold">${voting.Title || 'Без названия'}</h3>
-        <p class="text-xs">${voting.Description || ''}</p>
-        ${voting.EventID ? `<p class="text-xs text-[var(--hint-color)]">Для мероприятия: ${eventTitle}</p>` : ''}
-        <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'} mt-1">
-          ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
-        </p>
-      `;
-      
-      div.addEventListener('click', () => showVotingModal(record));
-      eventsContainer.appendChild(div);
-    }
-
-    async function checkIsAdmin(userId) {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
-        const data = await response.json();
-        return data.isAdmin;
-      } catch (err) {
-        console.error('Error checking admin:', err);
-        return false;
-      }
-    }
-
-    async function initAdmin() {
-      try {
-        const isAdmin = await checkIsAdmin(user.id);
-        console.log('Is Admin:', isAdmin);
-        if (isAdmin) {
-          document.getElementById('adminBtn').classList.remove('hidden');
-        } else {
-          console.log('Admin panel hidden - not admin');
-          document.getElementById('adminBtn').classList.add('hidden');
-        }
-      } catch (err) {
-        console.error('Admin init error:', err);
-        document.getElementById('adminBtn').classList.add('hidden');
-      }
-    }
-
-    function showTab(tabId) {
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-      document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
-      document.getElementById(tabId).classList.add('active');
-      
-      if (tabId === 'tab-list') {
-        renderAdminEvents();
-      } else if (tabId === 'tab-ads-list') {
-        loadAds();
-      } else if (tabId === 'tab-votings-list') {
-        loadVotings();
-      }
-    }
-
-    async function renderAdminEvents() {
-      const eventList = document.getElementById('eventList');
-      eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events`, { mode: 'cors' });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка загрузки ивентов');
-        }
-        
-        const data = await response.json();
-        eventList.innerHTML = '';
-        
-        if (data.records && data.records.length > 0) {
-          data.records.sort((a, b) => new Date(a.fields.Date) - new Date(b.fields.Date));
-          data.records.forEach(record => {
-            const event = record.fields || {};
-            const safeTitle = event.Title ? event.Title.replace(/'/g, "\\'") : '';
-            const safeLocation = event.Location ? event.Location.replace(/'/g, "\\'") : '';
-            const safeDescription = event.Description ? event.Description.replace(/'/g, "\\'") : '';
-            const safeMapLink = event.MapLink ? event.MapLink.replace(/'/g, "\\'") : '';
-            const safeImageUrl = event.Image?.[0]?.url ? event.Image[0].url.replace(/'/g, "\\'") : '';
-            
-            const div = document.createElement('div');
-            div.className = 'p-2 border-b border-[var(--hint-color)]';
-            div.innerHTML = `
-              <p class="text-sm text-contrast">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
-              <p class="text-xs text-contrast">Идут: ${event.AttendeesCount || 0} человек</p>
-              <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
-              <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
-            `;
-            eventList.appendChild(div);
-          });
-        } else {
-          eventList.innerHTML = '<p class="text-center text-[var(--hint-color)]">Ивенты не найдены</p>';
-        }
-      } catch (err) {
-        alert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    function showAdminModal() {
-      showTab('tab-list');
-      clearForm();
-      clearAdForm();
-      loadEventsForVoting();
-      document.getElementById('adminModal').classList.remove('hidden');
-      tg.BackButton.show();
-      tg.BackButton.onClick(closeAdminModal);
-    }
-
-    function closeAdminModal() {
-      document.getElementById('adminModal').classList.add('hidden');
-      tg.BackButton.hide();
-    }
-
-    function clearForm() {
-      document.getElementById('eventRecordId').value = '';
-      document.getElementById('eventId').value = '';
-      document.getElementById('eventTitle').value = '';
-      document.getElementById('eventType').value = '';
-      document.getElementById('eventDate').value = '';
-      document.getElementById('eventLocation').value = '';
-      document.getElementById('eventDescription').value = '';
-      document.getElementById('eventMapLink').value = '';
-      document.getElementById('eventImage').value = '';
-    }
-
-    function editEvent(recordId, id, title, type, date, location, description, mapLink, imageUrl) {
-      document.getElementById('eventRecordId').value = recordId;
-      document.getElementById('eventId').value = id;
-      document.getElementById('eventTitle').value = title;
-      document.getElementById('eventType').value = type;
-      document.getElementById('eventDate').value = date;
-      document.getElementById('eventLocation').value = location;
-      document.getElementById('eventDescription').value = description;
-      document.getElementById('eventMapLink').value = mapLink || '';
-      alert('Текущее изображение: ' + imageUrl);
-      showTab('tab-form');
-    }
-
-    async function deleteEvent(recordId) {
-      if (!confirm('Удалить ивент?')) return;
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/events/${recordId}`, {
-          method: 'DELETE'
-        });
-        if (!response.ok) throw new Error('Ошибка удаления');
-        alert('Ивент удален');
-        renderAdminEvents();
-        renderEvents();
-      } catch (err) {
-        alert(`Ошибка: ${err.message}`);
-      }
-    }
-
-    document.getElementById('eventForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      let eventId = document.getElementById('eventId').value;
-      if (!eventId) eventId = String(Math.floor(Math.random() * 1000000));
-      
-      const recordId = document.getElementById('eventRecordId').value;
-      const eventData = {
-        fields: {
-          ID: eventId,
-          Title: document.getElementById('eventTitle').value,
-          Type: document.getElementById('eventType').value,
-          Date: document.getElementById('eventDate').value,
-          Location: document.getElementById('eventLocation').value,
-          Description: document.getElementById('eventDescription').value,
-          AttendeesCount: 0,
-          AttendeesIDs: ''
-        }
-      };
-      
-      const mapLink = document.getElementById('eventMapLink').value;
-      if (mapLink) eventData.fields.MapLink = mapLink;
-      
-      const imageFile = document.getElementById('eventImage').files[0];
-      if (imageFile) {
-        try {
-          const uploadForm = new FormData();
-          uploadForm.append('image', imageFile);
-          const uploadResponse = await fetch(`${BACKEND_URL}/api/upload`, {
-            method: 'POST',
-            body: uploadForm
-          });
-          const uploadData = await uploadResponse.json();
-          if (uploadData.url) {
-            eventData.fields.Image = [{ 
-              url: uploadData.url,
-              filename: `event_image_${Date.now()}.jpg`
-            }];
-          } else {
-            throw new Error('Ошибка загрузки изображения');
-          }
-        } catch (err) {
-          alert(`Ошибка загрузки изображения: ${err.message}`);
-          return;
-        }
-      }
-      
-      try {
-        const method = recordId ? 'PATCH' : 'POST';
-        const url = recordId ? `${BACKEND_URL}/api/events/${recordId}` : `${BACKEND_URL}/api/events`;
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(eventData)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Ошибка сохранения события');
-        }
-        
-        alert('Событие сохранено');
-        clearForm();
-        renderAdminEvents();
-        renderEvents();
-        showTab('tab-list');
-      } catch (err) {
-        alert(`Ошибка сохранения: ${err.message}`);
-      }
-    });
-
-    // Инициализация приложения
-    applyTheme();
-    initAdmin();
-    renderEvents();
-    addOption();
-  </script>
-</body>
-</html>
+// Запуск сервера
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+  console.log(`Radikal API URL: ${RADIKAL_API_URL}`);
+  console.log('Make sure RADIKAL_API_KEY and AIRTABLE_* env vars are set in environment variables');
+});
