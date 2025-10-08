@@ -473,7 +473,7 @@
     tg.expand();
 
     // Жёсткий список ID администраторов (ЗАМЕНИТЕ НА РЕАЛЬНЫЕ ID АДМИНОВ)
-    const ADMIN_USER_IDS = [366825437]; // ЗАМЕНИТЕ ЭТИ ID НА РЕАЛЬНЫЕ
+    const ADMIN_USER_IDS = [123456789, 987654321]; // ЗАМЕНИТЕ ЭТИ ID НА РЕАЛЬНЫЕ
 
     let currentEventRecord = null;
     let currentAttendeesCount = 0;
