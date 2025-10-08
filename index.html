@@ -630,11 +630,15 @@
           adIndex++;
         }
 
-        allItems.forEach(item => {
-          if (item.type === 'voting') renderVotingItem(item.data);
-          else if (item.type === 'ad') renderAdItem(item.data);
-          else if (item.type === 'event') renderEventItem(item.data);
-        });
+       for (const item of allItems) {
+  if (item.type === 'voting') {
+    await renderVotingItem(item.data);
+  } else if (item.type === 'ad') {
+    renderAdItem(item.data);
+  } else if (item.type === 'event') {
+    renderEventItem(item.data);
+  }
+}
 
         if (allItems.length === 0) {
           eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
@@ -1758,11 +1762,34 @@
       return eventRecord ? eventRecord.fields.Title : eventId;
     }
 
-    function renderVotingItem(record) {
-      const eventsContainer = document.getElementById('events');
-      const voting = record.fields || {};
-      const isCompleted = voting.Status === 'Completed';
-      const eventTitle = voting.EventID ? await getEventTitleById(voting.EventID) : '';
+    async function renderVotingItem(record) {
+  const eventsContainer = document.getElementById('events');
+  const voting = record.fields || {};
+  const isCompleted = voting.Status === 'Completed';
+  const eventTitle = voting.EventID ? await getEventTitleById(voting.EventID) : '';
+  
+  const div = document.createElement('div');
+  div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
+  
+  if (isCompleted) {
+    div.style.background = 'var(--voting-completed-bg)';
+    div.style.borderColor = 'var(--voting-completed-border)';
+    div.style.color = 'var(--voting-completed-text)';
+  }
+  
+  div.innerHTML = `
+    <div class="voting-badge">${isCompleted ? 'Завершено' : 'Голосование'}</div>
+    <h3 class="text-sm font-bold">${voting.Title || 'Без названия'}</h3>
+    <p class="text-xs">${voting.Description || ''}</p>
+    ${voting.EventID ? `<p class="text-xs text-[var(--hint-color)]">Для мероприятия: ${eventTitle}</p>` : ''}
+    <p class="text-xs ${isCompleted ? 'text-green-600' : 'text-red-600'} mt-1">
+      ${isCompleted ? 'Голосование завершено' : 'Активное голосование'}
+    </p>
+  `;
+  
+  div.addEventListener('click', () => showVotingModal(record));
+  eventsContainer.appendChild(div);
+}
       
       const div = document.createElement('div');
       div.className = `voting-card p-2 fade-in relative ${isCompleted ? 'completed' : ''}`;
