@@ -12,14 +12,8 @@ const port = process.env.PORT || 3000;
 // Middleware для CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   next();
 });
 
@@ -34,9 +28,9 @@ const EVENTS_TABLE = process.env.AIRTABLE_EVENTS_TABLE_NAME || 'Events';
 const ADS_TABLE = process.env.AIRTABLE_ADS_TABLE_NAME || 'Ads';
 const VOTINGS_TABLE = process.env.AIRTABLE_VOTINGS_TABLE_NAME || 'Votings';
 
-// Radikal API конфигурация
+// Radikal API конфигурация (Chevereto-совместимое)
 const RADIKAL_API_URL = 'https://radikal.cloud/api/1';
-const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY;
+const RADIKAL_API_KEY = process.env.RADIKAL_API_KEY; // ← ИМЕННО ТАК!
 
 // Хардкод админа
 const ADMIN_ID = 366825437;
@@ -57,7 +51,7 @@ app.get('/', (req, res) => {
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ RADIKAL API ====================
 
 /**
- * Загружает файл в Radikal API
+ * Загружает файл в Radikal API (Chevereto-совместимое)
  */
 async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg') {
   try {
@@ -66,43 +60,21 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
     console.log('Content type:', contentType);
     console.log('File size:', fileBuffer.length, 'bytes');
 
-    // Сжимаем изображение для мобильных сетей
-    let processedBuffer = fileBuffer;
-    if (contentType.startsWith('image/')) {
-      try {
-        processedBuffer = await sharp(fileBuffer)
-          .resize(1200, 1200, {
-            fit: 'inside',
-            withoutEnlargement: true
-          })
-          .jpeg({ 
-            quality: 80,
-            progressive: true
-          })
-          .toBuffer();
-        
-        console.log(`Image compressed: ${fileBuffer.length} -> ${processedBuffer.length} bytes`);
-        contentType = 'image/jpeg';
-        filename = filename.replace(/\.[^/.]+$/, ".jpg");
-      } catch (sharpError) {
-        console.warn('Sharp compression failed, using original:', sharpError.message);
-        processedBuffer = fileBuffer;
-      }
-    }
-
     const formData = new FormData();
-    formData.append('source', processedBuffer, {
+    formData.append('source', fileBuffer, {
       filename: filename,
       contentType: contentType
     });
 
+    console.log('Radikal API Key:', RADIKAL_API_KEY ? 'Set' : 'Missing');
+    console.log('API URL:', `${RADIKAL_API_URL}/upload`);
+
     const response = await axios.post(`${RADIKAL_API_URL}/upload`, formData, {
       headers: {
-        'X-API-Key': RADIKAL_API_KEY,
+        'X-API-Key': RADIKAL_API_KEY, // ← ЗДЕСЬ используем X-API-Key как заголовок!
         ...formData.getHeaders(),
       },
-      timeout: 30000,
-      maxContentLength: 50 * 1024 * 1024,
+      timeout: 30000
     });
 
     console.log('Radikal API upload response:', response.data);
@@ -131,6 +103,31 @@ async function uploadToRadikal(fileBuffer, filename, contentType = 'image/jpeg')
 }
 
 /**
+ * Получает информацию о файле из Radikal API
+ */
+async function getRadikalFileInfo(fileId) {
+  try {
+    console.log('Getting file info for:', fileId);
+    
+    const response = await axios.get(`${RADIKAL_API_URL}/files/${fileId}`, {
+      headers: {
+        'X-API-Key': RADIKAL_API_KEY
+      }
+    });
+    
+    console.log('File info retrieved successfully');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting file info from Radikal API:', error.message);
+    if (error.response && error.response.status === 404) {
+      console.log('File info endpoint not available in Radikal Cloud');
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
  * Удаляет файл из Radikal API
  */
 async function deleteFromRadikal(fileId) {
@@ -151,332 +148,16 @@ async function deleteFromRadikal(fileId) {
   }
 }
 
-// ==================== НОВЫЕ ЭНДПОИНТЫ ДЛЯ ЗАГРУЗКИ ЧЕРЕЗ RADIKAL ====================
+// ==================== API ДЛЯ АДМИНА ====================
 
-// Эндпоинт для создания события с загрузкой изображения
-app.post('/api/events-with-image', upload.single('image'), async (req, res) => {
-  try {
-    console.log('Creating event with image upload');
-    
-    const eventData = JSON.parse(req.body.eventData);
-    let imageUrl = null;
-
-    // Загружаем изображение если есть
-    if (req.file) {
-      console.log('Processing event image:', req.file.originalname);
-      
-      const fileBuffer = fs.readFileSync(req.file.path);
-      const uploadResult = await uploadToRadikal(
-        fileBuffer,
-        req.file.originalname,
-        req.file.mimetype
-      );
-
-      imageUrl = uploadResult.url;
-
-      // Удаляем временный файл
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkError) {
-        console.error('Error deleting temp file:', unlinkError.message);
-      }
-    }
-
-    // Добавляем URL изображения в данные события
-    if (imageUrl) {
-      eventData.fields.Image = imageUrl;
-    }
-
-    console.log('Creating event in Airtable with data:', JSON.stringify(eventData, null, 2));
-
-    // Создаем запись в Airtable
-    const response = await axios.post(EVENTS_URL, eventData, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-
-    res.json({
-      success: true,
-      event: response.data,
-      imageUrl: imageUrl
-    });
-
-  } catch (error) {
-    console.error('Event with image creation error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Эндпоинт для обновления изображения события
-app.patch('/api/events/:id/update-image', upload.single('image'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    if (!req.file) {
-      return res.status(400).json({ error: 'Image file is required' });
-    }
-
-    console.log('Updating event image for event:', id);
-
-    // Загружаем изображение в Radikal
-    const fileBuffer = fs.readFileSync(req.file.path);
-    const uploadResult = await uploadToRadikal(
-      fileBuffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
-
-    // Удаляем временный файл
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch (unlinkError) {
-      console.error('Error deleting temp file:', unlinkError.message);
-    }
-
-    // Обновляем запись в Airtable
-    const updateResponse = await axios.patch(`${EVENTS_URL}/${id}`, {
-      fields: {
-        Image: uploadResult.url
-      }
-    }, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
-
-    res.json({
-      success: true,
-      imageUrl: uploadResult.url,
-      event: updateResponse.data
-    });
-
-  } catch (error) {
-    console.error('Event image update error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Эндпоинт для создания рекламы с изображением
-app.post('/api/ads-with-image', upload.single('image'), async (req, res) => {
-  try {
-    console.log('Creating ad with image upload');
-    
-    const adData = JSON.parse(req.body.adData);
-    let imageUrl = null;
-
-    // Загружаем изображение если есть
-    if (req.file) {
-      console.log('Processing ad image:', req.file.originalname);
-      
-      const fileBuffer = fs.readFileSync(req.file.path);
-      const uploadResult = await uploadToRadikal(
-        fileBuffer,
-        req.file.originalname,
-        req.file.mimetype
-      );
-
-      imageUrl = uploadResult.url;
-
-      // Удаляем временный файл
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkError) {
-        console.error('Error deleting temp file:', unlinkError.message);
-      }
-    }
-
-    // Добавляем URL изображения в данные рекламы
-    if (imageUrl) {
-      adData.fields.Image = imageUrl;
-    }
-
-    console.log('Creating ad in Airtable with data:', JSON.stringify(adData, null, 2));
-
-    // Создаем запись в Airtable
-    const response = await axios.post(ADS_URL, adData, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`, 
-        'Content-Type': 'application/json' 
-      }
-    });
-
-    res.json({
-      success: true,
-      ad: response.data,
-      imageUrl: imageUrl
-    });
-
-  } catch (error) {
-    console.error('Ad with image creation error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Эндпоинт для загрузки изображения опции голосования
-app.post('/api/votings/:id/upload-option-image', upload.single('image'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { optionIndex } = req.body;
-
-    if (!req.file || optionIndex === undefined) {
-      return res.status(400).json({ error: 'Image file and optionIndex are required' });
-    }
-
-    console.log(`Uploading option image for voting ${id}, option ${optionIndex}`);
-
-    // Загружаем изображение в Radikal
-    const filePath = req.file.path;
-    const fileBuffer = fs.readFileSync(filePath);
-    
-    const uploadResult = await uploadToRadikal(
-      fileBuffer,
-      req.file.originalname || `voting_option_${id}_${optionIndex}.jpg`,
-      req.file.mimetype
-    );
-
-    // Удаляем временный файл
-    try {
-      fs.unlinkSync(filePath);
-    } catch (unlinkError) {
-      console.error('Error deleting temp file:', unlinkError.message);
-    }
-
-    // Получаем текущие данные голосования
-    const votingResponse = await axios.get(`${VOTINGS_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
-    });
-
-    const voting = votingResponse.data;
-    let optionImages = [];
-
-    // Парсим существующие изображения опций из поля OptionImages
-    if (voting.fields.OptionImages) {
-      try {
-        if (typeof voting.fields.OptionImages === 'string') {
-          optionImages = JSON.parse(voting.fields.OptionImages);
-        } else {
-          optionImages = voting.fields.OptionImages;
-        }
-      } catch (e) {
-        console.warn('Could not parse OptionImages, starting fresh');
-        optionImages = [];
-      }
-    }
-
-    // Обновляем изображение для конкретной опции
-    optionImages[optionIndex] = {
-      url: uploadResult.url,
-      filename: uploadResult.filename,
-      fileId: uploadResult.fileId,
-      uploadedAt: new Date().toISOString()
-    };
-
-    // Обновляем запись в Airtable в поле OptionImages
-    const updateResponse = await axios.patch(`${VOTINGS_URL}/${id}`, {
-      fields: {
-        OptionImages: JSON.stringify(optionImages)
-      }
-    }, {
-      headers: { 
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json' 
-      }
-    });
-
-    res.json({
-      success: true,
-      imageUrl: uploadResult.url,
-      fileId: uploadResult.fileId,
-      optionIndex: optionIndex,
-      voting: updateResponse.data
-    });
-
-  } catch (error) {
-    console.error('Voting option image upload error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Прокси для изображений (на случай проблем с CDN)
-app.get('/api/proxy-image', async (req, res) => {
-  try {
-    const { url } = req.query;
-    
-    if (!url) {
-      return res.status(400).json({ error: 'URL parameter is required' });
-    }
-
-    const response = await axios.get(url, {
-      responseType: 'stream',
-      timeout: 15000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Smolville-Backend/1.0)'
-      }
-    });
-
-    res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    
-    response.data.pipe(res);
-    
-  } catch (error) {
-    console.error('Image proxy error:', error.message);
-    res.status(500).json({ error: 'Failed to load image' });
-  }
-});
-
-// Health check для Radikal
-app.get('/api/health/radikal', async (req, res) => {
-  try {
-    const testResponse = await axios.get(`${RADIKAL_API_URL}/upload`, {
-      headers: { 'X-API-Key': RADIKAL_API_KEY },
-      timeout: 10000
-    });
-    
-    res.json({ 
-      status: 'healthy', 
-      radikal: 'accessible',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Radikal health check failed:', error.message);
-    res.status(503).json({ 
-      status: 'unhealthy', 
-      radikal: 'inaccessible',
-      error: error.message 
-    });
-  }
-});
-
-// Эндпоинт для тестирования
-app.get('/api/test-upload', (req, res) => {
-  res.json({
-    message: 'Smolville backend ready for image uploads!',
-    baseUrl: 'https://smolville.onrender.com',
-    endpoints: {
-      events: '/api/events-with-image',
-      ads: '/api/ads-with-image', 
-      votingOptions: '/api/votings/:id/upload-option-image',
-      proxy: '/api/proxy-image',
-      health: '/api/health/radikal'
-    }
-  });
-});
-
-// ==================== СУЩЕСТВУЮЩИЕ ЭНДПОИНТЫ ====================
-
-// API ДЛЯ АДМИНА
 app.get('/api/is-admin', (req, res) => {
   const userId = parseInt(req.query.userId, 10);
   const isAdmin = userId === ADMIN_ID;
   res.json({ isAdmin });
 });
 
-// API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ
+// ==================== API ДЛЯ ЗАГРУЗКИ ИЗОБРАЖЕНИЙ ====================
+
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -586,6 +267,9 @@ app.delete('/api/upload/:fileId', async (req, res) => {
   }
 });
 
+// ==================== ОСТАЛЬНЫЕ API (без изменений) ====================
+
+// [Здесь остальной код без изменений - события, реклама, голосования и т.д.]
 // Events API
 app.get('/api/events', async (req, res) => {
   try {
@@ -1314,8 +998,7 @@ if (!fs.existsSync(uploadsDir)) {
 
 // Запуск сервера
 app.listen(port, () => {
-  console.log(`Smolville server running on port ${port}`);
-  console.log(`API Base URL: https://smolville.onrender.com`);
-  console.log('New image upload endpoints are ready!');
-  console.log('Test endpoint: https://smolville.onrender.com/api/test-upload');
+  console.log(`Server running on port ${port}`);
+  console.log(`Radikal API URL: ${RADIKAL_API_URL}`);
+  console.log('Make sure RADIKAL_API_KEY is set in environment variables');
 });
