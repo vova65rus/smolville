@@ -426,21 +426,30 @@
       gap: 12px;
     }
 
-    /* Стили для административной кнопки */
-    #adminBtn {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 100;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      border-radius: 50%;
-      width: 60px;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-    }
+   /* Стили для административной кнопки - ИСПРАВЛЕННЫЕ */
+#adminBtn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  /* УБРАТЬ display: flex - управление видимостью будет через класс hidden */
+}
+
+/* Гарантированное скрытие админ-кнопки */
+#adminBtn.hidden {
+  display: none !important;
+}
+
+#adminBtn:not(.hidden) {
+  display: flex !important;
+}
 
     /* Фильтры событий */
     .filter-container {
