@@ -497,13 +497,20 @@
       margin-bottom: 12px;
       font-size: 16px;
     }
+
+    /* Дополнительный отступ для логотипа */
+    .logo-container {
+      padding-top: calc(env(safe-area-inset-top) + 16px);
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
   <div class="container mx-auto p-4 flex-grow">
-    <a href="https://t.me/smolville_drift" target="_blank">
-      <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
-    </a>
+    <div class="logo-container">
+      <a href="https://t.me/smolville_drift" target="_blank">
+        <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
+      </a>
+    </div>
     <h1 class="text-2xl font-bold text-center mb-4">Автособытия Сахалина</h1>
     
     <!-- Фильтры событий -->
@@ -2038,17 +2045,15 @@
 
     async function initAdmin() {
       try {
-        const isAdmin = await checkIsAdmin(user.id);
-        console.log('Is Admin:', isAdmin);
-        if (isAdmin) {
-          document.getElementById('adminBtn').classList.remove('hidden');
-        } else {
-          console.log('Admin panel hidden - not admin');
-          document.getElementById('adminBtn').classList.add('hidden');
+        const adminBtn = document.getElementById('adminBtn');
+        adminBtn.classList.add('hidden'); // Скрываем кнопку по умолчанию
+
+        const adminStatus = await checkIsAdmin(user.id);
+        if (adminStatus) {
+          adminBtn.classList.remove('hidden');
         }
       } catch (err) {
         console.error('Admin init error:', err);
-        document.getElementById('adminBtn').classList.add('hidden');
       }
     }
 
