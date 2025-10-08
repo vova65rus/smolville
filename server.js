@@ -272,7 +272,7 @@
     </a>
     <h1 class="text-2xl font-bold text-center mb-4 text-contrast">Автособытия Сахалина</h1>
     <div id="events" class="grid grid-cols-1 gap-4"></div>
-    <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition" onclick="showAdminModal()">Админ</button>
+   <button id="adminBtn" class="hidden fixed bottom-4 right-4 bg-[var(--button-color)] hover:opacity-90 text-[var(--button-text-color)] px-4 py-2 rounded-lg transition" onclick="showAdminModal()">Админ</button>
   </div>
 
   <!-- Модальное окно события -->
@@ -341,7 +341,7 @@
     </div>
   </div>
 
-  <!-- Админ-панель -->
+ <!-- Админ-панель -->
   <div id="adminModal" class="modal hidden">
     <div class="modal-content">
       <h2 class="text-lg font-bold mb-4 text-contrast">Админ-панель</h2>
