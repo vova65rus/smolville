@@ -30,6 +30,8 @@
       --card-bg-color: #ffffff;
       --card-hover-bg: #f8f9fa;
       --card-border-color: #e5e5e5;
+      --progress-bg: #e0e0e0;
+      --progress-fill: #3390ec;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -56,6 +58,8 @@
         --card-bg-color: #2d2d2d;
         --card-hover-bg: #383838;
         --card-border-color: #404040;
+        --progress-bg: #424242;
+        --progress-fill: #4da6ff;
       }
     }
 
@@ -159,6 +163,40 @@
     .voting-card.completed .voting-badge {
       background: var(--voting-completed-border);
       color: var(--voting-completed-text);
+    }
+
+    /* Skeleton loader */
+    .skeleton {
+      background: var(--tg-theme-secondary-bg-color);
+      border-radius: 4px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    .skeleton-card {
+      height: 120px;
+      margin-bottom: 12px;
+    }
+
+    /* Прогресс-бар */
+    .progress-container {
+      width: 100%;
+      background: var(--progress-bg);
+      border-radius: 12px;
+      height: 8px;
+      margin-bottom: 16px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--progress-fill);
+      border-radius: 12px;
+      transition: width 0.3s ease;
     }
 
     /* Утилиты */
@@ -403,6 +441,62 @@
       justify-content: center;
       font-size: 12px;
     }
+
+    /* Фильтры событий */
+    .filter-container {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .filter-btn {
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn.active {
+      background: var(--tg-theme-button-color);
+      color: var(--tg-theme-button-text-color);
+    }
+
+    /* Онбординг модалка */
+    .onboarding-modal {
+      background: rgba(0, 0, 0, 0.8);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .onboarding-content {
+      background: var(--tg-theme-bg-color);
+      color: var(--tg-theme-text-color);
+      padding: 20px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    .onboarding-steps {
+      margin: 16px 0;
+    }
+
+    .onboarding-step {
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -411,6 +505,14 @@
       <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
     </a>
     <h1 class="text-2xl font-bold text-center mb-4">Автособытия Сахалина</h1>
+    
+    <!-- Фильтры событий -->
+    <div id="filters" class="filter-container hidden">
+      <div class="filter-btn active" data-type="all" onclick="filterEvents('all')">Все</div>
+      <div class="filter-btn" data-type="Спорт" onclick="filterEvents('Спорт')">Спорт</div>
+      <div class="filter-btn" data-type="Выставки" onclick="filterEvents('Выставки')">Выставки</div>
+    </div>
+    
     <div id="events" class="grid grid-cols-1 gap-4"></div>
     <button id="adminBtn" class="hidden fixed bottom-4 right-4" onclick="showAdminModal()">Админ</button>
   </div>
@@ -459,6 +561,12 @@
       <h2 id="votingModalTitle" class="text-lg font-bold mb-2"></h2>
       <p id="votingModalDescription" class="mb-3"></p>
       
+      <!-- Прогресс-бар для голосования -->
+      <div class="progress-container mb-3">
+        <div id="votingProgress" class="progress-bar" style="width: 0%;"></div>
+      </div>
+      <p id="votingStepText" class="text-center text-muted mb-3">Шаг 1 из 2: Определите местоположение</p>
+      
       <div class="mb-3 pt-3 border-t border-card-border-color">
         <p class="text-sm text-muted mb-2">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
         <button id="getLocationBtn" class="w-full">
@@ -466,7 +574,7 @@
         </button>
       </div>
       
-      <div id="votingOptions" class="my-4"></div>
+      <div id="votingOptions" class="my-4 hidden"></div>
       <div id="votingResultsImageContainer" class="hidden mt-4">
         <h3 class="font-bold mb-2">Изображение с результатами:</h3>
         <img id="votingResultsImage" class="results-image" loading="lazy">
@@ -589,6 +697,19 @@
     </div>
   </div>
 
+  <!-- Онбординг модалка -->
+  <div id="onboardingModal" class="onboarding-modal hidden">
+    <div class="onboarding-content">
+      <h2 class="text-lg font-bold mb-4">Добро пожаловать в Smolville!</h2>
+      <div class="onboarding-steps">
+        <p class="onboarding-step">1. Просматривайте события и голосуйте за номинантов.</p>
+        <p class="onboarding-step">2. Нажмите "Я пойду!" для участия.</p>
+        <p class="onboarding-step">3. Используйте фильтры для поиска по типу.</p>
+      </div>
+      <button onclick="closeOnboarding()" class="w-full">Понятно, начать!</button>
+    </div>
+  </div>
+
   <script>
     const BACKEND_URL = 'https://smolville.onrender.com';
     const tg = window.Telegram?.WebApp;
@@ -607,6 +728,9 @@
     let optionImages = {};
     let eventsData = null;
     let currentResultsImageUrl = null;
+    let allItems = []; // Для фильтрации
+    let currentFilter = 'all';
+    let votingStep = 1; // Для прогресса в голосовании
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -616,7 +740,6 @@
       const theme = tg.themeParams;
       
       if (theme.bg_color) {
-        // Используем тему Telegram
         document.documentElement.style.setProperty('--tg-theme-bg-color', theme.bg_color);
         document.documentElement.style.setProperty('--tg-theme-text-color', theme.text_color);
         document.documentElement.style.setProperty('--tg-theme-hint-color', theme.hint_color);
@@ -626,7 +749,6 @@
         document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', theme.secondary_bg_color);
       }
       
-      // Слушаем изменения системной темы
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
         if (!tg.themeParams.bg_color) {
           document.body.style.backgroundColor = e.matches ? '#1a1a1a' : '#ffffff';
@@ -640,9 +762,19 @@
       return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]} ${year}`;
     }
 
+    function showSkeletonLoaders(count = 5) {
+      const eventsContainer = document.getElementById('events');
+      eventsContainer.innerHTML = '';
+      for (let i = 0; i < count; i++) {
+        const skeleton = document.createElement('div');
+        skeleton.className = 'skeleton skeleton-card';
+        eventsContainer.appendChild(skeleton);
+      }
+    }
+
     async function renderEvents() {
       const eventsContainer = document.getElementById('events');
-      eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Загрузка...</p>';
+      showSkeletonLoaders(); // Показываем skeleton во время загрузки
 
       try {
         const [eventsResponse, adsResponse, votingsResponse] = await Promise.all([
@@ -663,13 +795,10 @@
         if (adsResponse.ok) adsData = await adsResponse.json();
         if (votingsResponse.ok) votingsData = await votingsResponse.json();
 
-        eventsContainer.innerHTML = '';
-
         let activeVotings = [];
         let events = [];
         let ads = [];
 
-        // Собираем активные голосования (всегда первые)
         if (votingsData.records) {
           activeVotings = votingsData.records
             .filter(record => record.fields.Status !== 'Completed')
@@ -680,7 +809,6 @@
             }));
         }
 
-        // Собираем события и сортируем по дате (от ближайших к будущим)
         if (eventsData.records) {
           events = eventsData.records
             .map(record => ({
@@ -691,17 +819,15 @@
             .sort((a, b) => a.date - b.date);
         }
 
-        // Собираем рекламу
         if (adsData.records) {
           ads = adsData.records.map(record => ({
-            type: 'ad',
-            data: record,
-            date: new Date(record.createdTime || Date.now())
-          }));
+              type: 'ad',
+              data: record,
+              date: new Date(record.createdTime || Date.now())
+            }));
         }
 
-        // Формируем итоговый список: голосования первые, затем события, реклама каждые 2 события
-        let allItems = [...activeVotings];
+        allItems = [...activeVotings];
 
         let adIndex = 0;
         events.forEach((event, index) => {
@@ -717,14 +843,15 @@
           adIndex++;
         }
 
-        allItems.forEach(item => {
-          if (item.type === 'voting') renderVotingItem(item.data);
-          else if (item.type === 'ad') renderAdItem(item.data);
-          else if (item.type === 'event') renderEventItem(item.data);
-        });
+        filterEvents(currentFilter); // Применяем текущий фильтр
 
         if (allItems.length === 0) {
           eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">Мероприятия не найдены</p>';
+        }
+
+        // Показываем фильтры, если есть события
+        if (events.length > 0) {
+          document.getElementById('filters').classList.remove('hidden');
         }
       } catch (err) {
         console.error('Render events error:', err);
@@ -732,11 +859,53 @@
       }
     }
 
+    function filterEvents(type) {
+      currentFilter = type;
+      const eventsContainer = document.getElementById('events');
+      eventsContainer.innerHTML = '';
+
+      const filterBtns = document.querySelectorAll('.filter-btn');
+      filterBtns.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.type === type) btn.classList.add('active');
+      });
+
+      const filteredItems = allItems.filter(item => {
+        if (type === 'all') return true;
+        if (item.type !== 'event') return true; // Голосования и реклама всегда показываются
+        return item.data.fields.Type === type;
+      });
+
+      filteredItems.forEach(item => {
+        if (item.type === 'voting') renderVotingItem(item.data);
+        else if (item.type === 'ad') renderAdItem(item.data);
+        else if (item.type === 'event') renderEventItem(item.data);
+      });
+
+      if (filteredItems.length === 0) {
+        eventsContainer.innerHTML = '<p class="text-center text-[var(--hint-color)]">События не найдены</p>';
+      }
+    }
+
+    function updateVotingProgress(step) {
+      votingStep = step;
+      const progressBar = document.getElementById('votingProgress');
+      const stepText = document.getElementById('votingStepText');
+      progressBar.style.width = `${(step / 2) * 100}%`;
+      stepText.textContent = `Шаг ${step} из 2: ${step === 1 ? 'Определите местоположение' : 'Выберите номинанта'}`;
+      if (step === 1) {
+        document.getElementById('votingOptions').classList.add('hidden');
+      } else {
+        document.getElementById('votingOptions').classList.remove('hidden');
+      }
+    }
+
     function showVotingOptions(voting) {
+      updateVotingProgress(2);
       const optionsContainer = document.getElementById('votingOptions');
       optionsContainer.innerHTML = '<h4 class="font-bold mb-2 text-contrast">Выберите номинанта:</h4>';
 
-      document.getElementById('getLocationBtn').style.display = 'block';
+      document.getElementById('getLocationBtn').style.display = 'none';
       document.getElementById('votingResultsImageContainer').classList.add('hidden');
 
       if (voting.Options && voting.Options.split(',').length > 0) {
@@ -864,6 +1033,7 @@
           document.getElementById('getLocationBtn').classList.add('bg-green-600', 'hover:bg-green-700');
           document.getElementById('getLocationBtn').disabled = true;
           updateVoteButtons();
+          updateVotingProgress(2); // Переходим к шагу 2
         },
         (error) => {
           console.error('Geolocation error:', error);
@@ -879,6 +1049,7 @@
 
       document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
       document.getElementById('votingModalDescription').textContent = voting.Description || '';
+      updateVotingProgress(1); // Начинаем с шага 1
 
       try {
         fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
@@ -910,6 +1081,7 @@
     }
 
     async function showVotingResults(voting, userVote, votingId) {
+      updateVotingProgress(2); // Результаты на шаге 2
       const optionsContainer = document.getElementById('votingOptions');
       const isCompleted = voting.Status === 'Completed';
       
@@ -919,7 +1091,6 @@
       
       document.getElementById('getLocationBtn').style.display = 'none';
       
-      // Отображение изображения результатов
       if (voting.ResultsImage) {
         const imageContainer = document.getElementById('votingResultsImageContainer');
         const resultsImage = document.getElementById('votingResultsImage');
@@ -1036,7 +1207,6 @@
           if (data.success) {
             currentResultsImageUrl = data.imageUrl;
             
-            // Сохраняем URL изображения в базе данных
             await fetch(`${BACKEND_URL}/api/votings/${votingId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -1047,7 +1217,6 @@
               })
             });
             
-            // Обновляем отображение
             showVotingModal(currentVotingRecord);
             alert('Изображение с результатами успешно сгенерировано!');
           } else {
@@ -1069,6 +1238,7 @@
       tg.BackButton.hide();
       currentVotingRecord = null;
       currentResultsImageUrl = null;
+      votingStep = 1;
     }
 
     function renderEventItem(record) {
@@ -1469,7 +1639,6 @@
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
-            // Открываем изображение в новой вкладке
             window.open(data.imageUrl, '_blank');
             alert('Изображение с результатами успешно сгенерировано!');
           } else {
@@ -1551,7 +1720,7 @@
       const container = fileInput.closest('.option-item');
       const imageStatus = container.querySelector('.image-status');
       const preview = container.querySelector('.option-preview');
-      const uploadBtn = container.querySelector('button');
+      const uploadBtn = container.querySelector('button[onclick="triggerImageUpload(this)"]');
       const optionIndex = Array.from(document.querySelectorAll('.option-item')).indexOf(container);
       
       const reader = new FileReader();
@@ -1656,9 +1825,9 @@
               currentItem.querySelector('.option-preview').src = imagesArray[index].url;
               currentItem.querySelector('.option-preview').classList.remove('hidden');
               currentItem.querySelector('.image-status').textContent = 'Фото загружено';
-              currentItem.querySelector('button').textContent = '✅ Фото загружено';
-              currentItem.querySelector('button').classList.remove('bg-blue-500');
-              currentItem.querySelector('button').classList.add('bg-green-500');
+              currentItem.querySelector('button[onclick="triggerImageUpload(this)"]').textContent = '✅ Фото загружено';
+              currentItem.querySelector('button[onclick="triggerImageUpload(this)"]').classList.remove('bg-blue-500');
+              currentItem.querySelector('button[onclick="triggerImageUpload(this)"]').classList.add('bg-green-500');
             }
           });
         } else {
@@ -1854,6 +2023,17 @@
         console.error('Error checking admin:', err);
         return false;
       }
+    }
+
+    function showOnboardingIfNeeded() {
+      if (!localStorage.getItem('onboardingShown')) {
+        document.getElementById('onboardingModal').classList.remove('hidden');
+        localStorage.setItem('onboardingShown', 'true');
+      }
+    }
+
+    function closeOnboarding() {
+      document.getElementById('onboardingModal').classList.add('hidden');
     }
 
     async function initAdmin() {
@@ -2058,6 +2238,7 @@
     initAdmin();
     renderEvents();
     addOption();
+    showOnboardingIfNeeded();
   </script>
 </body>
 </html>
