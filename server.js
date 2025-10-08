@@ -263,21 +263,9 @@
       color: var(--text-color);
       border: 1px solid var(--hint-color);
     }
-
-    /* Гарантированное скрытие админ-кнопки */
-    #adminBtn {
-      display: none !important;
-    }
-
-    #adminBtn:not(.hidden) {
-      display: block !important;
-    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
-  <!-- Отладочная информация -->
-  <div id="debugInfo" style="position: fixed; top: 10px; left: 10px; background: red; color: white; padding: 5px; z-index: 9999; font-size: 10px; display: none;"></div>
-
   <div class="container mx-auto p-4 flex-grow">
     <a href="https://t.me/smolville_drift" target="_blank">
       <img src="logo.PNG" alt="Smolville Logo" class="mx-auto h-16 mb-4">
@@ -472,9 +460,6 @@
     tg.ready();
     tg.expand();
 
-    // Жёсткий список ID администраторов (ЗАМЕНИТЕ НА РЕАЛЬНЫЕ ID АДМИНОВ)
-    const ADMIN_USER_IDS = [123456789, 987654321]; // ЗАМЕНИТЕ ЭТИ ID НА РЕАЛЬНЫЕ
-
     let currentEventRecord = null;
     let currentAttendeesCount = 0;
     let isUserAttending = false;
@@ -486,62 +471,6 @@
 
     const user = tg.initDataUnsafe?.user || { id: 0, first_name: 'Гость' };
     const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-
-    // === ИСПРАВЛЕННАЯ ЛОГИКА АДМИН-ПАНЕЛИ ===
-    function isUserAdmin(userId) {
-        if (!userId || userId === 0) {
-            console.log('Invalid user ID for admin check:', userId);
-            return false;
-        }
-        
-        const numericUserId = parseInt(userId);
-        const isAdmin = ADMIN_USER_IDS.includes(numericUserId);
-        
-        console.log('Admin check - User ID:', numericUserId, 'Is admin:', isAdmin);
-        return isAdmin;
-    }
-
-    function initAdmin() {
-        console.log('Initializing admin panel for user:', user.id, user.first_name);
-        
-        const isAdmin = isUserAdmin(user.id);
-        const adminBtn = document.getElementById('adminBtn');
-        
-        if (isAdmin) {
-            adminBtn.classList.remove('hidden');
-            console.log('Admin panel shown for user:', user.id);
-        } else {
-            adminBtn.classList.add('hidden');
-            console.log('Admin panel hidden for user:', user.id);
-        }
-        
-        // Обновляем отладочную информацию
-        updateDebugInfo();
-    }
-
-    function showAdminModal() {
-        if (!isUserAdmin(user.id)) {
-            alert('У вас нет прав доступа к админ-панели');
-            console.warn('Unauthorized admin access attempt by user:', user.id);
-            return;
-        }
-        
-        showTab('tab-list');
-        clearForm();
-        clearAdForm();
-        loadEventsForVoting();
-        document.getElementById('adminModal').classList.remove('hidden');
-        tg.BackButton.show();
-        tg.BackButton.onClick(closeAdminModal);
-    }
-
-    function updateDebugInfo() {
-        const debugEl = document.getElementById('debugInfo');
-        if (debugEl) {
-            const adminBtn = document.getElementById('adminBtn');
-            debugEl.textContent = `User: ${user.id} | Admin: ${isUserAdmin(user.id)} | Button visible: ${!adminBtn.classList.contains('hidden')}`;
-        }
-    }
 
     // Применение темы Telegram с адаптацией под системные настройки
     function applyTheme() {
@@ -1829,6 +1758,33 @@
       eventsContainer.appendChild(div);
     }
 
+    async function checkIsAdmin(userId) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/is-admin?userId=${userId}`);
+        const data = await response.json();
+        return data.isAdmin;
+      } catch (err) {
+        console.error('Error checking admin:', err);
+        return false;
+      }
+    }
+
+    async function initAdmin() {
+      try {
+        const isAdmin = await checkIsAdmin(user.id);
+        console.log('Is Admin:', isAdmin);
+        if (isAdmin) {
+          document.getElementById('adminBtn').classList.remove('hidden');
+        } else {
+          console.log('Admin panel hidden - not admin');
+          document.getElementById('adminBtn').classList.add('hidden');
+        }
+      } catch (err) {
+        console.error('Admin init error:', err);
+        document.getElementById('adminBtn').classList.add('hidden');
+      }
+    }
+
     function showTab(tabId) {
       document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -1883,6 +1839,16 @@
       } catch (err) {
         alert(`Ошибка: ${err.message}`);
       }
+    }
+
+    function showAdminModal() {
+      showTab('tab-list');
+      clearForm();
+      clearAdForm();
+      loadEventsForVoting();
+      document.getElementById('adminModal').classList.remove('hidden');
+      tg.BackButton.show();
+      tg.BackButton.onClick(closeAdminModal);
     }
 
     function closeAdminModal() {
@@ -2002,16 +1968,7 @@
 
     // Инициализация приложения
     applyTheme();
-    
-    // Инициализация админ-панели с двойной проверкой
-    setTimeout(() => {
-        initAdmin();
-        // Двойная проверка через секунду на случай асинхронных проблем
-        setTimeout(initAdmin, 1000);
-        setTimeout(updateDebugInfo, 500);
-        setTimeout(updateDebugInfo, 2000);
-    }, 100);
-    
+    initAdmin();
     renderEvents();
     addOption();
   </script>
