@@ -6,44 +6,59 @@
   <title>Smolville</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root {
-      --bg-color: #ffffff;
-      --text-color: #000000;
-      --hint-color: #707579;
-      --link-color: #3390ec;
-      --button-color: #3390ec;
-      --button-text-color: #ffffff;
-      --secondary-bg-color: #f4f4f5;
-      --ad-bg-color: #fff3cd;
-      --ad-text-color: #856404;
+  :root {
+      /* Telegram WebApp Default Colors */
+      --tg-theme-bg-color: #ffffff;
+      --tg-theme-text-color: #000000;
+      --tg-theme-hint-color: #707579;
+      --tg-theme-link-color: #3390ec;
+      --tg-theme-button-color: #3390ec;
+      --tg-theme-button-text-color: #ffffff;
+      --tg-theme-secondary-bg-color: #f4f4f5;
+      
+      /* Custom colors with Telegram styling */
+      --ad-bg-color: #fff9e6;
+      --ad-text-color: #8a6d3b;
       --ad-border-color: #ffeaa7;
-      --voting-bg-color: #fff0f0;
-      --voting-text-color: #8b0000;
-      --voting-border-color: #ffcccc;
-      --voting-completed-bg: #f0fff0;
-      --voting-completed-text: #006400;
-      --voting-completed-border: #ccffcc;
+      --voting-bg-color: #f0f7ff;
+      --voting-text-color: #1976d2;
+      --voting-border-color: #bbdefb;
+      --voting-completed-bg: #e8f5e9;
+      --voting-completed-text: #2e7d32;
+      --voting-completed-border: #c8e6c9;
+      --card-bg-color: #ffffff;
+      --card-hover-bg: #f8f9fa;
+      --card-border-color: #e5e5e5;
+      --progress-bg: #e0e0e0;
+      --progress-fill: #3390ec;
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg-color: #1a1a1a;
-        --text-color: #ffffff;
-        --hint-color: #a0a0a0;
-        --link-color: #4da6ff;
-        --button-color: #4da6ff;
-        --button-text-color: #ffffff;
-        --secondary-bg-color: #2d2d2d;
-        --ad-bg-color: #333300;
-        --ad-text-color: #ffffcc;
-        --ad-border-color: #666600;
-        --voting-bg-color: #330000;
-        --voting-text-color: #ffcccc;
-        --voting-border-color: #660000;
-        --voting-completed-bg: #003300;
-        --voting-completed-text: #ccffcc;
-        --voting-completed-border: #006600;
+        /* Telegram WebApp Dark Theme Colors */
+        --tg-theme-bg-color: #1a1a1a;
+        --tg-theme-text-color: #ffffff;
+        --tg-theme-hint-color: #a0a0a0;
+        --tg-theme-link-color: #4da6ff;
+        --tg-theme-button-color: #4da6ff;
+        --tg-theme-button-text-color: #ffffff;
+        --tg-theme-secondary-bg-color: #2d2d2d;
+        
+        /* Custom dark theme colors */
+        --ad-bg-color: #332900;
+        --ad-text-color: #ffcc80;
+        --ad-border-color: #665200;
+        --voting-bg-color: #0d1a30;
+        --voting-text-color: #90caf9;
+        --voting-border-color: #1e3a5f;
+        --voting-completed-bg: #1a331a;
+        --voting-completed-text: #a5d6a7;
+        --voting-completed-border: #2d5a2d;
+        --card-bg-color: #2d2d2d;
+        --card-hover-bg: #383838;
+        --card-border-color: #404040;
+        --progress-bg: #424242;
+        --progress-fill: #4da6ff;
       }
     }
 
