@@ -30,6 +30,8 @@
       --card-bg-color: #ffffff;
       --card-hover-bg: #f8f9fa;
       --card-border-color: #e5e5e5;
+      --progress-bg: #e0e0e0;
+      --progress-fill: #3390ec;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -179,6 +181,22 @@
     .skeleton-card {
       height: 120px;
       margin-bottom: 12px;
+    }
+
+    /* Прогресс-бар */
+    .progress-container {
+      width: 100%;
+      background: var(--progress-bg);
+      border-radius: 12px;
+      height: 8px;
+      margin-bottom: 16px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--progress-fill);
+      border-radius: 12px;
+      transition: width 0.3s ease;
     }
 
     /* Утилиты */
@@ -555,6 +573,12 @@
     <div class="modal-content">
       <h2 id="votingModalTitle" class="text-lg font-bold mb-2"></h2>
       <p id="votingModalDescription" class="mb-3"></p>
+      
+      <!-- Прогресс-бар для голосования -->
+      <div class="progress-container mb-3">
+        <div id="votingProgress" class="progress-bar" style="width: 0%;"></div>
+      </div>
+      <p id="votingStepText" class="text-center text-muted mb-3">Шаг 1 из 2: Определите местоположение</p>
             
       <div class="mb-3 pt-3 border-t border-card-border-color">
         <p class="text-sm text-muted mb-2">Для голосования необходимо находиться в радиусе 1000м от указанного места</p>
