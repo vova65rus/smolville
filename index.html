@@ -895,7 +895,10 @@
 
     function showVotingOptions(voting) {
       const optionsContainer = document.getElementById('votingOptions');
-      optionsContainer.innerHTML = '<h4 class="font-bold mb-2 text-contrast">Выберите номинанта:</h4>';
+      optionsContainer.innerHTML = '<h4 class="font-bold mb-2">Выберите номинанта:</h4>';
+
+      // ВАЖНОЕ ИСПРАВЛЕНИЕ: Убираем скрытие контейнера с опциями
+      optionsContainer.classList.remove('hidden');
 
       document.getElementById('getLocationBtn').style.display = 'none';
       document.getElementById('votingResultsImageContainer').classList.add('hidden');
@@ -906,14 +909,14 @@
 
         optionsArray.forEach((option, index) => {
           const optionDiv = document.createElement('div');
-          optionDiv.className = 'mb-3 p-3 border rounded-lg bg-contrast transition voting-option border-contrast';
+          optionDiv.className = 'mb-3 p-3 border rounded-lg bg-[var(--tg-theme-secondary-bg-color)] transition voting-option';
 
           let imageHtml = '';
           if (optionImages[index] && optionImages[index].url) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
                 <img src="${optionImages[index].url}" alt="${option}" 
-                     class="w-24 h-24 object-cover rounded-lg border border-contrast">
+                     class="w-24 h-24 object-cover rounded-lg border border-[var(--card-border-color)]">
               </div>
             `;
           }
@@ -922,9 +925,9 @@
             <div class="flex items-center justify-between">
               ${imageHtml}
               <div class="flex-grow">
-                <span class="font-medium text-contrast">${option}</span>
+                <span class="font-medium">${option}</span>
               </div>
-              <button class="vote-button bg-blue-600 text-white px-3 py-1 rounded text-sm transition" 
+              <button class="vote-button px-3 py-1 rounded text-sm transition" 
                       onclick="castVote(${index})" disabled>
                 Голосовать
               </button>
@@ -943,12 +946,12 @@
       voteButtons.forEach(button => {
         if (userLocation) {
           button.classList.add('enabled');
-          button.classList.remove('bg-blue-600');
+          button.classList.remove('bg-[var(--tg-theme-button-color)]');
           button.classList.add('bg-green-600', 'hover:bg-green-700');
           button.disabled = false;
         } else {
           button.classList.remove('enabled');
-          button.classList.add('bg-blue-600');
+          button.classList.add('bg-[var(--tg-theme-button-color)]');
           button.classList.remove('bg-green-600', 'hover:bg-green-700');
           button.disabled = true;
         }
@@ -1005,6 +1008,21 @@
       }
     }
 
+    // Функция для расчета расстояния между двумя точками
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Радиус Земли в метрах
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c;
+      return distance;
+    }
+
+    // ОБНОВЛЕННЫЙ ОБРАБОТЧИК КНОПКИ ОПРЕДЕЛЕНИЯ ЛОКАЦИИ
     document.getElementById('getLocationBtn').addEventListener('click', () => {
       if (!navigator.geolocation) {
         alert('Геолокация не поддерживается вашим браузером');
@@ -1013,19 +1031,42 @@
       }
 
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           userLocation = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           };
           console.log('Geolocation obtained:', userLocation);
+          
+          // ВАЖНОЕ ИСПРАВЛЕНИЕ: Проверяем расстояние до места голосования
+          if (currentVotingRecord && currentVotingRecord.fields) {
+            const voting = currentVotingRecord.fields;
+            
+            if (voting.Latitude && voting.Longitude) {
+              const distance = calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                parseFloat(voting.Latitude),
+                parseFloat(voting.Longitude)
+              );
+              
+              if (distance > 1000) {
+                alert(`Вы находитесь слишком далеко от места голосования. Расстояние: ${Math.round(distance)}м. Максимально допустимое: 1000м.`);
+                return;
+              }
+            }
+          }
+          
           alert('Ваше местоположение определено! Теперь вы можете проголосовать.');
           document.getElementById('getLocationBtn').textContent = 'Местоположение определено';
-          document.getElementById('getLocationBtn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
+          document.getElementById('getLocationBtn').classList.remove('bg-[var(--tg-theme-button-color)]');
           document.getElementById('getLocationBtn').classList.add('bg-green-600', 'hover:bg-green-700');
           document.getElementById('getLocationBtn').disabled = true;
-          updateVoteButtons();
-          showVotingOptions(currentVotingRecord.fields);
+          
+          // ВАЖНОЕ ИСПРАВЛЕНИЕ: Показываем варианты голосования
+          if (currentVotingRecord && currentVotingRecord.fields) {
+            showVotingOptions(currentVotingRecord.fields);
+          }
         },
         (error) => {
           console.error('Geolocation error:', error);
@@ -1042,12 +1083,16 @@
       document.getElementById('votingModalTitle').textContent = voting.Title || 'Голосование';
       document.getElementById('votingModalDescription').textContent = voting.Description || '';
 
-      // Сброс кнопки определения местоположения
+      // Сброс состояния кнопки и контейнера опций
       document.getElementById('getLocationBtn').style.display = 'block';
       document.getElementById('getLocationBtn').textContent = 'Определить мое местоположение';
       document.getElementById('getLocationBtn').classList.remove('bg-green-600', 'hover:bg-green-700');
-      document.getElementById('getLocationBtn').classList.add('bg-blue-600', 'hover:bg-blue-700');
+      document.getElementById('getLocationBtn').classList.add('bg-[var(--tg-theme-button-color)]');
       document.getElementById('getLocationBtn').disabled = false;
+      
+      // Скрываем опции при открытии модального окна
+      document.getElementById('votingOptions').classList.add('hidden');
+      document.getElementById('votingResultsImageContainer').classList.add('hidden');
 
       try {
         fetch(`${BACKEND_URL}/api/votings/${record.id}/vote-status/${user.id}`)
@@ -1061,19 +1106,16 @@
             if (status.hasVoted || voting.Status === 'Completed') {
               showVotingResults(voting, status.userVote, record.id);
             } else {
-              // Показываем кнопку определения местоположения и скрываем варианты
-              document.getElementById('votingOptions').classList.add('hidden');
+              // Если пользователь еще не голосовал, просто показываем кнопку определения локации
+              // Опции появятся только после определения локации
             }
           })
           .catch(err => {
             console.error('Error checking vote status:', err);
-            // Показываем кнопку определения местоположения и скрываем варианты
-            document.getElementById('votingOptions').classList.add('hidden');
+            // В случае ошибки просто показываем кнопку определения локации
           });
       } catch (err) {
         console.error('Error in showVotingModal:', err);
-        // Показываем кнопку определения местоположения и скрываем варианты
-        document.getElementById('votingOptions').classList.add('hidden');
       }
 
       modal.classList.remove('hidden');
@@ -1086,10 +1128,11 @@
       const isCompleted = voting.Status === 'Completed';
       
       optionsContainer.innerHTML = isCompleted ? 
-        '<h4 class="font-bold mb-2 text-contrast">Финальные результаты:</h4>' : 
-        '<h4 class="font-bold mb-2 text-contrast">Текущие результаты:</h4>';
+        '<h4 class="font-bold mb-2">Финальные результаты:</h4>' : 
+        '<h4 class="font-bold mb-2">Текущие результаты:</h4>';
       
       document.getElementById('getLocationBtn').style.display = 'none';
+      optionsContainer.classList.remove('hidden');
       
       if (voting.ResultsImage) {
         const imageContainer = document.getElementById('votingResultsImageContainer');
@@ -1144,14 +1187,14 @@
           const isUserChoice = userVote === index;
           
           const resultDiv = document.createElement('div');
-          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-contrast voting-option border-contrast';
+          resultDiv.className = 'mb-4 p-3 border rounded-lg bg-[var(--tg-theme-secondary-bg-color)] voting-option';
           
           let imageHtml = '';
           if (result.image) {
             imageHtml = `
               <div class="flex-shrink-0 mr-3">
                 <img src="${result.image}" alt="${result.option}" 
-                     class="w-24 h-24 object-cover rounded-lg border border-contrast">
+                     class="w-24 h-24 object-cover rounded-lg border border-[var(--card-border-color)]">
               </div>
             `;
           }
@@ -1161,7 +1204,7 @@
               ${imageHtml}
               <div class="flex-grow">
                 <div class="flex justify-between items-start mb-2">
-                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : 'text-contrast'}">
+                  <span class="font-medium ${isUserChoice ? 'text-blue-600' : ''}">
                     ${result.option}
                   </span>
                   <span class="text-sm text-[var(--hint-color)] whitespace-nowrap">
@@ -1185,10 +1228,10 @@
 
         if (isCompleted && voting.Results) {
           const resultsData = typeof voting.Results === 'string' ? JSON.parse(voting.Results) : voting.Results;
-          let resultsHtml = '<h4 class="font-bold mb-2 mt-4 text-contrast">Итоги:</h4>';
+          let resultsHtml = '<h4 class="font-bold mb-2 mt-4">Итоги:</h4>';
           Object.values(resultsData).sort((a, b) => b.count - a.count).forEach((result, index) => {
             resultsHtml += `
-              <p class="text-contrast">${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
+              <p>${index + 1}. ${result.option} - ${result.count} голосов (${result.percentage}%)</p>
             `;
           });
           optionsContainer.innerHTML += resultsHtml;
@@ -1248,7 +1291,7 @@
       const div = document.createElement('div');
       div.className = 'event-card p-2 fade-in card-contrast';
       div.innerHTML = `
-        <h3 class="text-sm font-bold text-contrast">${event.Title || 'Без названия'}</h3>
+        <h3 class="text-sm font-bold">${event.Title || 'Без названия'}</h3>
         <p class="text-xs text-[var(--hint-color)]">${formatDate(event.Date)}</p>
         <p class="text-xs text-[var(--hint-color)]">${event.Location || 'Без места'}</p>
         <p class="text-xs text-green-600">Идут: ${attendeesCount} человек</p>
@@ -1464,8 +1507,8 @@
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
             div.innerHTML = `
-              <p class="text-sm font-bold text-contrast">${ad.Title || 'Без названия'}</p>
-              <p class="text-xs text-contrast">${ad.Description || 'Без описания'}</p>
+              <p class="text-sm font-bold">${ad.Title || 'Без названия'}</p>
+              <p class="text-xs">${ad.Description || 'Без описания'}</p>
               <p class="text-xs text-[var(--hint-color)]">URL: ${ad.URL || 'Не указан'}</p>
               <div class="flex space-x-2 mt-2">
                 <button onclick="editAd('${record.id}', '${safeTitle}', '${safeDescription}', '${safeUrl}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition">Редактировать</button>
@@ -1604,13 +1647,13 @@
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)] mb-2';
             div.innerHTML = `
-              <p class="text-sm font-bold text-contrast">${voting.Title || 'Без названия'} 
+              <p class="text-sm font-bold">${voting.Title || 'Без названия'} 
                 <span class="text-xs ${status === 'Completed' ? 'text-green-600' : 'text-red-600'}">
                   (${status === 'Completed' ? 'Завершено' : 'Активно'})
                 </span>
               </p>
-              ${voting.EventID ? `<p class="text-xs text-contrast">Мероприятие: ${voting.EventID}</p>` : ''}
-              <p class="text-xs text-contrast">Номинантов: ${options.length}</p>
+              ${voting.EventID ? `<p class="text-xs">Мероприятие: ${voting.EventID}</p>` : ''}
+              <p class="text-xs">Номинантов: ${options.length}</p>
               <p class="text-xs text-[var(--hint-color)]">Проголосовало: ${voting.VotedUserIDs ? voting.VotedUserIDs.split(',').length : 0} человек</p>
               <div class="flex space-x-2 mt-2 flex-wrap">
                 <button onclick="editVoting('${record.id}', '${safeTitle}', '${safeDescription}', ${voting.Latitude || ''}, ${voting.Longitude || ''}, '${JSON.stringify(options).replace(/'/g, "\\'")}', '${voting.EventID || ''}', '${status}', '${JSON.stringify(voting.OptionImages || [])}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs transition mb-1">Редактировать</button>
@@ -1984,7 +2027,7 @@
       return eventRecord ? eventRecord.fields.Title : eventId;
     }
 
-    async function renderVotingItem(record) {
+    function renderVotingItem(record) {
       const eventsContainer = document.getElementById('events');
       const voting = record.fields || {};
       const isCompleted = voting.Status === 'Completed';
@@ -2092,8 +2135,8 @@
             const div = document.createElement('div');
             div.className = 'p-2 border-b border-[var(--hint-color)]';
             div.innerHTML = `
-              <p class="text-sm text-contrast">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
-              <p class="text-xs text-contrast">Идут: ${event.AttendeesCount || 0} человек</p>
+              <p class="text-sm">${event.Title || 'Без названия'} (${formatDate(event.Date)})</p>
+              <p class="text-xs">Идут: ${event.AttendeesCount || 0} человек</p>
               <button onclick="editEvent('${record.id}', '${event.ID}', '${safeTitle}', '${event.Type}', '${event.Date}', '${safeLocation}', '${safeDescription}', '${safeMapLink}', '${safeImageUrl}')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded mr-2 transition">Редактировать</button>
               <button onclick="deleteEvent('${record.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition">Удалить</button>
             `;
