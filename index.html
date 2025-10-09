@@ -1293,8 +1293,7 @@
       document.getElementById('attendeesCount').textContent = currentAttendeesCount;
       
       const mapButtonContainer = document.getElementById('modalMapButtonContainer');
-      const mapButton = document.getElementById('modalMapButton');
-      
+      const mapButton = document.getElementById('modalMapButton');      
       if (event.MapLink) {
         mapButtonContainer.classList.remove('hidden');
         mapButton.onclick = () => tg.openLink(event.MapLink);
